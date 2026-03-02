@@ -17,6 +17,12 @@ Key design choices:
 - Maven modules are **minimal and technology-oriented** (e.g., `common`, `app`, `starter`, optional `bom`).
 - DDD layers (**domain/application/interfaces/infrastructure**) are created as **packages inside the business module** (default `app`), NOT as separate Maven modules.
 
+# Global Rule: Always Ask Module Names
+For both Mode 1 (Create new project) and Mode 2 (Add modules), the wizard MUST ask for module names.
+- Even if the user chooses a preset module set/template (Recommended/Minimal/Starter-only/Custom), still ask to confirm or rename modules.
+- Provide defaults and allow pressing Enter to accept defaults.
+- Validate names as Maven-friendly: lowercase letters, digits, and hyphens only (`[a-z0-9-]+`).
+
 # 2. Triggers (When to Use)
 Use this skill when the user requests any combination of:
 - Create/generate/scaffold a Spring Boot Maven project (创建/生成/脚手架/模板项目)
@@ -60,11 +66,20 @@ Choose a module set. DDD layers will be generated as **packages inside `app`**.
 - A) Recommended (default): `common`, `app`, `starter`
 - B) Minimal: `app`, `starter`
 - C) Custom: user provides module names (must identify business module and optional runtime module)
+- D) Starter-only (single module): `starter` only (DDD packages live inside `starter`)
 
 If C, ask:
 - Module names (comma-separated)
 - Which is the business module? (default = `app`)
 - Which is the runtime module? (default = `starter`, optional)
+
+#### Starter-only Rules
+If module set is **D) Starter-only**:
+- Create a single Maven module named `starter` (or user-provided name).
+- The module is both **business module** and **runtime module**.
+- Generate DDD packages under `starter/src/main/java/<basePackage>/`:
+  - `domain/`, `application/`, `interfaces/`, `infrastructure/`
+- Parent POM may still exist as the root project POM (single-module), but do NOT create additional child modules.
 
 ## 5.3 Mode 2: Add Modules to Existing Project (Required Questions)
 1) Parent `pom.xml` path (default: `./pom.xml`)
@@ -130,6 +145,16 @@ Important:
 - Do NOT create Maven modules named `domain`, `application`, `interfaces`, or `infrastructure`.
 - These are packages under the business module.
 
+## 7.3 Starter-only (Single Module) Option
+When Starter-only is chosen:
+- Create only one module (user-named; default `starter`).
+- This module is both **business module** and **runtime module**.
+- DDD layers are packages inside this module:
+  - `<basePackage>.domain`
+  - `<basePackage>.application`
+  - `<basePackage>.interfaces`
+  - `<basePackage>.infrastructure`
+
 # 8. Maven & Dependency Management Requirements
 The parent POM MUST include:
 - `dependencyManagement`
@@ -154,12 +179,18 @@ Pick one convention and apply consistently:
 - Convention A: `<root-artifactId>-<module>` (e.g., `demo-platform-app`)
 - Convention B: `<module>` (e.g., `app`, `starter`)
 
-## 9.3 Inter-module Dependencies
+## 9.3 Module Name Validation (MUST)
+- Allowed pattern: `[a-z0-9-]+`
+- Disallow: spaces, uppercase, underscores, dots, non-ASCII characters
+- Names must be unique within the project
+- If invalid/conflicting, ask the user to rename before generating files
+
+## 9.4 Inter-module Dependencies
 - `app` depends on `common` (if present)
 - `starter` depends on `app` (and `common` if present)
 - `common` should avoid Spring Boot starters unless explicitly required
 
-## 9.4 Runtime Module (`starter`) Requirements
+## 9.5 Runtime Module (`starter`) Requirements
 Only the runtime module should:
 - Apply/execute `spring-boot-maven-plugin`
 - Contain `@SpringBootApplication` main class
@@ -267,22 +298,40 @@ Ask:
   1) Enable (default)
   2) Disable
 
-### Step 7: Module set (minimal modules)
+### Step 7: Choose module template (count/intent)
 Ask:
-- Module set:
-  A) Recommended (common, app, starter)
-  B) Minimal (app, starter)
-  C) Custom
-If C:
-- Provide module names (comma-separated)
-- Which is business module? (default = app)
-- Which is runtime module? (default = starter; optional)
+- Module template:
+  A) Recommended: 3 modules (common + business + runtime)
+  B) Minimal: 2 modules (business + runtime)
+  C) Starter-only: 1 module (runtime only)
+  D) Custom: provide your own module names
 
-### Step 8: Preflight plan + confirmation
+### Step 8: Module names (ALWAYS REQUIRED)
+Ask module names (defaults shown; user may rename):
+- If A) Recommended:
+  - Common module name (default: `common`)
+  - Business module name (default: `app`)
+  - Runtime module name (default: `starter`)
+- If B) Minimal:
+  - Business module name (default: `app`)
+  - Runtime module name (default: `starter`)
+- If C) Starter-only:
+  - Runtime module name (default: `starter`) *(this is also the business module)*
+- If D) Custom:
+  - Module names (comma-separated)
+  - Which is the business module? (required)
+  - Which is the runtime module? (optional; if provided, it must depend on business)
+
+Validate module names using `[a-z0-9-]+` and ensure uniqueness.
+
+
+### Step 9: Preflight plan + confirmation
 Print planned:
-- module tree
-- app package layout: domain/application/interfaces/infrastructure
-- list of files to create
+- module tree (with final module names)
+- package layout inside business module:
+  - `domain/`, `application/`, `interfaces/`, `infrastructure/`
+- list of files to create/modify
+- build/run commands
 Then ask:
 - Type `CONFIRM` to generate files, or anything else to cancel.
 
@@ -300,31 +349,51 @@ Action:
 Ask:
 - Confirm detected module list (Y/N). If N, ask user to provide correct module list.
 
-### Step 3: Choose modules to add
+### Step 3: Choose what to add (template or custom)
 Ask:
-- Which modules to add:
-  - common / app / starter / bom / custom names (comma-separated)
+- Add modules by template:
+  A) Add common + business + runtime
+  B) Add business + runtime
+  C) Add runtime only
+  D) Custom selection (comma-separated module names)
 
-### Step 4: Module type mapping
+### Step 4: New module names (ALWAYS REQUIRED)
+Ask for the exact names of the modules to be added (defaults shown; user may rename):
+- If A) template:
+  - Common module name (default: `common`)
+  - Business module name (default: `app`)
+  - Runtime module name (default: `starter`)
+- If B) template:
+  - Business module name (default: `app`)
+  - Runtime module name (default: `starter`)
+- If C) template:
+  - Runtime module name (default: `starter`)
+- If D) custom:
+  - Provide module names (comma-separated)
+  - Identify which is runtime module (optional; recommended)
+
+### Step 5: Module type mapping
 Ask:
 - For each new module, choose type:
   1) library (jar)
   2) runtime app (Spring Boot runnable)
+If user selects a runtime module, ensure only one module is configured to execute `spring-boot-maven-plugin`.
 
-### Step 5: basePackage (if needed)
+### Step 6: basePackage (if needed)
 Ask:
 - basePackage (only if adding a new business module or no existing basePackage can be inferred)
 
-### Step 6: Redis
+### Step 7: Redis
 Ask:
 - Redis:
   1) Enable (default)
   2) Disable
 
-### Step 7: Preflight plan + confirmation
+### Step 8: Preflight plan + confirmation
 Print planned changes:
 - parent pom.xml changes
-- modules to be created
-- files to create
+- module tree after changes (with final module names)
+- files to create/modify
+- build/run commands
 Ask:
 - Type `CONFIRM` to proceed.
