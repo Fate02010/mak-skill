@@ -1,0 +1,6 @@
+interface:
+  display_name: "Spring Boot Multi-module Generator"
+  short_description: "Create or add Maven modules for Spring Boot projects (explicit invocation only)."
+
+policy:
+  allow_implicit_invocation: false
