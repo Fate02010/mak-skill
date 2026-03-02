@@ -1,166 +1,330 @@
 ---
 name: spring-boot-multimodule-generator
 description: >
-  Use when the user asks to generate/create/scaffold a Spring Boot multi-module Maven project OR add/create Maven modules in an existing project.
-  适用于：创建 Spring Boot 多模块 Maven 项目，或在已有项目中新增/创建模块（module）。
-  Keywords: create project/创建项目, scaffold/脚手架, generator/生成器, template/模板, multi-module/多模块, module/模块, add module/新增模块,
+  Use when the user asks to generate/create/scaffold a Spring Boot Maven project OR add/create Maven modules in an existing project,
+  with interactive choices (Java 17/21, Spring Boot 2.x/3.x, ORM: MyBatis(+MyBatis-Plus)/JPA/Hibernate, Redis, DB drivers: MySQL/PostgreSQL/MariaDB).
+  This skill keeps Maven modules minimal and technology-oriented; DDD layers are packages inside the business module (no domain/application/interfaces/infrastructure modules).
+  适用于：创建 Spring Boot Maven 项目或在已有项目中新增模块（module），并进行交互式选择（Java 17/21、Boot 2/3、ORM、Redis、DB）。
+  关键字/keywords: create project/创建项目, scaffold/脚手架, generator/生成器, template/模板, multi-module/多模块, module/模块, add module/新增模块,
   Maven/maven 多模块, Spring Boot 2.x/3.x, Java 17/21, JDK17/JDK21, ORM: MyBatis/MyBatis-Plus/JPA/Hibernate, Redis/缓存,
   DB: MySQL/PostgreSQL/PG/PGSQL/MariaDB.
 ---
 
 # 1. Purpose
-This skill can:
-- **Create a new Spring Boot multi-module Maven project** (interactive choices).
-- **Add new Maven modules** to an **existing** multi-module project (interactive module selection).
-- Generate consistent parent `dependencyManagement`, module POMs, and minimal wiring (depending on selected ORM/DB/Redis).
+Generate a **Spring Boot Maven project** and/or **add Maven modules** to an existing project via an **interactive questionnaire**.
+
+Key design choices:
+- Maven modules are **minimal and technology-oriented** (e.g., `common`, `app`, `starter`, optional `bom`).
+- DDD layers (**domain/application/interfaces/infrastructure**) are created as **packages inside the business module** (default `app`), NOT as separate Maven modules.
 
 # 2. Triggers (When to Use)
-Use when user asks for:
-- Create/generate/scaffold a Spring Boot multi-module Maven project (创建/生成/脚手架/多模块项目)
-- Add/create a module in an existing Maven multi-module project (新增模块/创建module/添加子模块)
-- Standard options selection: Java 17/21, Boot 2.x/3.x, ORM, Redis, DB driver
+Use this skill when the user requests any combination of:
+- Create/generate/scaffold a Spring Boot Maven project (创建/生成/脚手架/模板项目)
+- Create/add Maven module(s) in an existing multi-module project (新增模块/添加子模块/创建 module)
+- Interactive selection of Java 17/21, Spring Boot 2.x/3.x, ORM, Redis, and DB drivers
 
 # 3. Non-triggers (When NOT to Use)
-Do NOT use when:
-- Concept-only discussion (no file generation)
-- User does not allow file creation/modification
-- The repository is not a Maven multi-module project and user only wants a single-module quick demo (use other skill)
+Do NOT use this skill when:
+- The user asks only conceptual questions without requesting file generation
+- The user does not allow creating/modifying files
+- The user requests a full business system beyond scaffolding
+- The target is not Maven (e.g., Gradle-only) unless the user explicitly asks to adapt
 
-# 4. Inputs (Interactive Questionnaire)
-Before modifying files, ask ONE questionnaire and wait for answers.
+# 4. Guardrails (Safety & Control)
+- This skill SHOULD be invoked explicitly (e.g., `$spring-boot-multimodule-generator`) for safety, because it may create many files.
+- Never paste or generate secrets (tokens/passwords/private keys).
+- Do not run destructive commands (e.g., `rm -rf`) or mass refactors beyond the agreed scope.
+- Prefer small, reviewable changes: produce a plan and file list before writing many files.
 
-## 4.1 Mode Selection (Must Ask)
-- 0) Mode:  
-  1) Create new project (创建新项目)  
-  2) Add modules to existing project (在已有项目里新增模块)
+# 5. Inputs (Interactive Questionnaire)
+Before generating/modifying any files, ask ONE questionnaire and wait for answers.
 
-## 4.2 Create New Project (Mode 1) - Required Questions
-1) groupId:
-2) artifactId (root project folder name):
-3) basePackage (default = groupId):
+## 5.1 Mode Selection (Must Ask)
+0) Mode:
+1) Create new project (创建新项目)
+2) Add modules to existing project (在已有项目里新增模块)
+
+## 5.2 Mode 1: Create New Project (Required Questions)
+1) `groupId`
+2) `artifactId` (also used as root folder name)
+3) `basePackage` (default = groupId)
 4) Java: 1) 17  2) 21
-5) Spring Boot: 1) 2.x  2) 3.x (optional: specify exact version)
-6) ORM: 1) MyBatis (default MyBatis-Plus) 2) JPA 3) Hibernate
-7) DB: 1) MySQL 2) PostgreSQL 3) MariaDB
+5) Spring Boot: 1) 2.x  2) 3.x (optional: exact version)
+6) ORM: 1) MyBatis (default MyBatis-Plus)  2) JPA  3) Hibernate
+7) DB: 1) MySQL  2) PostgreSQL  3) MariaDB
 8) Redis: enabled by default (say "disable" to disable)
 
-### 4.2.1 Module Plan (Mode 1) - Interactive Module Set
-Ask user to choose a module template set (default recommended), OR custom list.
+### 5.2.1 Module Set (Mode 1)
+Choose a module set. DDD layers will be generated as **packages inside `app`**.
 
-- A) Recommended DDD (default):
-  - common, domain, infrastructure, application, interfaces, bootstrap
-- B) Minimal practical (simpler):
-  - common, infrastructure, interfaces, bootstrap
-- C) Custom (user lists module names)
+- A) Recommended (default): `common`, `app`, `starter`
+- B) Minimal: `app`, `starter`
+- C) Custom: user provides module names (must identify business module and optional runtime module)
 
-If user chooses C, ask:
-- List module names (comma-separated)
-- Identify the runtime module (default = bootstrap)
-- Identify web module (default = interfaces)
+If C, ask:
+- Module names (comma-separated)
+- Which is the business module? (default = `app`)
+- Which is the runtime module? (default = `starter`, optional)
 
-## 4.3 Add Modules (Mode 2) - Required Questions
-1) Root module/pom location:
-- Where is the parent `pom.xml`? (default: repo root `pom.xml`)
-2) Existing module names (if unknown, skill must detect from parent POM `<modules>`):
-- Allow skill to parse and list them, then confirm.
-3) Add which modules:
-- User chooses from templates or provides custom names:
-  - common / domain / infrastructure / application / interfaces / bootstrap / bom
-  - or custom module name(s)
-4) Module type for each new module:
-- 1) library (jar)
-- 2) spring-boot app (runtime module)
-5) Dependencies per new module (minimal):
-- If runtime/web: include `spring-boot-starter-web` (optional)
-- If infra: include ORM + DB driver + Redis config modules where appropriate
+## 5.3 Mode 2: Add Modules to Existing Project (Required Questions)
+1) Parent `pom.xml` path (default: `./pom.xml`)
+2) Add which modules:
+   - choose from `common`, `app`, `starter`, `bom`, or custom module names
+3) For each new module: type
+   - 1) library (`jar`)
+   - 2) runtime app (Spring Boot runnable module)
+4) Redis: enabled by default (say "disable" to disable)
+5) If adding a business module: confirm the `basePackage` (or derive from existing code)
 
-# 5. Workflow (Must Follow)
-1) Ask the questionnaire (Mode + required options)
-2) Inspect repository context:
-   - If Mode 2, read parent POM and list existing modules
-3) Propose changes:
-   - Print planned directory tree and which files will be created/changed
-4) Generate/Modify files:
-   - Create module folders, module POMs
-   - Update parent POM `<modules>` (Mode 2) and align `dependencyManagement`
-   - Add minimal Spring Boot bootstrap module if requested
-5) Provide verification commands:
-   - `mvn -q -DskipTests package`
-   - run command for runtime module if applicable
-6) Summarize:
-   - Selected options, generated modules, key files, next steps
+# 6. Workflow (Wizard-style, Step-by-step)
 
-# 6. Module Rules (How to Create Modules)
-## 6.1 Parent POM Update
+1) Start Wizard
+   - Explain that the skill will collect options step-by-step and will NOT create files until final confirmation.
+
+2) Step-by-step collection
+   - Ask ONE question per step (or one tightly-related group).
+   - After each answer, print a short "Summary so far".
+
+3) Validation & defaults
+   - Validate user input (e.g., mode=1/2, Java=17/21, Boot=2.x/3.x).
+   - Apply safe defaults when user does not specify details (e.g., Redis enabled by default).
+
+4) Preflight Plan (no file changes yet)
+   - Print:
+     - planned module tree
+     - DDD package layout (inside business module)
+     - files to be created/modified
+     - build/run commands
+   - Highlight risky operations (e.g., modifying parent pom.xml).
+
+5) Final Confirmation (required)
+   - Ask the user to type `CONFIRM` to proceed.
+   - If user does not confirm, stop after showing the plan.
+
+6) Execute changes
+   - Create/modify files as planned.
+
+7) Verify & Summarize
+   - Provide verification commands and a concise summary of what was generated.
+
+# 7. Project Structure (Modules vs Packages)
+
+## 7.1 Default Modules (Minimal, technology-oriented)
+Recommended default modules:
+- `<root>`: parent aggregator (`packaging=pom`)
+- `common` (optional): shared utilities, common response objects, exceptions, constants
+- `app`: main business module (`packaging=jar`), contains DDD layers as packages
+- `starter`: runtime Spring Boot module (`packaging=jar`), contains `@SpringBootApplication`, depends on `app` (and `common`)
+
+Optional:
+- `bom`: centralized dependencyManagement module if the org prefers an explicit BOM module; otherwise keep dependencyManagement in parent.
+
+## 7.2 DDD Layers as Packages (Inside Business Module)
+Inside `app/src/main/java/<basePackage>/`, create:
+- `domain/` (entities, value objects, domain services, domain events)
+- `application/` (application services, use cases, command/query models)
+- `interfaces/` (controllers, web DTOs, request/response, API adapters)
+- `infrastructure/` (persistence adapters, repositories/mappers, Redis config, external clients)
+
+Important:
+- Do NOT create Maven modules named `domain`, `application`, `interfaces`, or `infrastructure`.
+- These are packages under the business module.
+
+# 8. Maven & Dependency Management Requirements
+The parent POM MUST include:
+- `dependencyManagement`
+  - Import `spring-boot-dependencies` BOM
+  - If the user explicitly requires controlling Spring Framework versions, optionally align via a Spring Framework BOM or properties (without breaking the Boot BOM).
+- `pluginManagement`
+  - `maven-compiler-plugin` (source/target = 17 or 21)
+  - `spring-boot-maven-plugin` (configured so it runs only in the runtime module)
+
+Child modules MUST:
+- Inherit from the parent
+- Avoid declaring Spring/Boot dependency versions directly; rely on `dependencyManagement`
+
+# 9. Module Rules (How to Create/Add Modules)
+
+## 9.1 Parent POM `<modules>` Update (Mode 2)
 - When adding modules, update `<modules>` in parent `pom.xml`.
-- Keep module ordering stable and readable (e.g., common → domain → infra → app → interfaces → bootstrap).
+- Keep module ordering stable/readable (e.g., `common` → `app` → `starter`).
 
-## 6.2 Module POM Conventions
-Each module must:
-- Inherit from parent (`<parent>`)
-- Use consistent `artifactId` naming:
-  - `<root-artifactId>-<module>` OR simply `<module>` (choose one convention and apply consistently)
-- Depend on other modules by responsibility:
-  - application depends on domain + common
-  - infrastructure depends on domain + common (+ ORM/DB/Redis deps)
-  - interfaces depends on application + common
-  - bootstrap depends on interfaces (+ spring-boot starters)
+## 9.2 Module Naming Convention
+Pick one convention and apply consistently:
+- Convention A: `<root-artifactId>-<module>` (e.g., `demo-platform-app`)
+- Convention B: `<module>` (e.g., `app`, `starter`)
 
-## 6.3 Runtime Module (Spring Boot app)
-- Only the runtime module should include `spring-boot-maven-plugin`.
-- Provide:
-  - `@SpringBootApplication` main class
-  - `application.yml` minimal config
+## 9.3 Inter-module Dependencies
+- `app` depends on `common` (if present)
+- `starter` depends on `app` (and `common` if present)
+- `common` should avoid Spring Boot starters unless explicitly required
 
-# 7. Dependency Management Requirements
-Parent must include:
-- `dependencyManagement` importing `spring-boot-dependencies`
-- Optionally align/override Spring Framework versions if org requires
-- `pluginManagement` for compiler plugin and boot plugin
+## 9.4 Runtime Module (`starter`) Requirements
+Only the runtime module should:
+- Apply/execute `spring-boot-maven-plugin`
+- Contain `@SpringBootApplication` main class
+- Provide `application.yml` with minimal configuration
 
-Child modules should not declare core Spring/Boot versions directly.
+# 10. Dependencies (Based on Choices)
 
-# 8. Dependencies (Based on Choices)
-- ORM (MyBatis/MyBatis-Plus/JPA/Hibernate)
-- Redis (default on)
-- DB driver (MySQL/PostgreSQL/MariaDB)
-- Keep Boot 2 vs Boot 3 namespace consistency (javax vs jakarta).
+## 10.1 Spring Boot 2.x vs 3.x
+- Boot 2.x: beware of `javax.*` vs `jakarta.*` differences
+- Boot 3.x: uses `jakarta.*` namespaces
+Generated dependencies/config must match the chosen Boot line (do not mix `javax` and `jakarta`).
 
-# 9. Output Format (Must)
-Final output must include:
-- What mode was executed (Mode 1 or Mode 2)
-- Planned vs created module tree
-- Parent POM changes summary (modules added, dependencyManagement)
-- Key files list
-- Build/run commands
+## 10.2 ORM
+- MyBatis: `mybatis-spring-boot-starter`
+- MyBatis-Plus (default when MyBatis selected): `mybatis-plus-boot-starter`
+- JPA: `spring-boot-starter-data-jpa`
+- Hibernate: prefer via JPA starter (Hibernate is the default provider). If user explicitly requests “pure Hibernate”, add notes/config guidance.
 
-# 10. Quality Bar (DoD)
+## 10.3 Redis (Enabled by Default)
+- `spring-boot-starter-data-redis`
+- Provide minimal `application.yml` examples (host/port/password/database/timeout)
+
+## 10.4 DB Drivers (One of)
+- MySQL: `mysql-connector-j`
+- PostgreSQL: `org.postgresql:postgresql`
+- MariaDB: `org.mariadb.jdbc:mariadb-java-client`
+
+# 11. Output Format (Must)
+Final output MUST include:
+1) Mode executed (Mode 1 or Mode 2)
+2) Planned vs created module tree
+3) Parent POM change summary (modules added/updated, dependencyManagement highlights)
+4) Key file list (parent `pom.xml`, each module `pom.xml`, runtime `application.yml`, main class)
+5) Build/run commands
+6) Summary of selected options (Java/Boot/ORM/DB/Redis)
+
+## Wizard UI Convention (recommended)
+At each step:
+- Show choices with numbers/letters
+- Accept short answers (e.g., "1", "A", "disable")
+- Print "Summary so far" after the user answers
+
+# 12. Quality Bar (Definition of Done)
 - `mvn -q -DskipTests package` succeeds
-- New modules are correctly included in parent `<modules>`
-- If runtime module exists, it can start or at least compiles with proper plugin config
-- DependencyManagement is not duplicated across modules
+- New modules appear in parent `<modules>` (Mode 2)
+- Child modules do not re-declare core Spring/Boot versions unnecessarily
+- If `starter` exists: it at least compiles and provides a runnable entrypoint (`spring-boot:run` command)
+- Dependencies/config are consistent with Boot 2 vs Boot 3 namespace requirements
 
-# 11. Interactive Questionnaire Template (Ask Exactly Like This)
-0) Mode:
-   1) Create new project (创建新项目)
-   2) Add modules to existing project (新增模块)
+# 13. Wizard Steps (Ask Step-by-step)
 
-If Mode 1:
-- ① groupId:
-- ② artifactId:
-- ③ basePackage (default = groupId):
-- ④ Java: 1) 17  2) 21
-- ⑤ Spring Boot: 1) 2.x  2) 3.x (optional exact version)
-- ⑥ ORM: 1) MyBatis (default MyBatis-Plus) 2) JPA  3) Hibernate
-- ⑦ DB: 1) MySQL  2) PostgreSQL  3) MariaDB
-- ⑧ Redis: enabled by default (say "disable" if you want to disable)
-- ⑨ Module set:
-    A) Recommended DDD (common, domain, infrastructure, application, interfaces, bootstrap)
-    B) Minimal (common, infrastructure, interfaces, bootstrap)
-    C) Custom (provide module names)
+## Step 0: Mode
+Ask:
+- Choose mode:
+  1) Create new project (创建新项目)
+  2) Add modules to existing project (新增模块)
 
-If Mode 2:
-- ① Parent pom.xml path (default: ./pom.xml):
-- ② Add modules (choose: common/domain/infrastructure/application/interfaces/bootstrap/bom or custom names):
-- ③ For each new module: type 1) library 2) runtime app
-- ④ Redis: enabled by default (say "disable" if you want to disable)
+Then print:
+- Summary so far: mode = ...
+
+---
+
+## Mode 1 Wizard (Create new project)
+
+### Step 1: Project coordinates
+Ask:
+- groupId:
+- artifactId:
+- basePackage (default = groupId)
+
+### Step 2: Java version
+Ask:
+- Java:
+  1) 17
+  2) 21
+
+### Step 3: Spring Boot line
+Ask:
+- Spring Boot:
+  1) 2.x
+  2) 3.x
+- Optional: exact version (press Enter to skip)
+
+### Step 4: ORM
+Ask:
+- ORM:
+  1) MyBatis (default MyBatis-Plus)
+  2) JPA
+  3) Hibernate
+If MyBatis selected:
+- Enable MyBatis-Plus?
+  1) Yes (default)
+  2) No
+
+### Step 5: Database
+Ask:
+- DB:
+  1) MySQL
+  2) PostgreSQL
+  3) MariaDB
+
+### Step 6: Redis
+Ask:
+- Redis:
+  1) Enable (default)
+  2) Disable
+
+### Step 7: Module set (minimal modules)
+Ask:
+- Module set:
+  A) Recommended (common, app, starter)
+  B) Minimal (app, starter)
+  C) Custom
+If C:
+- Provide module names (comma-separated)
+- Which is business module? (default = app)
+- Which is runtime module? (default = starter; optional)
+
+### Step 8: Preflight plan + confirmation
+Print planned:
+- module tree
+- app package layout: domain/application/interfaces/infrastructure
+- list of files to create
+Then ask:
+- Type `CONFIRM` to generate files, or anything else to cancel.
+
+---
+
+## Mode 2 Wizard (Add modules to existing project)
+
+### Step 1: Parent POM location
+Ask:
+- Parent pom.xml path (default: ./pom.xml)
+
+### Step 2: Detect existing modules
+Action:
+- Parse parent POM <modules> and print detected modules
+Ask:
+- Confirm detected module list (Y/N). If N, ask user to provide correct module list.
+
+### Step 3: Choose modules to add
+Ask:
+- Which modules to add:
+  - common / app / starter / bom / custom names (comma-separated)
+
+### Step 4: Module type mapping
+Ask:
+- For each new module, choose type:
+  1) library (jar)
+  2) runtime app (Spring Boot runnable)
+
+### Step 5: basePackage (if needed)
+Ask:
+- basePackage (only if adding a new business module or no existing basePackage can be inferred)
+
+### Step 6: Redis
+Ask:
+- Redis:
+  1) Enable (default)
+  2) Disable
+
+### Step 7: Preflight plan + confirmation
+Print planned changes:
+- parent pom.xml changes
+- modules to be created
+- files to create
+Ask:
+- Type `CONFIRM` to proceed.
