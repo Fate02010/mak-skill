@@ -29,6 +29,26 @@ Step 6: 审视原型 → 提出改进建议 → 用户确认 → 迭代改进（
 
 ## 执行方式
 
+### 第一步：创建执行计划，展示进度
+
+工作流启动后，**立即**使用 `TaskCreate` 创建任务列表，让用户能实时看到整体进度：
+
+```
+TaskCreate:
+  subject: "原型生成工作流 - [产品名称]"
+  description: |
+    Step 1: 扫描产品资料 → 生成 RountMap.md
+    Step 2: 提炼产品特性 → 生成 PM 角色 prompt
+    Step 3: 竞品调研分析 → 生成竞品分析报告
+    Step 4: 生成详细需求文档
+    Step 5: 并行生成 HTML 原型图
+    Step 6: 改进建议与迭代
+```
+
+每个 Step 开始时用 `TaskUpdate` 标记为 `in_progress`，完成后标记为 `completed`。
+
+### 第二步：按需加载指令，逐步执行
+
 每个 Step 开始前，先 Read 对应的指令文件，然后按指令执行：
 
 | Step | 指令文件 | 说明 |
