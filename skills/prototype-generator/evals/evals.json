@@ -1,0 +1,23 @@
+{
+  "skill_name": "prototype-generator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "我在 /tmp/test-product/ 有一个产品的资料文件夹，里面有 PRD 文档和设计稿说明。请帮我：1. 生成资料导航索引 RountMap.md，2. 生成需求文档草稿，3. 生成 HTML 原型图。",
+      "expected_output": "生成 RountMap.md、需求文档草稿.md、原型任务清单.md，以及 prototypes/ 目录下的多个 HTML 文件（包含 index.html 导航页）",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "帮我根据这个电商产品的资料文件夹 /tmp/ecommerce-app/ 生成原型图。产品是一个生鲜电商 APP，面向 C 端用户，功能包括商品浏览、购物车、下单支付。",
+      "expected_output": "生成完整的 HTML 原型图，包括商品列表页、商品详情页、购物车页、订单确认页等核心页面",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "我有个 SaaS 后台管理系统的需求，资料在 /tmp/saas-admin/ 里。先帮我分析资料生成 RountMap，然后生成需求文档草稿，最后生成管理后台的 HTML 原型。",
+      "expected_output": "按工作流四步执行：RountMap.md → PM prompt → 需求文档草稿.md → 并行生成多个后台管理页面原型",
+      "files": []
+    }
+  ]
+}
