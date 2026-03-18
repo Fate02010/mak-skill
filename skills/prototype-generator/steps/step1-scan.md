@@ -15,51 +15,7 @@
 | 图片 | `.png` / `.jpg` / `.jpeg` / `.gif` / `.webp` | `Read` 工具直接读取（Claude 支持视觉理解） |
 | ZIP | `.zip` | `Bash: unzip -l` 查看内容清单，再按需解压到 `WORK_DIR/unzipped/` 后读取 |
 
-### 各格式读取命令参考
-
-**Word (.docx)：**
-```bash
-python3 -c "
-import docx
-doc = docx.Document('[文件路径]')
-for p in doc.paragraphs:
-    print(p.text)
-" 2>/dev/null || pandoc '[文件路径]' -t plain 2>/dev/null
-```
-
-**Excel (.xlsx)：**
-```bash
-python3 -c "
-import openpyxl
-wb = openpyxl.load_workbook('[文件路径]', read_only=True)
-for sheet in wb.sheetnames:
-    ws = wb[sheet]
-    print(f'=== {sheet} ===')
-    for row in ws.iter_rows(max_row=50, values_only=True):
-        print(row)
-" 2>/dev/null
-```
-
-**PPT (.pptx)：**
-```bash
-python3 -c "
-from pptx import Presentation
-prs = Presentation('[文件路径]')
-for i, slide in enumerate(prs.slides):
-    print(f'=== 第{i+1}页 ===')
-    for shape in slide.shapes:
-        if hasattr(shape, 'text'):
-            print(shape.text)
-" 2>/dev/null
-```
-
-**ZIP：**
-```bash
-# 先查看内容
-unzip -l '[文件路径]'
-# 按需解压到 WORK_DIR
-unzip -o '[文件路径]' -d '[WORK_DIR]/unzipped/'
-```
+> 遇到 Word / Excel / PPT / ZIP 文件时，Read `SKILL_DIR/steps/step1-file-readers.md` 获取读取命令。
 
 ## 执行步骤
 
@@ -101,42 +57,8 @@ unzip -o '[文件路径]' -d '[WORK_DIR]/unzipped/'
 - **参考文件**：读取摘要（前 50 行或关键段落），按需深入
 - **跳过文件**：记录在 RountMap.md 中但不读取内容
 
-读取时根据格式使用对应方式（见上方"各格式读取命令参考"）。
+读取时根据格式使用对应方式（非文本格式见 `SKILL_DIR/steps/step1-file-readers.md`）。
 
-4. 生成 `RountMap.md` 文件，保存到 `WORK_DIR`，文件索引中记录每个文件的用户确认优先级
+4. Read `SKILL_DIR/steps/step1-routemap-format.md` 获取格式规范，生成 `RountMap.md` 保存到 `WORK_DIR`，记录每个文件的用户确认优先级。
 
-> **依赖检查：** 如果 python3 命令不可用，或缺少 `python-docx` / `openpyxl` / `python-pptx` 库，用 `pip3 install python-docx openpyxl python-pptx` 安装，或改用 `pandoc` / `libreoffice --headless` 等替代方案。
-
-## RountMap.md 格式
-
-```markdown
-# 产品资料导航 (RountMap)
-
-## 资料概览
-[简短描述产品是什么，基于扫描到的资料推断]
-
-## 文件索引
-
-| 文件路径 | 格式 | 内容类型 | 适用场景 | 优先级 |
-|---------|------|---------|---------|-------|
-| docs/PRD.md | Markdown | 产品需求文档 | 了解完整功能需求时读取 | 高 |
-| docs/UI设计.pptx | PPT | 设计规范 | 生成原型时读取样式要求 | 中 |
-| assets/流程图.png | 图片 | 业务流程 | 理解核心流程时参考 | 高 |
-| ... | ... | ... | ... | ... |
-
-## 按场景索引
-
-### 理解产品定位时读
-- [文件路径] - [一句话说明]
-
-### 了解功能需求时读
-- [文件路径] - [一句话说明]
-
-### 生成原型图时读
-- [文件路径] - [一句话说明]
-
-### 了解用户/角色时读
-- [文件路径] - [一句话说明]
-```
-
-> **分块提示：** 如果文件夹中文件超过 20 个，先扫描目录结构，再按子目录分批读取文件摘要，避免一次加载过多内容。
+> 文件超过 20 个时，先扫描目录结构，再按子目录分批读取摘要，避免一次加载过多内容。
