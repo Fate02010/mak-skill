@@ -84,7 +84,13 @@
 
 ### 启动 Agent 的方式
 
-使用 `Agent` 工具，**在单次响应中同时调用所有 Agent**（实现真正并行），每个 Agent 的提示词如下：
+**根据当前运行环境选择对应方式，两种方式使用完全相同的提示词：**
+
+**Claude Code**：使用 `Agent` 工具，在单次响应中同时调用所有 Agent（实现真正并行）。
+
+**Codex**：使用 `Task` 工具并设置 `run_in_background=true`，为每个模块启动一个后台 Task，再统一用 `TaskOutput` 收集结果。
+
+每个 Agent / Task 的提示词如下：
 
 ```
 你是 [模块名] 的原型生成 Agent。
