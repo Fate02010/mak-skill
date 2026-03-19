@@ -135,15 +135,51 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 
 4. 合并完成后删除临时文件（`sql_*.sql`）
 
-## 阶段 6-4：生成 ER 关系说明文档
+## 阶段 6-4：并行生成 ER 文档 + 详细设计文档
 
-Read `SKILL_DIR/steps/step6-er-doc.md` 获取格式规范，生成 `WORK_DIR/ER关系图.md`。
+> **为什么用 subagent：** 这两个文档都需要读取完整 SQL 文件（10K-15K tokens），在主线程执行会大量消耗上下文。改用 subagent 隔离，主线程只追踪进度。
 
-## 阶段 6-5：生成数据详细设计文档
+展示计划并**等待用户确认后**启动两个并行 subagent：
 
-Read `SKILL_DIR/steps/step6-design-doc.md` 获取格式规范，生成 `WORK_DIR/数据详细设计文档.md`。
+```
+=== 文档生成计划 ===
 
-该文档包含：设计概述、每张表的字段明细/索引/业务规则/关联、跨表业务流程、数据字典。
+Doc-Agent 1 │ 生成 ER关系图.md
+            │ 输入：[产品名称].sql + 领域模型.md
+            │ 输出：WORK_DIR/ER关系图.md
+
+Doc-Agent 2 │ 生成 数据详细设计文档.md
+            │ 输入：[产品名称].sql + 领域模型.md + ER关系图.md
+            │ 输出：WORK_DIR/数据详细设计文档.md
+
+是否确认并启动？（回复"确认"）
+```
+
+**Doc-Agent 1 prompt（ER 文档）：**
+```
+任务：生成 ER 关系说明文档
+
+1. Read `[SKILL_DIR]/steps/step6-er-doc.md` 获取格式规范
+2. Read `[WORK_DIR]/[产品名称].sql` 提取表结构
+3. Read `[WORK_DIR]/领域模型.md` 获取聚合分组
+4. 按规范生成，写入 `[WORK_DIR]/ER关系图.md`
+5. 完成后输出：✅ ER关系图.md 已生成
+```
+
+**Doc-Agent 2 prompt（详细设计文档）：**
+```
+任务：生成数据详细设计文档
+
+1. Read `[SKILL_DIR]/steps/step6-design-doc.md` 获取格式规范
+2. Read `[WORK_DIR]/[产品名称].sql` 提取所有表和字段
+3. Read `[WORK_DIR]/领域模型.md` 获取实体职责和业务规则
+4. 等待 ER关系图.md 存在后 Read 以引用关系说明
+5. 按规范生成，写入 `[WORK_DIR]/数据详细设计文档.md`
+6. 完成后输出：✅ 数据详细设计文档.md 已生成（共 N 张表）
+```
+
+**Claude Code**：单次响应同时调用两个 `Agent` 工具并行执行
+**Codex**：`Task(run_in_background=true)` × 2，再 `TaskOutput(block=true)` 收集
 
 ## 阶段 6-6：收集领域模型反馈
 
