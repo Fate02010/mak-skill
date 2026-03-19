@@ -1,6 +1,6 @@
-# Step 3：选择目标数据库
+# Step 1：选择目标数据库
 
-**目标：** 确认本次 SQL 输出的目标数据库类型，后续所有 DDL 语法严格遵循所选数据库规范。
+**目标：** 在读取任何资料之前，先确认 SQL 输出的目标数据库，后续所有 DDL 语法严格遵循所选数据库规范。
 
 ## 执行步骤
 
@@ -20,15 +20,15 @@
 请回复数字（1-5）选择数据库：
 ```
 
-## 各数据库关键语法差异备忘
+选定后记录所选数据库类型，后续所有 SQL 生成均以此为准。
 
-选定后记录所选数据库，后续生成 SQL 时参照以下规范：
+## 各数据库关键语法备忘
 
 | 特性 | MySQL/MariaDB | PostgreSQL | SQL Server | Oracle | Db2 |
 |------|--------------|------------|------------|--------|-----|
-| 自增主键 | `AUTO_INCREMENT` | `SERIAL` / `GENERATED ALWAYS AS IDENTITY` | `IDENTITY(1,1)` | `GENERATED ALWAYS AS IDENTITY` | `GENERATED ALWAYS AS IDENTITY` |
-| 字段注释 | `COMMENT '...'` | `COMMENT ON COLUMN` | 无原生，用扩展属性 | `COMMENT ON COLUMN` | `COMMENT ON COLUMN` |
+| 自增主键 | `AUTO_INCREMENT` | `GENERATED ALWAYS AS IDENTITY` | `IDENTITY(1,1)` | `GENERATED ALWAYS AS IDENTITY` | `GENERATED ALWAYS AS IDENTITY` |
+| 字段注释 | `COMMENT '...'` | `COMMENT ON COLUMN` | 扩展属性 | `COMMENT ON COLUMN` | `COMMENT ON COLUMN` |
 | 字符串类型 | `VARCHAR` | `VARCHAR` | `NVARCHAR` | `VARCHAR2` | `VARCHAR` |
-| 当前时间默认值 | `CURRENT_TIMESTAMP` | `CURRENT_TIMESTAMP` | `GETDATE()` | `SYSDATE` | `CURRENT_TIMESTAMP` |
+| 时间默认值 | `CURRENT_TIMESTAMP` | `CURRENT_TIMESTAMP` | `GETDATE()` | `SYSDATE` | `CURRENT_TIMESTAMP` |
 | 布尔/标志位 | `TINYINT(1)` | `BOOLEAN` | `BIT` | `NUMBER(1)` | `SMALLINT` |
 | 表注释 | `COMMENT='...'` | `COMMENT ON TABLE` | 无原生 | `COMMENT ON TABLE` | `COMMENT ON TABLE` |

@@ -8,6 +8,7 @@ description: |
   - 设计 ER 图 / ER 模型 / 实体关系图
   - 说"帮我设计数据库"、"生成建表SQL"、"数据库表结构设计"、"表结构设计"、"数据库schema"时
   - 说"数据建模"、"数据模型设计"、"画ER图"、"生成DDL"时
+  - 说"领域模型"、"DDD建模"、"聚合设计"、"实体设计"时
   - 在已有 SQL 上新增表，说"新增XX表"、"帮我补充XX模块的表"时
   - 修改现有表结构，说"修改XX表"、"给XX表加个字段"、"改一下XX表的索引"时
   请务必使用此 skill。
@@ -28,7 +29,7 @@ description: |
 
 ```
 检测到已有 SQL 文件，请选择：
-1. 新增表或修改现有表结构（增量）→ 进入 Step 5
+1. 增量模式（新增表或修改现有表结构）→ 进入 Step 8
 2. 重新生成（从头开始）→ 从 Step 1 开始
 ```
 
@@ -38,70 +39,88 @@ description: |
 
 1. 如果用户在指令中明确提供了产品资料路径，使用该路径作为 `WORK_DIR`
 2. 如果没有指定，**默认使用当前终端的工作目录**（通过 `Bash: pwd` 获取）
-3. 告知用户："产品资料目录：`[WORK_DIR]`，所有文件（RountMap.md、SQL 文件、临时分块文件）将输出到此目录，是否确认？"
+3. 告知用户："产品资料目录：`[WORK_DIR]`，所有文件（RountMap.md、领域模型.md、SQL 文件）将输出到此目录，是否确认？"
 4. **必须等待用户确认**后才能进入 Step 1
 
-**重要：所有生成和缓存文件（RountMap.md、sql_*.sql 分块文件、最终 SQL 文件）必须保存在 `WORK_DIR` 下，严禁写入 `/private/tmp` 或其他系统临时目录。**
+**重要：所有生成和缓存文件必须保存在 `WORK_DIR` 下，严禁写入 `/private/tmp` 或其他系统临时目录。**
 
 ### 第一步：创建执行计划，展示进度
 
-工作流启动后**立即**展示执行计划，并用 `TaskCreate` 创建任务列表：
+工作流启动后**立即**展示执行计划，并用 `TaskCreate` 为每个 Step 创建任务：
 
 ```
 === 数据库设计执行计划 ===
 
 工作目录：[WORK_DIR]
 
-[ ] Step 1：扫描产品资料 → 生成 RountMap.md
-[ ] Step 2：提炼产品特性 → 生成架构师 prompt
-[ ] Step 3：选择目标数据库
-[ ] Step 4：设计表结构 → 生成 SQL 文件
+[ ] Step 1：选择目标数据库
+[ ] Step 2：扫描产品资料 → 生成 RountMap.md
+[ ] Step 3：提炼产品特性 → 生成架构师 prompt，设定角色
+[ ] Step 4：创建领域模型 → 生成 领域模型.md
+[ ] Step 5：拆分设计任务 → 等待用户确认
+[ ] Step 6：并行生成 SQL 文件
+[ ] Step 7：审视检查 → 改进建议 → 更新领域模型（如影响）
 
 即将开始，按任意内容继续，或回复"取消"退出。
 ```
 
-每个 Step 开始时用 `TaskUpdate` 标记为 `in_progress`，完成后标记为 `completed`，让用户实时看到整体进度。
+每个 Step 开始时用 `TaskUpdate` 标记为 `in_progress`，完成后标记为 `completed`。
 
 ### 第二步：按需加载指令，逐步执行
 
 | Step | 指令文件 | 说明 |
 |------|---------|------|
-| 1 | `SKILL_DIR/steps/step1-scan.md` | 扫描资料，生成 RountMap.md |
-| 2 | `SKILL_DIR/steps/step2-architect-prompt.md` | 生成数据库架构师角色 prompt |
-| 3 | `SKILL_DIR/steps/step3-db-select.md` | 用户选择目标数据库 |
-| 4 | `SKILL_DIR/steps/step4-table-design.md` | 分析需求，设计表结构，生成 SQL |
-| 5 | `SKILL_DIR/steps/step5-incremental.md` | 增量新增表或修改现有表结构 |
+| 1 | `SKILL_DIR/steps/step1-db-select.md` | 用户选择目标数据库 |
+| 2 | `SKILL_DIR/steps/step2-scan.md` | 扫描资料，生成 RountMap.md |
+| 3 | `SKILL_DIR/steps/step3-architect-prompt.md` | 生成数据库架构师角色 prompt，设定角色 |
+| 4 | `SKILL_DIR/steps/step4-domain-model.md` | 识别业务实体，生成 领域模型.md |
+| 5 | `SKILL_DIR/steps/step5-split-tasks.md` | 按聚合拆分设计任务 |
+| 6 | `SKILL_DIR/steps/step6-generate-sql.md` | 并行生成各聚合 SQL，合并输出 |
+| 7 | `SKILL_DIR/steps/step7-review.md` | 审视检查，改进建议，更新领域模型 |
+| 8 | `SKILL_DIR/steps/step8-incremental.md` | 增量新增表或修改现有表结构 |
+
+SQL 规范（每个生成子任务必须加载）：`SKILL_DIR/steps/step4-sql-rules.md`
 
 ## 工作流概览
 
 ```
 【全量模式】
-Step 1: 扫描产品资料 → 展示文件列表 → 用户确认分级 → 生成 RountMap.md
-Step 2: 提炼产品特性 → 生成数据库架构师 prompt → 设定角色
-Step 3: 用户选择目标数据库（单选）
-Step 4: 深度读取资料 → 设计表结构 → 用户确认 → 生成 SQL 文件（>10张表并行）
+Step 1: 用户选择目标数据库（单选，后续 SQL 语法严格遵循）
+Step 2: 扫描产品资料 → 展示文件列表 → 用户确认分级 → 生成 RountMap.md
+Step 3: 提炼产品特性 → 生成架构师 prompt → 用户确认 → 设定角色
+Step 4: 识别业务实体与关系 → 展示领域模型清单 → 用户确认 → 生成 领域模型.md
+Step 5: 按聚合拆分设计任务 → 展示任务清单 → 用户确认
+Step 6: 并行生成各聚合 SQL → 合并为完整 SQL 文件
+Step 7: 审视检查（完整性/规范性/性能/业务正确性）→ 改进建议 → 用户确认 → 应用改进
+       ↳ 如设计影响领域模型 → 必须更新 领域模型.md 并记录变更
 
 【增量模式】
-Step 5: 理解变更需求 → 分析影响 → 变更清单确认 → 生成 ALTER/建表 SQL → 追加到主文件
+Step 8: 理解变更需求 → 分析影响 → 变更清单确认 → 生成 ALTER/建表 SQL → 追加到主文件
+       ↳ 如影响领域模型 → 同步更新 领域模型.md
 ```
 
 ## 输出文件结构
 
 ```
 WORK_DIR/                         ← 所有文件必须在此目录下，禁止写入 /private/tmp
-├── RountMap.md                   ← Step 1 生成
-├── sql_[模块名].sql               ← Step 4 并行时的临时分块文件（合并后自动删除）
-└── [产品名称].sql                 ← Step 4 最终输出文件
+├── RountMap.md                   ← Step 2 生成（资料索引）
+├── 领域模型.md                   ← Step 4 生成，Step 7 按需更新
+├── db_task_list.md               ← Step 5 生成（任务清单，临时文件）
+├── sql_[聚合名].sql              ← Step 6 并行时的临时分块文件（合并后删除）
+└── [产品名称].sql                ← Step 6 最终输出文件
 ```
 
 ## 注意事项
 
-1. **强制用户交互点：**
-   - **第零步**：确认 WORK_DIR，必须等待用户确认
-   - **Step 1**：展示文件列表，等待用户确认分级
-   - **Step 3**：等待用户选择数据库
-   - **Step 4**：展示表结构清单，等待用户确认后生成 SQL
-2. **文件路径：** 所有文件统一写入 `WORK_DIR`，使用绝对路径，严禁写入 `/private/tmp` 或其他系统临时目录
+1. **强制用户交互点（必须等待用户确认才能继续）：**
+   - **第零步**：确认 WORK_DIR
+   - **Step 1**：等待用户选择数据库
+   - **Step 2**：展示文件列表，等待用户确认分级
+   - **Step 3**：展示架构师 prompt，等待用户确认角色
+   - **Step 4**：展示领域模型清单，等待用户确认
+   - **Step 5**：展示任务分组清单，等待用户确认
+   - **Step 7**：展示改进建议，等待用户决策
+2. **领域模型是基准：** 设计过程中发现任何影响领域模型的问题，Step 7 必须同步更新 `领域模型.md` 并记录变更
 3. **SQL 规范：** 详见 `SKILL_DIR/steps/step4-sql-rules.md`，每次生成前必须加载
-4. **并行生成：** 表数量 > 10 时并行分块生成，详见 `SKILL_DIR/steps/step4-parallel.md`
+4. **文件路径：** 所有文件统一写入 `WORK_DIR`，使用绝对路径，严禁写入 `/private/tmp`
 5. **禁止自动推进：** 在强制交互点，严禁假设用户意图自动继续，必须明确等待用户输入
