@@ -27,14 +27,36 @@
 
 ### 启动方式
 
-Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，填入模块数据后启动：
+Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，填入模块数据后启动。
 
-- **Claude Code**：`Agent` 工具，单次响应同时调用所有 Agent
-- **Codex**：`Task` 工具 + `run_in_background=true`，用 `TaskOutput` 收集结果
+**Claude Code（Agent 工具）：** 单次响应内同时调用所有 Agent，每个 Agent 对应一个模块：
+```
+Agent(prompt="...模块1 完整 prompt...")
+Agent(prompt="...模块2 完整 prompt...")
+...  # 所有调用在同一响应中发出，并行执行
+```
+
+**Codex（Task 工具 + run_in_background）：**
+```
+# 步骤1：依次创建后台任务
+task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=true)
+task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=true)
+...
+
+# 步骤2：等待并收集结果
+result_1 = TaskOutput(task_id=task_1.id, block=true)
+result_2 = TaskOutput(task_id=task_2.id, block=true)
+...
+```
 
 ### 启动后进度
 
-展示每个 Agent 状态（⏳生成中 → ✅已完成 N 个文件），等待全部完成后进入下一阶段。
+展示每个 Agent 状态，等待全部完成后进入下一阶段：
+```
+  ⏳ Agent 1 │ [模块名]（生成中...）
+  ✅ Agent 2 │ [模块名]（已完成，N 个文件）
+```
+若某任务失败，记录后继续等待其他任务，最后统一补充。
 
 ## 阶段 5-4：收集需求变更，更新需求文档
 
