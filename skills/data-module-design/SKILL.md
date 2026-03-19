@@ -61,10 +61,11 @@ SQL 规范（每个生成子任务必须加载）：`SKILL_DIR/steps/step4-sql-r
 
 ```
 WORK_DIR/
-├── RountMap.md       ← Step 2
-├── 领域模型.md       ← Step 4，Step 7/8 按需更新
-├── [产品名称].sql    ← Step 6（含 t_ 前缀表名）
-└── ER关系图.md       ← Step 6（Mermaid + 关系表 + 索引说明）
+├── RountMap.md           ← Step 2
+├── 领域模型.md           ← Step 4，Step 7/8 按需更新
+├── [产品名称].sql        ← Step 6（含 t_ 前缀表名）
+├── ER关系图.md           ← Step 6（Mermaid + 关系表 + 索引说明）
+└── 数据详细设计文档.md   ← Step 6（字段明细、业务规则、流程说明、数据字典）
 ```
 
 ## 强制交互点（每处必须等待用户回复）
