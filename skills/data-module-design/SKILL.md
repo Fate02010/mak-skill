@@ -75,7 +75,7 @@ description: |
 | 3 | `SKILL_DIR/steps/step3-architect-prompt.md` | 生成数据库架构师角色 prompt，设定角色 |
 | 4 | `SKILL_DIR/steps/step4-domain-model.md` | 识别业务实体，生成 领域模型.md |
 | 5 | `SKILL_DIR/steps/step5-split-tasks.md` | 按聚合拆分设计任务 |
-| 6 | `SKILL_DIR/steps/step6-generate-sql.md` | 并行生成各聚合 SQL，合并输出 |
+| 6 | `SKILL_DIR/steps/step6-generate-sql.md` | 并行生成各聚合 SQL，合并输出，生成 ER 关系图.md |
 | 7 | `SKILL_DIR/steps/step7-review.md` | 审视检查，改进建议，更新领域模型 |
 | 8 | `SKILL_DIR/steps/step8-incremental.md` | 增量新增表或修改现有表结构 |
 
@@ -90,7 +90,7 @@ Step 2: 扫描产品资料 → 展示文件列表 → 用户确认分级 → 生
 Step 3: 提炼产品特性 → 生成架构师 prompt → 用户确认 → 设定角色
 Step 4: 识别业务实体与关系 → 展示领域模型清单 → 用户确认 → 生成 领域模型.md
 Step 5: 按聚合拆分设计任务 → 展示任务清单 → 用户确认
-Step 6: 并行生成各聚合 SQL → 合并为完整 SQL 文件
+Step 6: 并行生成各聚合 SQL → 合并为完整 SQL 文件 → 生成 ER关系图.md（Mermaid + 关系表 + 索引说明）
 Step 7: 审视检查（完整性/规范性/性能/业务正确性）→ 改进建议 → 用户确认 → 应用改进
        ↳ 如设计影响领域模型 → 必须更新 领域模型.md 并记录变更
 
@@ -104,10 +104,11 @@ Step 8: 理解变更需求 → 分析影响 → 变更清单确认 → 生成 AL
 ```
 WORK_DIR/                         ← 所有文件必须在此目录下，禁止写入 /private/tmp
 ├── RountMap.md                   ← Step 2 生成（资料索引）
-├── 领域模型.md                   ← Step 4 生成，Step 7 按需更新
+├── 领域模型.md                   ← Step 4 生成，Step 7/8 按需更新
 ├── db_task_list.md               ← Step 5 生成（任务清单，临时文件）
 ├── sql_[聚合名].sql              ← Step 6 并行时的临时分块文件（合并后删除）
-└── [产品名称].sql                ← Step 6 最终输出文件
+├── [产品名称].sql                ← Step 6 最终输出文件
+└── ER关系图.md                   ← Step 6 生成（Mermaid 图 + 关系表 + 索引说明）
 ```
 
 ## 注意事项
