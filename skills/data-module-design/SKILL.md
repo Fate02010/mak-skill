@@ -36,12 +36,29 @@ description: |
 
 1. 如果用户在指令中明确提供了产品资料路径，使用该路径作为 `WORK_DIR`
 2. 如果没有指定，**默认使用当前终端的工作目录**（通过 `Bash: pwd` 获取）
-3. 告知用户："产品资料目录：`[WORK_DIR]`，SQL 文件将输出到此目录，是否确认？"
+3. 告知用户："产品资料目录：`[WORK_DIR]`，所有文件（RountMap.md、SQL 文件、临时分块文件）将输出到此目录，是否确认？"
 4. **必须等待用户确认**后才能进入 Step 1
 
-### 第一步：创建执行计划
+**重要：所有生成和缓存文件（RountMap.md、sql_*.sql 分块文件、最终 SQL 文件）必须保存在 `WORK_DIR` 下，严禁写入 `/private/tmp` 或其他系统临时目录。**
 
-工作流启动后立即用 `TaskCreate` 为每个 Step 创建任务，用 `TaskUpdate` 标记 `in_progress` / `completed`。
+### 第一步：创建执行计划，展示进度
+
+工作流启动后**立即**展示执行计划，并用 `TaskCreate` 创建任务列表：
+
+```
+=== 数据库设计执行计划 ===
+
+工作目录：[WORK_DIR]
+
+[ ] Step 1：扫描产品资料 → 生成 RountMap.md
+[ ] Step 2：提炼产品特性 → 生成架构师 prompt
+[ ] Step 3：选择目标数据库
+[ ] Step 4：设计表结构 → 生成 SQL 文件
+
+即将开始，按任意内容继续，或回复"取消"退出。
+```
+
+每个 Step 开始时用 `TaskUpdate` 标记为 `in_progress`，完成后标记为 `completed`，让用户实时看到整体进度。
 
 ### 第二步：按需加载指令，逐步执行
 
@@ -69,18 +86,20 @@ Step 5: 理解变更需求 → 分析影响 → 变更清单确认 → 生成 AL
 ## 输出文件结构
 
 ```
-WORK_DIR/
-├── RountMap.md          ← Step 1 生成
-└── [产品名称].sql        ← Step 4 生成（最终合并文件）
+WORK_DIR/                         ← 所有文件必须在此目录下，禁止写入 /private/tmp
+├── RountMap.md                   ← Step 1 生成
+├── sql_[模块名].sql               ← Step 4 并行时的临时分块文件（合并后自动删除）
+└── [产品名称].sql                 ← Step 4 最终输出文件
 ```
 
 ## 注意事项
 
 1. **强制用户交互点：**
-   - **第零步**：确认 WORK_DIR
+   - **第零步**：确认 WORK_DIR，必须等待用户确认
    - **Step 1**：展示文件列表，等待用户确认分级
    - **Step 3**：等待用户选择数据库
    - **Step 4**：展示表结构清单，等待用户确认后生成 SQL
-2. **SQL 规范：** 详见 `SKILL_DIR/steps/step4-sql-rules.md`，每次生成前必须加载
-3. **并行生成：** 表数量 > 10 时并行分块生成，详见 `SKILL_DIR/steps/step4-parallel.md`
-4. **路径处理：** 使用绝对路径，确保子任务能正确找到文件
+2. **文件路径：** 所有文件统一写入 `WORK_DIR`，使用绝对路径，严禁写入 `/private/tmp` 或其他系统临时目录
+3. **SQL 规范：** 详见 `SKILL_DIR/steps/step4-sql-rules.md`，每次生成前必须加载
+4. **并行生成：** 表数量 > 10 时并行分块生成，详见 `SKILL_DIR/steps/step4-parallel.md`
+5. **禁止自动推进：** 在强制交互点，严禁假设用户意图自动继续，必须明确等待用户输入
