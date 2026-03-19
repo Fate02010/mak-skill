@@ -68,7 +68,8 @@ PRIMARY KEY (id)
 
 ## 5. 表级规范
 
-- 表名：小写下划线命名，见名知意
+- **表名前缀：所有表名必须以 `t_` 开头**，例如 `t_user`、`t_order`、`t_order_item`
+- 表名：`t_` + 小写下划线命名，见名知意
 - 表必须有表级注释说明业务含义
 - 字符集（MySQL）：`CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci`
 - 存储引擎（MySQL）：`ENGINE=InnoDB`

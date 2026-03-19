@@ -24,55 +24,55 @@
 
 ```mermaid
 erDiagram
-    USER {
+    T_USER {
         bigint id PK "用户ID"
         varchar username "用户名"
         varchar email "邮箱"
         tinyint status "状态 1启用 0禁用"
-        datetime created_at "创建时间"
+        datetime create_time "创建时间"
     }
-    USER_ADDRESS {
+    T_USER_ADDRESS {
         bigint id PK "地址ID"
-        bigint user_id FK "用户ID"
+        bigint user_id FK "关联 t_user 表 id"
         varchar province "省份"
         varchar city "城市"
         varchar detail "详细地址"
     }
-    ORDER {
+    T_ORDER {
         bigint id PK "订单ID"
-        bigint user_id FK "用户ID"
+        bigint user_id FK "关联 t_user 表 id"
         decimal total_amount "订单金额"
         tinyint status "状态"
-        datetime created_at "创建时间"
+        datetime create_time "创建时间"
     }
-    ORDER_ITEM {
+    T_ORDER_ITEM {
         bigint id PK "明细ID"
-        bigint order_id FK "订单ID"
-        bigint product_id FK "商品ID"
+        bigint order_id FK "关联 t_order 表 id"
+        bigint product_id FK "关联 t_product 表 id"
         int quantity "数量"
         decimal unit_price "单价"
     }
-    PRODUCT {
+    T_PRODUCT {
         bigint id PK "商品ID"
         varchar name "商品名"
         decimal price "售价"
         int stock "库存"
     }
 
-    USER ||--o{ USER_ADDRESS : "拥有"
-    USER ||--o{ ORDER : "下单"
-    ORDER ||--|{ ORDER_ITEM : "包含"
-    PRODUCT ||--o{ ORDER_ITEM : "被购买"
+    T_USER ||--o{ T_USER_ADDRESS : "拥有"
+    T_USER ||--o{ T_ORDER : "下单"
+    T_ORDER ||--|{ T_ORDER_ITEM : "包含"
+    T_PRODUCT ||--o{ T_ORDER_ITEM : "被购买"
 ```
 
 ## 二、关系汇总表
 
 | # | 主表 | 关系 | 从表 | 关联字段 | 业务含义 |
 |---|------|------|------|---------|---------|
-| 1 | user | 1:N | user_address | user_address.user_id → user.id | 用户拥有多个收货地址 |
-| 2 | user | 1:N | order | order.user_id → user.id | 用户可创建多笔订单 |
-| 3 | order | 1:N | order_item | order_item.order_id → order.id | 订单包含多条商品明细 |
-| 4 | product | 1:N | order_item | order_item.product_id → product.id | 商品可出现在多条明细中 |
+| 1 | t_user | 1:N | t_user_address | t_user_address.user_id → t_user.id | 用户拥有多个收货地址 |
+| 2 | t_user | 1:N | t_order | t_order.user_id → t_user.id | 用户可创建多笔订单 |
+| 3 | t_order | 1:N | t_order_item | t_order_item.order_id → t_order.id | 订单包含多条商品明细 |
+| 4 | t_product | 1:N | t_order_item | t_order_item.product_id → t_product.id | 商品可出现在多条明细中 |
 
 > 关系符号说明：1:1（一对一）、1:N（一对多）、N:M（多对多，通过中间表）
 
@@ -80,13 +80,13 @@ erDiagram
 
 ### [聚合名称一]（如：用户聚合）
 
-**聚合根：** `user`
+**聚合根：** `t_user`
 
 | 表名 | 中文名 | 职责 | 与聚合根的关系 |
 |------|-------|------|--------------|
-| user | 用户 | 存储账号基本信息 | 聚合根 |
-| user_address | 用户地址 | 收货地址管理 | N:1 → user |
-| user_profile | 用户资料 | 扩展信息（头像/昵称） | 1:1 → user |
+| t_user | 用户 | 存储账号基本信息 | 聚合根 |
+| t_user_address | 用户地址 | 收货地址管理 | N:1 → t_user |
+| t_user_profile | 用户资料 | 扩展信息（头像/昵称） | 1:1 → t_user |
 
 **关键业务规则：**
 - [规则1，如：用户删除后地址级联软删除]
@@ -96,13 +96,13 @@ erDiagram
 
 ### [聚合名称二]（如：订单聚合）
 
-**聚合根：** `order`
+**聚合根：** `t_order`
 
 | 表名 | 中文名 | 职责 | 与聚合根的关系 |
 |------|-------|------|--------------|
-| order | 订单 | 订单主体信息 | 聚合根 |
-| order_item | 订单明细 | 购买的商品明细 | N:1 → order |
-| order_payment | 支付记录 | 支付流水 | N:1 → order |
+| t_order | 订单 | 订单主体信息 | 聚合根 |
+| t_order_item | 订单明细 | 购买的商品明细 | N:1 → t_order |
+| t_order_payment | 支付记录 | 支付流水 | N:1 → t_order |
 
 **关键业务规则：**
 - [规则1，如：订单状态流转：待支付→已支付→已发货→已完成/已取消]
@@ -113,8 +113,8 @@ erDiagram
 
 | 关联 | 类型 | 说明 |
 |------|------|------|
-| order → user | 跨聚合引用 | order.user_id 仅存储 ID，不做 FK 约束（跨聚合） |
-| order_item → product | 跨聚合引用 | 记录下单时的商品 ID，价格快照存储在 order_item |
+| t_order → t_user | 跨聚合引用 | t_order.user_id 仅存储 ID，不做 FK 约束（跨聚合） |
+| t_order_item → t_product | 跨聚合引用 | 记录下单时的商品 ID，价格快照存储在 t_order_item |
 
 > 跨聚合关联通过 ID 引用而非外键约束，保持聚合边界独立性。
 
@@ -122,11 +122,11 @@ erDiagram
 
 | 表名 | 索引名 | 字段 | 类型 | 用途 |
 |------|-------|------|------|------|
-| user | uk_username | username | UNIQUE | 用户名唯一 |
-| user | idx_email | email | INDEX | 邮箱查询 |
-| order | idx_user_id | user_id | INDEX | 按用户查订单 |
-| order | idx_status_created | status, created_at | INDEX | 状态+时间筛选 |
-| order_item | idx_order_id | order_id | INDEX | 按订单查明细 |
+| t_user | uniq_username | username | UNIQUE | 用户名唯一 |
+| t_user | idx_email | email | INDEX | 邮箱查询 |
+| t_order | idx_user_id | user_id | INDEX | 按用户查订单 |
+| t_order | idx_status_time | status, create_time | INDEX | 状态+时间筛选 |
+| t_order_item | idx_order_id | order_id | INDEX | 按订单查明细 |
 ```
 
 ## Mermaid 关系符号说明
