@@ -125,56 +125,7 @@ swimlane 内部
 
 ---
 
-## 完整单页示例（移动端登录页）
-
-```xml
-<mxfile host="app.diagrams.net" modified="2024-01-01T00:00:00.000Z" agent="Claude Code" version="24.0.0" type="device">
-  <diagram id="kR2mNp4q" name="登录页">
-    <mxGraphModel dx="1034" dy="546" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="375" pageHeight="812" math="0" shadow="0">
-      <root>
-        <mxCell id="0" />
-        <mxCell id="1" parent="0" />
-        <!-- 页面背景 -->
-        <mxCell id="2" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;" vertex="1" parent="1">
-          <mxGeometry x="0" y="0" width="375" height="812" as="geometry" />
-        </mxCell>
-        <!-- 顶部导航栏 -->
-        <mxCell id="3" value="登录" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;" vertex="1" parent="1">
-          <mxGeometry x="0" y="0" width="375" height="48" as="geometry" />
-        </mxCell>
-        <!-- Logo 占位 -->
-        <mxCell id="4" value="🐟 鲜渔到家" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=24;fontStyle=1;" vertex="1" parent="1">
-          <mxGeometry x="0" y="100" width="375" height="60" as="geometry" />
-        </mxCell>
-        <!-- 手机号输入框 -->
-        <mxCell id="5" value="请输入手机号" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=12;fontSize=13;fontColor=#9e9e9e;" vertex="1" parent="1">
-          <mxGeometry x="24" y="200" width="327" height="48" as="geometry" />
-        </mxCell>
-        <!-- 密码输入框 -->
-        <mxCell id="6" value="请输入密码" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=12;fontSize=13;fontColor=#9e9e9e;" vertex="1" parent="1">
-          <mxGeometry x="24" y="264" width="327" height="48" as="geometry" />
-        </mxCell>
-        <!-- 登录按钮 -->
-        <mxCell id="7" value="登录" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=15;fontStyle=1;" vertex="1" parent="1" tooltip="→ home.drawio">
-          <mxGeometry x="24" y="340" width="327" height="48" as="geometry" />
-        </mxCell>
-        <!-- 注册链接 -->
-        <mxCell id="8" value="还没有账号？立即注册" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=13;fontColor=#1e88e5;" vertex="1" parent="1" tooltip="→ register.drawio">
-          <mxGeometry x="0" y="408" width="375" height="32" as="geometry" />
-        </mxCell>
-        <!-- 跳转说明 -->
-        <mxCell id="9" value="跳转说明：&#xa;• 登录按钮 → home.drawio&#xa;• 立即注册 → register.drawio" style="text;html=1;strokeColor=#e0e0e0;fillColor=#fafafa;align=left;verticalAlign=top;fontSize=11;fontColor=#9e9e9e;spacingLeft=8;" vertex="1" parent="1">
-          <mxGeometry x="0" y="760" width="375" height="52" as="geometry" />
-        </mxCell>
-      </root>
-    </mxGraphModel>
-  </diagram>
-</mxfile>
-```
-
----
-
-## 连线（edge）写法（用于 index.drawio 跳转地图）
+## 连线（edge）写法（用于导航跳转地图 diagram）
 
 ```xml
 <mxCell id="[数字]" value="[标注文字，可为空]" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" source="[来源节点id]" target="[目标节点id]" parent="1">
@@ -223,48 +174,14 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 
 ### 模块内页面布局（swimlane 并排）
 
-同一 `<diagram>` 内，每个页面用 swimlane 容器包裹，水平并排排列，容器间距 40px：
+同一 `<diagram>` 内，每个页面用 swimlane 容器包裹，水平并排排列：
 
-```xml
-<!-- 模块 diagram 内，页面一（移动端）x=20，宽595 -->
-<mxCell id="10" value="登录页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-  <mxGeometry x="20" y="20" width="595" height="860" as="geometry" />
-</mxCell>
-
-<!-- ── UI 区（x: 0~375） ── -->
-<!-- 导航栏 -->
-<mxCell id="11" value="登录" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;" vertex="1" parent="10">
-  <mxGeometry x="0" y="0" width="375" height="48" as="geometry" />
-</mxCell>
-<!-- 手机号输入框 -->
-<mxCell id="12" value="请输入手机号" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=12;fontSize=13;fontColor=#9e9e9e;" vertex="1" parent="10">
-  <mxGeometry x="24" y="160" width="327" height="48" as="geometry" />
-</mxCell>
-<!-- 登录按钮 -->
-<mxCell id="13" value="登录" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=15;fontStyle=1;" vertex="1" parent="10" tooltip="→ 用户模块/首页">
-  <mxGeometry x="24" y="280" width="327" height="48" as="geometry" />
-</mxCell>
-
-<!-- ── 标注区（x: 395~595） ── -->
-<!-- 页面说明卡片 -->
-<mxCell id="14" value="页面：用户-登录页&#xa;用途：账号密码登录&#xa;角色：买家&#xa;主操作：登录&#xa;跳转：登录→首页，注册→注册页" style="text;html=1;strokeColor=#e0e0e0;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="10">
-  <mxGeometry x="395" y="0" width="196" height="100" as="geometry" />
-</mxCell>
-<!-- 业务规则 -->
-<mxCell id="15" value="规则：&#xa;• 手机号11位&#xa;• 密码6-20字符&#xa;• 连续失败5次锁定" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;" vertex="1" parent="10">
-  <mxGeometry x="395" y="110" width="196" height="80" as="geometry" />
-</mxCell>
-
-<!-- 页面二（x = 20 + 595 + 40 = 655） -->
-<mxCell id="50" value="注册页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-  <mxGeometry x="655" y="20" width="595" height="860" as="geometry" />
-</mxCell>
-```
-
-> - swimlane 内所有元素的 `parent` 指向 swimlane 的 `id`，而非 `"1"`
-> - swimlane 间距 = 40px，下一个 swimlane x = 上一个 x + 595（移动端）或 1700（Web）+ 40
-> - UI 组件严格约束在 x: 0~375（移动端）/ 0~1440（Web）内
-> - 标注元素严格约束在 x: 395~595（移动端）/ 1460~1700（Web）内
+- swimlane style：`swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;`
+- 第一个 swimlane x=20，y=20；后续 x = 前一个 x + swimlane宽 + 40（间距）
+- **移动端** swimlane 宽 595（375 UI区 + 20 + 200 标注区），高 860
+- **Web** swimlane 宽 1700（1440 UI区 + 20 + 240 标注区），高 960
+- swimlane 内元素 `parent` 指向 swimlane 的 `id`（不是 `"1"`）
+- UI 组件 x: 0~UI宽；标注元素 x: UI宽+20 起（移动端 x≥395，Web x≥1460）
 
 ### 页面/组件/连线命名规则
 
@@ -351,13 +268,7 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 
 ## UI 渲染质量规则（禁止违反）
 
-### 首要原则：输出结果必须首先像界面，其次才是说明图
-
-在生成任何页面前，明确以下两点：
-1. **界面 ≠ 文档截图**：不能把 PRD 章节标题、业务说明直接画成界面主体
-2. **组件优先**：需求信息必须映射为真实 UI 组件，禁止用大文本框平铺说明文字
-
----
+> **首要原则**：输出结果必须首先像界面。禁止把 PRD 文字/章节标题直接画为界面主体；需求必须映射为真实 UI 组件。
 
 ### 规则一：先识别页面类型，再套用对应骨架
 
@@ -388,16 +299,7 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 
 ---
 
-### 规则三：主次层级与视觉中心
-
-- **主操作区**（核心按钮、主要输入框）占据最显眼位置，使用蓝色填充主按钮突出
-- **次要信息**（页面说明卡、跳转说明框、业务规则注释）统一放置在页面右侧或底部，字号 ≤ 11，颜色 `#9e9e9e`
-- **页面说明卡片**尺寸不超过页面宽度的 30%，绝不占据页面上半部分核心区域
-- **状态流程图**（如：待支付→已支付→已发货）用小型流程图或状态标签行排列，不用大文本框
-
----
-
-### 规则四：布局对齐与间距规格
+### 规则三：布局对齐与间距规格
 
 | 规格项 | 标准值 |
 |--------|--------|
