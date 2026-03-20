@@ -29,26 +29,43 @@
 
 ### 启动方式
 
-Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板（含 HTML 和 draw.io 两套模板），按 OUTPUT_FORMAT 选择对应模板，填入模块数据后启动。
+Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板（含 HTML 和 draw.io 两套模板），按 OUTPUT_FORMAT 选择对应模板。
 
-**Claude Code（Agent 工具）：** 单次响应内同时调用所有 Agent，每个 Agent 对应一个模块：
+**启动前必须完成的占位符替换（两种运行环境均强制要求）：**
+
+| 占位符 | 替换为 |
+|--------|--------|
+| `[SKILL_DIR]` | skill 所在绝对路径（如 `/Users/xxx/.claude/skills/prototype-generator`） |
+| `[WORK_DIR的绝对路径]` | 用户确认的 WORK_DIR 绝对路径 |
+| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 |
+| `[模块名称]` | diagram 的 name 值（如 `用户模块`） |
+| `[页面名称N]` | 该模块负责的具体页面名 |
+| `[章节名]` | 需求文档中对应章节标题 |
+| `[画布宽]` / `[画布高]` / `[总宽]` | 移动端 595/860/总宽；Web 1700/960/总宽 |
+| `[风格]` / `[颜色]` | 实际设计风格和主色调 |
+
+> **Codex 特别注意**：Task 的 prompt 完全自包含，不继承父会话变量，所有路径必须是实际绝对路径字符串，不能有任何未展开的占位符。
+
+**Claude Code（Agent 工具）：** 单次响应内同时调用所有 Agent：
+
 ```
-Agent(prompt="...模块1 完整 prompt...")
-Agent(prompt="...模块2 完整 prompt...")
+Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...")
+Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...")
 ...  # 所有调用在同一响应中发出，并行执行
 ```
 
 **Codex（Task 工具 + run_in_background）：**
-```
-# 步骤1：依次创建后台任务
-task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=true)
-task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=true)
-...
 
-# 步骤2：等待并收集结果
+```
+# 步骤1：依次创建后台任务（每个 Task 立即返回 task_id）
+task_1 = Task(prompt="...模块1 完整 prompt（所有占位符已替换）...", run_in_background=true)
+task_2 = Task(prompt="...模块2 完整 prompt（所有占位符已替换）...", run_in_background=true)
+task_3 = Task(prompt="...模块3 完整 prompt（所有占位符已替换）...", run_in_background=true)
+
+# 步骤2：阻塞等待所有任务完成
 result_1 = TaskOutput(task_id=task_1.id, block=true)
 result_2 = TaskOutput(task_id=task_2.id, block=true)
-...
+result_3 = TaskOutput(task_id=task_3.id, block=true)
 ```
 
 ### 启动后进度
