@@ -89,7 +89,9 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 
 ## 阶段 5-5：强制自查（质量校验）
 
-生成导航首页之前，**必须完成以下校验**，发现问题立即修复，不得跳过：
+生成导航首页之前，**必须完成以下校验**，发现问题立即修复，不得跳过。
+
+> draw.io 模式：Read `SKILL_DIR/steps/drawio-design-rules.md` 获取输出文件规则和校验标准。
 
 ### 1. 文件完整性校验
 
