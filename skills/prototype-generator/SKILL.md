@@ -135,10 +135,7 @@ WORK_DIR/
     └── ...
     │
     │  【draw.io 模式（OUTPUT_FORMAT=drawio）】
-    ├── index.drawio         ← 目录页（列出所有页面及跳转关系）
-    ├── login.drawio
-    ├── home.drawio
-    └── ...
+    └── [产品名称].drawio    ← 单文件，每页一个 diagram（第一个 diagram 为导航跳转地图）
 ```
 
 > `WORK_DIR` 由用户指定，未指定时默认为当前终端工作目录（`pwd`）。

@@ -163,14 +163,19 @@ draw.io 无法实现真实文件跳转，统一用以下两种方式标注：
 ## 命名规范
 
 ### 文件命名
-文件名与 HTML 模式一致，仅扩展名改为 `.drawio`：
 
-| HTML 模式 | draw.io 模式 |
-|-----------|-------------|
-| `login.html` | `login.drawio` |
-| `home.html` | `home.drawio` |
-| `order-list.html` | `order-list.drawio` |
-| `index.html` | `index.drawio`（跳转地图目录页） |
+draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（如 `鲜渔到家.drawio`）。
+
+每个页面对应文件内的一个 `<diagram>`，用 `name` 属性标注页面名称：
+
+| 页面 | diagram name |
+|------|-------------|
+| 登录页 | `用户-登录页` |
+| 首页 | `用户-首页` |
+| 订单列表 | `订单-列表页` |
+| 跳转地图 | `导航-页面跳转地图` |
+
+**subagent 输出约定：** 每个 subagent 将负责的所有 `<diagram>` 写入临时片段文件 `WORK_DIR/drawio_[模块英文名]_tmp.xml`（仅含 `<diagram>` 元素，无 `<mxfile>` 包裹）。主流程等所有 subagent 完成后，将全部 `<diagram>` 合并写入 `WORK_DIR/prototypes/[产品名称].drawio`。
 
 ### 页面/组件/连线命名规则
 

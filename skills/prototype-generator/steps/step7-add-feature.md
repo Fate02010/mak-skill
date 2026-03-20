@@ -57,25 +57,27 @@
 
 ## 阶段 7-4：并行生成新增原型页面
 
-1. 确认 OUTPUT_FORMAT：检查 `WORK_DIR/prototypes/` 下已有文件扩展名（`.html` 或 `.drawio`），与原有格式保持一致
+1. 确认 OUTPUT_FORMAT：HTML 模式检查 `WORK_DIR/prototypes/` 下有 `.html` 文件；draw.io 模式检查有 `[产品名称].drawio`
 2. Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，按 OUTPUT_FORMAT 选择对应模板
 3. 仅对新增页面启动并行 Agent（已有页面不重新生成）
 4. 向用户展示执行计划并确认，启动方式同 Step 5-3：
    - **Claude Code**：`Agent` 工具并行调用
    - **Codex**：`Task` + `run_in_background=true`
 
-## 阶段 7-5：修改受影响的已有页面
+## 阶段 7-5：修改受影响的已有页面 / diagram
 
 新增功能往往需要在已有页面中添加入口，逐一处理：
 
-1. 列出需要修改的已有 HTML 文件（如导航栏、首页菜单、相关页面的跳转按钮）
-2. 逐文件编辑，添加指向新页面的链接/按钮
-3. 确保跳转地图完整，无断头路
+**HTML 模式**：列出需要修改的 `.html` 文件（如导航栏、首页菜单），逐文件编辑，添加指向新页面的链接/按钮。
 
-## 阶段 7-6：更新导航首页 / 目录页
+**draw.io 模式**：用 `Edit` 工具修改 `WORK_DIR/prototypes/[产品名称].drawio`：
+- 在需要添加入口的 `<diagram>` 中追加新的跳转按钮 `<mxCell>`（含 tooltip 指向新页面 diagram name）
+- 将新增页面的 `<diagram>` 元素追加到文件中
+
+## 阶段 7-6：更新导航首页 / 目录 diagram
 
 根据 OUTPUT_FORMAT 更新：
 - **HTML 模式** → 重新生成 `WORK_DIR/prototypes/index.html`：在已有页面列表中追加新页面入口，更新跳转地图
-- **draw.io 模式** → 重新生成 `WORK_DIR/prototypes/index.drawio`：在跳转地图中追加新页面节点和连线
+- **draw.io 模式** → 用 `Edit` 工具修改 `[产品名称].drawio` 中的 `<diagram name="导航-页面跳转地图">`：追加新页面节点和连线
 
 版本号 / 最后更新时间同步更新。

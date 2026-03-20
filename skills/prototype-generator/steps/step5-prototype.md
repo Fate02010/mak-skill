@@ -79,7 +79,7 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 
 所有并行任务完成后：
 
-1. 读取所有 HTML 文件，提取 `<!-- REQUIREMENT_CHANGES ... -->` 注释
+1. 读取所有原型文件（HTML 模式：`.html` 文件；draw.io 模式：`drawio_*_tmp.xml` 临时文件），提取 `<!-- REQUIREMENT_CHANGES ... -->` 注释
 2. 判断哪些需要同步回需求文档：
    - **假设性决策**：合理则固化为正式需求
    - **需求遗漏**：补充到需求文档对应章节
@@ -95,15 +95,13 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 
 ### 1. 文件完整性校验
 
-用 `Glob` 扫描 `WORK_DIR/prototypes/` 目录，与原型任务清单对比：
-- HTML 模式：列出所有应生成但**缺失**的 `.html` 文件
-- draw.io 模式：列出所有应生成但**缺失**的 `.drawio` 文件
-- 对每个缺失文件，重新生成（单独启动 Agent / Task 补充）
+- **HTML 模式**：用 `Glob` 扫描 `WORK_DIR/prototypes/` 目录，对比原型任务清单，列出缺失的 `.html` 文件，重新生成
+- **draw.io 模式**：用 `Glob` 扫描 `WORK_DIR/` 下的 `drawio_*_tmp.xml` 临时文件，对比模块任务列表，列出缺失的模块临时文件，重新生成对应 Agent
 
-### 2. 跳转链接校验
+### 2. 跳转标注校验
 
 - **HTML 模式**：逐一读取所有 HTML 文件，提取 `href` / `onclick` 跳转目标，检查目标文件是否实际存在，修复断链
-- **draw.io 模式**：逐一读取所有 .drawio 文件，提取 `tooltip` 属性和跳转说明文字框中的目标文件名，检查是否存在，修复缺失引用
+- **draw.io 模式**：逐一读取所有 `drawio_*_tmp.xml`，提取 `tooltip` 属性中的跳转目标 diagram name，检查是否在任务清单中存在，修复缺失引用
 
 ### 3. 内容有效性校验
 
@@ -115,13 +113,12 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 - 至少一个可交互元素（`<a>`、`<button>` 或带 `onclick` 的元素）
 - 无明显截断（文件末尾含 `</html>`）
 
-**draw.io 模式** — 每个文件必须包含：
-- `<mxfile>` 根标签
-- `<diagram>` 标签（含 `id` 属性）
+**draw.io 模式** — 每个 `drawio_*_tmp.xml` 临时文件必须包含：
+- 至少一个 `<diagram>` 标签（含 `id` 和 `name` 属性）
 - `<mxGraphModel>` 和 `<root>` 标签
 - 至少 3 个 `<mxCell>` 元素（id=0、id=1 基础层 + 至少一个 UI 元素）
 
-发现不合格文件 → 记录并重新生成该文件。
+发现不合格文件 → 记录并重新生成对应 Agent。
 
 ### 4. 需求覆盖校验
 
@@ -140,17 +137,30 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 
 > 若存在无法自动修复的问题，向用户说明后继续。
 
-## 阶段 5-6：生成导航首页 / 目录页
+## 阶段 5-6：合并文件 / 生成导航首页
 
-更新需求文档后，根据 OUTPUT_FORMAT 生成：
+更新需求文档后，根据 OUTPUT_FORMAT 处理：
 
 **HTML 模式** → 生成 `prototypes/index.html`：
 - 列出所有原型页面及功能说明，提供跳转链接
 - 显示产品名称和版本信息
 - 可视化展示页面跳转地图（箭头连线）
 
-**draw.io 模式** → 生成 `prototypes/index.drawio`：
-- 用矩形 + 箭头绘制完整页面跳转地图
-- 每个矩形节点标注：页面名称 + 对应文件名（tooltip 注明路径）
-- 用 tooltip 链接到对应 .drawio 文件（`tooltip="打开 [文件名].drawio"`）
-- 标题区域注明产品名称、生成时间、页面总数
+**draw.io 模式** → 合并为单一文件 `prototypes/[产品名称].drawio`：
+
+1. **生成导航 diagram**：创建一个 `<diagram name="导航-页面跳转地图">` 用矩形 + 箭头绘制完整页面跳转地图，每个矩形节点标注页面名称和所属模块
+2. **合并所有 diagram**：按模块顺序读取所有 `drawio_*_tmp.xml`，提取其中的 `<diagram>` 元素，连同导航 diagram 一起写入最终文件：
+
+```xml
+<mxfile host="app.diagrams.net" modified="[时间]" agent="Claude Code" version="24.0.0" type="device">
+  <!-- 第一个 diagram 为导航跳转地图 -->
+  <diagram id="..." name="导航-页面跳转地图">...</diagram>
+  <!-- 后续按模块顺序排列各页面 diagram -->
+  <diagram id="..." name="用户-登录页">...</diagram>
+  <diagram id="..." name="用户-首页">...</diagram>
+  ...
+</mxfile>
+```
+
+3. **清理临时文件**：合并完成后删除所有 `drawio_*_tmp.xml` 文件
+4. 在文件第一个 diagram（导航图）的标题区域注明产品名称、生成时间、页面总数

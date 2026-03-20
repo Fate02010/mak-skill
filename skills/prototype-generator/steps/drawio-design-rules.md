@@ -8,22 +8,11 @@
 
 | 规则 | 要求 |
 |------|------|
-| **一个模块一个文件** | 每个功能模块生成独立的 `.drawio` 文件，文件内用多个 `<diagram>` 存放多个状态页 |
-| **一个页面一个分组** | 同一画布内，每个页面用 `swimlane` 容器包裹，`value` 为页面名 |
+| **一个系统一个文件** | 整个系统所有页面合并在同一 `[产品名称].drawio` 文件中 |
+| **一个页面一个 diagram** | 每个 `<diagram>` 对应一个页面，`name` 格式为 `系统-模块-页面` |
+| **第一个 diagram 为导航图** | `<diagram name="导航-页面跳转地图">` 列出全部页面及跳转关系 |
 | **连线必须有标签** | 所有 `edge` 的 `value` 不可为空，至少写 `动作-目标` |
-| **弹窗挂载来源页** | 确认弹窗、错误弹窗等绘制在触发它的页面分组容器内部 |
-
-### 页面分组容器写法（swimlane）
-
-```xml
-<mxCell id="100" value="订单-列表页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-  <mxGeometry x="20" y="20" width="420" height="860" as="geometry" />
-</mxCell>
-<!-- 容器内的元素 parent 指向容器 id，而非 "1" -->
-<mxCell id="101" value="订单列表" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="100">
-  <mxGeometry x="0" y="0" width="420" height="48" as="geometry" />
-</mxCell>
-```
+| **弹窗挂载来源 diagram** | 确认弹窗、错误弹窗等绘制在触发它的 diagram 画布内 |
 
 ---
 
