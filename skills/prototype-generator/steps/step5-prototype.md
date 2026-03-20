@@ -153,11 +153,12 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 
 ```xml
 <mxfile host="app.diagrams.net" modified="[时间]" agent="Claude Code" version="24.0.0" type="device">
-  <!-- 第一个 diagram 为导航跳转地图 -->
+  <!-- 第一个 sheet：导航跳转地图 -->
   <diagram id="..." name="导航-页面跳转地图">...</diagram>
-  <!-- 后续按模块顺序排列各页面 diagram -->
-  <diagram id="..." name="用户-登录页">...</diagram>
-  <diagram id="..." name="用户-首页">...</diagram>
+  <!-- 后续按模块顺序，每个模块一个 sheet，模块内各页面用 swimlane 并排 -->
+  <diagram id="..." name="用户模块">...</diagram>
+  <diagram id="..." name="订单模块">...</diagram>
+  <diagram id="..." name="商品模块">...</diagram>
   ...
 </mxfile>
 ```

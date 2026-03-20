@@ -166,16 +166,38 @@ draw.io 无法实现真实文件跳转，统一用以下两种方式标注：
 
 draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（如 `鲜渔到家.drawio`）。
 
-每个页面对应文件内的一个 `<diagram>`，用 `name` 属性标注页面名称：
+**每个功能模块 = 一个 sheet（一个 `<diagram>`）**，模块内各页面用 swimlane 容器并排布局：
 
-| 页面 | diagram name |
-|------|-------------|
-| 登录页 | `用户-登录页` |
-| 首页 | `用户-首页` |
-| 订单列表 | `订单-列表页` |
-| 跳转地图 | `导航-页面跳转地图` |
+| 模块 | diagram name | 包含页面（swimlane） |
+|------|-------------|---------------------|
+| 用户模块 | `用户模块` | 登录页、注册页、个人中心 |
+| 订单模块 | `订单模块` | 订单列表、订单详情、下单页 |
+| 商品模块 | `商品模块` | 商品列表、商品详情 |
+| 导航总览 | `导航-页面跳转地图` | 全系统页面跳转关系图 |
 
-**subagent 输出约定：** 每个 subagent 将负责的所有 `<diagram>` 写入临时片段文件 `WORK_DIR/drawio_[模块英文名]_tmp.xml`（仅含 `<diagram>` 元素，无 `<mxfile>` 包裹）。主流程等所有 subagent 完成后，将全部 `<diagram>` 合并写入 `WORK_DIR/prototypes/[产品名称].drawio`。
+**subagent 输出约定：** 每个 subagent 负责一个模块，将该模块的**整个 `<diagram>`**（含所有页面 swimlane）写入临时文件 `WORK_DIR/drawio_[模块英文名]_tmp.xml`（仅含 `<diagram>` 元素，无 `<mxfile>` 包裹）。主流程等所有 subagent 完成后，将全部 `<diagram>` 合并写入 `WORK_DIR/prototypes/[产品名称].drawio`。
+
+### 模块内页面布局（swimlane 并排）
+
+同一 `<diagram>` 内，每个页面用 swimlane 容器包裹，水平并排排列，容器间距 40px：
+
+```xml
+<!-- 模块 diagram 内，页面一（x=20） -->
+<mxCell id="10" value="登录页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+  <mxGeometry x="20" y="20" width="420" height="900" as="geometry" />
+</mxCell>
+<!-- 容器内元素 parent 指向容器 id -->
+<mxCell id="11" value="登录" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="10">
+  <mxGeometry x="0" y="0" width="420" height="48" as="geometry" />
+</mxCell>
+
+<!-- 页面二（x = 20 + 420 + 40 = 480） -->
+<mxCell id="50" value="注册页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
+  <mxGeometry x="480" y="20" width="420" height="900" as="geometry" />
+</mxCell>
+```
+
+> swimlane 内所有元素的 `parent` 指向 swimlane 的 `id`，而非 `"1"`。
 
 ### 页面/组件/连线命名规则
 
