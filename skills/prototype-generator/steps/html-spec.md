@@ -336,6 +336,35 @@ function switchTab(t){
 
 ---
 
+## 导航栏一致性规则
+
+同一产品所有带导航的页面（非独立页面），导航栏菜单项必须完全一致：
+
+- **菜单项相同**：所有页面的导航栏包含相同的菜单项，顺序一致
+- **active 状态**：当前页对应的菜单项加 `.active` class，其他菜单项不加
+- **实现方式**：将导航栏 HTML 提取为相同结构，各页面只修改 active 项：
+
+```html
+<!-- 每个页面的导航栏结构必须完全相同，只有 active class 不同 -->
+<nav class="nav-bar">
+  <span style="font-size:var(--text-lg);font-weight:700;">产品名称</span>
+  <div style="display:flex;gap:var(--sp-6);margin-left:var(--sp-10);">
+    <a href="page-a.html" class="nav-item active">功能A</a>  <!-- 当前页加 active -->
+    <a href="page-b.html" class="nav-item">功能B</a>
+    <a href="page-c.html" class="nav-item">功能C</a>
+  </div>
+</nav>
+```
+
+```css
+.nav-item { color: rgba(255,255,255,.75); text-decoration:none; font-size:var(--text-sm); }
+.nav-item.active { color: #fff; font-weight:600; border-bottom:2px solid #fff; padding-bottom:2px; }
+```
+
+**禁止**：A 页有 5 个菜单项，B 页只有 3 个；或各页面菜单顺序不一致。
+
+---
+
 ## 技术规范
 
 - 纯 HTML + CSS + 原生 JS（不依赖外部库）
@@ -344,7 +373,7 @@ function switchTab(t){
 
 ## 内容规范
 
-- **真实数据**：使用符合业务场景的示例数据，不用"Lorem ipsum"或"文字1"
+- **真实数据**：使用符合业务场景的示例数据，严禁使用 `Lorem ipsum`、`文字1`、`按钮A`、`示例文字`、`功能待定`、`待补充`、`数据N` 等占位内容
 - **完整界面**：导航栏、主内容区、操作按钮、空态/错误态至少展示默认态
 
 ## 交互要求

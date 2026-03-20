@@ -134,6 +134,7 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 - 至少一个 `<diagram>` 标签（含 `id` 和 `name` 属性）
 - `<mxGraphModel>` 和 `<root>` 标签
 - 至少 3 个 `<mxCell>` 元素（id=0、id=1 基础层 + 至少一个 UI 元素）
+- **swimlane parent 校验**：文件中每个 swimlane 容器（style 含 `swimlane`）都有一个 `id`（设为 `S`），其内部 UI 元素的 `parent` 必须等于 `S`，而不是 `"1"`。用 Grep 检查是否存在 `parent="1"` 的非 swimlane 元素混在 swimlane 内部——若存在，说明 subagent 未正确设置 parent，需重新生成该模块
 
 发现不合格文件 → 记录并重新生成对应 Agent。
 
@@ -166,7 +167,16 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 **draw.io 模式** → 合并为单一文件 `prototypes/[产品名称].drawio`：
 
 1. **生成导航 diagram**：创建一个 `<diagram name="导航-页面跳转地图">` 用矩形 + 箭头绘制完整页面跳转地图，每个矩形节点标注页面名称和所属模块
-2. **合并所有 diagram**：按模块顺序读取所有 `drawio_*_tmp.xml`，提取其中的 `<diagram>` 元素，连同导航 diagram 一起写入最终文件：
+2. **合并前 ID 重新编号（必须执行，防止冲突）**：
+
+   每个 subagent 生成的 diagram 内部 mxCell id 都从 0 开始，直接合并会大量重复。合并前逐个 diagram 做 id 偏移：
+   - 导航 diagram：id 从 `0` 开始（保持 id=0、id=1 基础层）
+   - 第 1 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `1000`
+   - 第 2 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `2000`
+   - 第 N 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `N×1000`
+   - 同时更新该 diagram 内所有 `source`、`target`、`parent`（非 0、1）引用为偏移后的值
+
+3. **合并所有 diagram**：按模块顺序读取所有 `drawio_*_tmp.xml`，提取其中的 `<diagram>` 元素，连同导航 diagram 一起写入最终文件：
 
 ```xml
 <mxfile host="app.diagrams.net" modified="[时间]" agent="Claude Code" version="24.0.0" type="device">
@@ -180,5 +190,5 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 </mxfile>
 ```
 
-3. **清理临时文件**：合并完成后删除所有 `drawio_*_tmp.xml` 文件
-4. 在文件第一个 diagram（导航图）的标题区域注明产品名称、生成时间、页面总数
+4. **清理临时文件**：合并完成后删除所有 `drawio_*_tmp.xml` 文件
+5. 在文件第一个 diagram（导航图）的标题区域注明产品名称、生成时间、页面总数
