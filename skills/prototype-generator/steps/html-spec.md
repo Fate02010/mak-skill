@@ -81,6 +81,7 @@
 
 - **移动端页面**：`body` 宽度固定 `var(--w-mobile)`，居中显示，不做响应式拉伸
 - **Web/后台页面**：`body` 最大宽度 `var(--w-web)`，内容区 `var(--w-content-web)`，居中
+- **后台登录页**：属于未登录独立页，禁止带左侧菜单、顶部业务导航，必须使用单卡片居中布局
 
 ```css
 /* 移动端 */
@@ -90,7 +91,29 @@ body { width: var(--w-mobile); margin: 0 auto; background: var(--bg-page); }
 .layout { display: flex; min-height: 100vh; }
 .sidebar { width: var(--w-sidebar); background: var(--bg-card); }
 .main-content { flex: 1; padding: var(--sp-6); }
+
+/* Web 后台登录页 */
+.login-page {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
+}
+.login-card {
+  width: 420px;
+  padding: var(--sp-8);
+  background: var(--bg-card);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
 ```
+
+### 登录页专用规则
+
+- 后台登录页禁止出现 `.sidebar`、业务菜单、面包屑、模块切换入口。
+- 默认字段为账号、密码；验证码仅在需求文档明确写明时才允许渲染。
+- 如果是短信验证码登录，必须在资料中有“验证码登录”或同义描述，不能由模型自行脑补。
 
 ### 间距规则
 
@@ -250,6 +273,66 @@ body { width: var(--w-mobile); margin: 0 auto; background: var(--bg-page); }
 }
 .tab-bar-item.active { color: var(--primary); }
 ```
+
+---
+
+## 页面骨架隔离规则（禁止跨类型复用导航）
+
+> 骨架由**页面类型**决定，不由**系统类型**决定。同一个后台系统的登录页与列表页是不同类型，必须用不同骨架。
+
+**独立页面**（以下类型是全屏独立页面，严禁出现侧边栏/顶部业务导航/面包屑）：
+
+| 独立页面类型 | 正确骨架 |
+|------------|---------|
+| 登录页 / 注册页 | `body` 居中 flex，登录卡片 `width:400px`（Web）或 `width:100%`（移动），无任何导航 |
+| 落地页 / 欢迎页 | 全宽 hero 区，无侧边栏 |
+| 错误页（404/无权限/异常） | 居中插图 + 文案 + 返回按钮，无导航 |
+| 支付结果页 | 居中结果卡片，无侧边栏 |
+
+**自查**：生成每个 HTML 文件前，先判断是否属于独立页面类型，若是则去掉所有导航元素。
+
+---
+
+## 多模式互斥展示规则（禁止堆叠所有方式）
+
+> 需求说"支持 A 和 B 两种方式"，页面同一时刻**只展示一种**。用 Tab 或切换按钮实现，不得把两种方式的字段同时平铺。
+
+**触发关键词**：支持 X 和 Y 两种方式、可选 A 或 B、多种方式、两种模式
+
+**实现方式（原生 JS Tab 切换）：**
+
+```html
+<!-- Tab 切换示例：两种登录方式 -->
+<div class="tab-switch" style="display:flex;border-bottom:2px solid var(--border);margin-bottom:var(--sp-4);">
+  <button id="tab-pwd" onclick="switchTab('pwd')"
+    style="flex:1;height:var(--h-btn-sm);background:none;border:none;
+           border-bottom:2px solid var(--primary);color:var(--primary);
+           font-weight:600;cursor:pointer;">账号登录</button>
+  <button id="tab-sms" onclick="switchTab('sms')"
+    style="flex:1;height:var(--h-btn-sm);background:none;border:none;
+           color:var(--text-secondary);cursor:pointer;">验证码登录</button>
+</div>
+<div id="panel-pwd"><!-- 账号+密码字段 --></div>
+<div id="panel-sms" style="display:none;"><!-- 手机号+验证码字段 --></div>
+<script>
+function switchTab(t){
+  document.getElementById('panel-pwd').style.display = t==='pwd'?'':'none';
+  document.getElementById('panel-sms').style.display = t==='sms'?'':'none';
+  document.getElementById('tab-pwd').style.color = t==='pwd'?'var(--primary)':'var(--text-secondary)';
+  document.getElementById('tab-pwd').style.borderBottom = t==='pwd'?'2px solid var(--primary)':'none';
+  document.getElementById('tab-sms').style.color = t==='sms'?'var(--primary)':'var(--text-secondary)';
+  document.getElementById('tab-sms').style.borderBottom = t==='sms'?'2px solid var(--primary)':'none';
+}
+</script>
+```
+
+**正确 vs 禁止对照：**
+
+| 需求描述 | 正确做法 | 禁止做法 |
+|---------|---------|---------|
+| 支持账号密码和手机验证码两种登录 | Tab 切换，每个 Tab 只显示对应字段 | 账号+密码+手机号+验证码全部在同一表单 |
+| 支持微信支付和银行卡两种支付 | Tab 切换，默认展示第一种 | 微信二维码和银行卡输入框同时展示 |
+| 支持快递和自提两种配送方式 | 单选切换，切换后只显示对应地址区 | 收货地址和自提门店选择同时展示 |
 
 ---
 
