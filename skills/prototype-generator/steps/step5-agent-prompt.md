@@ -9,7 +9,7 @@
 ```
 你是 [模块名] 的原型生成 Agent。
 
-先读取 [SKILL_DIR]/steps/html-spec.md 获取 HTML 原型规范，然后生成以下页面。
+第一步：Read [SKILL_DIR的实际绝对路径]/steps/html-spec.md 获取 HTML 原型规范（如果读取失败，继续执行并在最终输出中标注 ⚠️ spec文件读取失败，已用内联规范），然后生成以下页面。
 
 【工作目录】
 WORK_DIR = [WORK_DIR的绝对路径]
@@ -54,7 +54,7 @@ Read WORK_DIR/详细需求文档.md 中以下章节获取各页面需求（不�
 ```
 你是 [模块名] 的 draw.io 原型生成 Agent。
 
-第一步：Read [SKILL_DIR的实际绝对路径]/steps/drawio-spec.md 获取规范（必须，包含 XML 格式、swimlane 布局、UI 组件样式、区域分离规则）。
+第一步：Read [SKILL_DIR的实际绝对路径]/steps/drawio-spec.md 获取规范（包含 XML 格式、swimlane 布局、UI 组件样式、区域分离规则）。如果读取失败，继续执行并在最终输出中标注 ⚠️ spec文件读取失败，已用内联规则。
 第二步：Read [WORK_DIR的实际绝对路径]/详细需求文档.md 中以下章节（不要读取整个文档）：
   - [页面名称1] → 章节：[### 模块名 > #### 功能点名]
   - [页面名称2] → 章节：[### 模块名 > #### 功能点名]

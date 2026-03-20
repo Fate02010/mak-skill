@@ -33,18 +33,18 @@ Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板（含 HTML �
 
 **启动前必须完成的占位符替换（两种运行环境均强制要求）：**
 
-| 占位符 | 替换为 |
-|--------|--------|
-| `[SKILL_DIR]` | skill 所在绝对路径（如 `/Users/xxx/.claude/skills/prototype-generator`） |
-| `[WORK_DIR的绝对路径]` | 用户确认的 WORK_DIR 绝对路径 |
-| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 |
-| `[模块名称]` | diagram 的 name 值（如 `用户模块`） |
-| `[页面名称N]` | 该模块负责的具体页面名 |
-| `[章节名]` | 需求文档中对应章节标题 |
-| `[画布宽]` / `[画布高]` / `[总宽]` | 移动端 595/860/总宽；Web 1700/960/总宽 |
-| `[风格]` / `[颜色]` | 实际设计风格和主色调 |
+| 占位符 | Claude Code 替换为 | Codex 替换为 |
+|--------|-------------------|-------------|
+| `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` | `/Users/xxx/.codex/skills/prototype-generator` |
+| `[WORK_DIR]` | 用户确认的工作目录绝对路径 | 同左，必须是绝对路径 |
+| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 | 同左 |
+| `[模块名称]` | diagram 的 name 值（如 `用户模块`） | 同左 |
+| `[页面名称N]` | 该模块负责的具体页面名 | 同左 |
+| `[章节名]` | 需求文档中对应章节标题 | 同左 |
+| `[画布宽]` / `[画布高]` | 移动端 595/860；Web 1700/960 | 同左 |
+| `[风格]` / `[颜色]` | 实际设计风格和主色调 | 同左 |
 
-> **Codex 特别注意**：Task 的 prompt 完全自包含，不继承父会话变量，所有路径必须是实际绝对路径字符串，不能有任何未展开的占位符。
+> **替换前必须自检**：在发送任何 prompt 前，搜索 prompt 文本中是否还有 `[` 字符——若有则说明有占位符未替换，必须先补全再发送。
 
 **Claude Code（Agent 工具）：** 单次响应内同时调用所有 Agent：
 
@@ -54,19 +54,30 @@ Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...")
 ...  # 所有调用在同一响应中发出，并行执行
 ```
 
-**Codex（Task 工具 + run_in_background）：**
+**Codex（Task 工具）：**
 
-```
-# 步骤1：依次创建后台任务（每个 Task 立即返回 task_id）
-task_1 = Task(prompt="...模块1 完整 prompt（所有占位符已替换）...", run_in_background=true)
-task_2 = Task(prompt="...模块2 完整 prompt（所有占位符已替换）...", run_in_background=true)
-task_3 = Task(prompt="...模块3 完整 prompt（所有占位符已替换）...", run_in_background=true)
+```python
+# 步骤1：批量创建后台任务（所有 Task 在同一轮创建，实现真正并行）
+# Codex 每个 Task 建议最多 4 页（避免单 Task 超时）
+task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=True)
+task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=True)
+task_3 = Task(prompt="...模块3 完整 prompt...", run_in_background=True)
 
-# 步骤2：阻塞等待所有任务完成
-result_1 = TaskOutput(task_id=task_1.id, block=true)
-result_2 = TaskOutput(task_id=task_2.id, block=true)
-result_3 = TaskOutput(task_id=task_3.id, block=true)
+# 步骤2：阻塞等待所有任务完成，逐一检查输出
+result_1 = TaskOutput(task_id=task_1.id, block=True, timeout=300000)
+result_2 = TaskOutput(task_id=task_2.id, block=True, timeout=300000)
+result_3 = TaskOutput(task_id=task_3.id, block=True, timeout=300000)
+
+# 步骤3：检测每个任务的成功/失败
+# 成功标志：输出包含 "✅ [模块名] 完成"
+# 失败标志：输出包含 "❌" 或不包含 "✅"
 ```
+
+**Codex 特别注意事项：**
+- Task prompt 完全自包含，不继承父会话任何变量，所有路径必须是实际字符串
+- SKILL_DIR 使用 `~/.codex/skills/prototype-generator`（不是 `.claude`）
+- 如果 spec 文件 Read 失败，Task 应用 prompt 内联的 R1-R5 规则继续执行，并在输出中标注 `⚠️ spec文件读取失败，已用内联规则`
+- 每个 Task 建议负责 ≤ 4 页；超过 4 页的模块在 Codex 环境下拆分为 2 个 Task
 
 ### 启动后进度
 
