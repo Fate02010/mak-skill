@@ -182,11 +182,12 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 **draw.io 模式** → 合并为单一文件 `prototypes/[产品名称].drawio`：
 
 1. **生成导航 diagram**：创建一个 `<diagram name="导航-页面跳转地图">`，规则如下：
-   - **按模块分组**：为每个功能模块创建一个 group 容器（style=`group`），所有页面节点的 `parent` 指向该 group 的 id，不得全部平铺在 `parent="1"`
-   - **模块 group 布局**：各 group 水平排列，group 内的页面节点垂直或网格排列，group 标题用粗体文字标注模块名
-   - **跳转连线**：页面间跳转关系用带箭头的连线（edge）表示，连线上标注触发动作名称
-   - **节点规格**：每个页面矩形 width=120，height=40，圆角 style=`rounded=1;fillColor=#e3f2fd;strokeColor=#1e88e5;`；当前模块内页面用蓝色，跨模块页面用浅灰色
-   - **禁止**：页面节点全部 `parent="1"` 平铺（无分组），导致导航图混乱无序
+   - **按模块分组**：为每个功能模块创建一个 group 容器（style=`swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#bdbdbd;fontStyle=1;fontSize=13;`），所有页面节点的 `parent` 指向该 group 的 id，不得全部平铺在 `parent="1"`
+   - **模块 group 布局**：各 group 水平排列，间距 60px；group 内页面节点**垂直排列**，节点间距 24px；group 宽度 = 节点宽 + 40，高度 = 节点数 × (节点高+24) + 60
+   - **节点规格（必须够大，禁止文字溢出）**：每个页面矩形 **width=160，height=48**，圆角 style=`rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1e88e5;fontSize=12;`；节点文字只写页面名称，不写"进入""跳转"等前缀
+   - **跳转连线标签（必须简短）**：连线上的 value 只写触发动作（如"点击下单"、"返回"、"提交"），**禁止**写"进入 目标页面名"——目标已由箭头指向表达，无需重复
+   - **边距与间距**：group 之间水平间距 ≥ 60px，避免箭头穿越 group 框；优先使用正交折线（orthogonalEdgeStyle）减少交叉
+   - **禁止**：页面节点全部 `parent="1"` 平铺（无分组）；箭头标签写"进入 XXX页"导致与节点文字重叠
 2. **合并前 ID 重新编号（必须执行，防止冲突）**：
 
    每个 subagent 生成的 diagram 内部 mxCell id 都从 0 开始，直接合并会大量重复。合并前逐个 diagram 做 id 偏移：
