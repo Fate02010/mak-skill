@@ -136,6 +136,15 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 - 至少 3 个 `<mxCell>` 元素（id=0、id=1 基础层 + 至少一个 UI 元素）
 - **swimlane parent 校验**：文件中每个 swimlane 容器（style 含 `swimlane`）都有一个 `id`（设为 `S`），其内部 UI 元素的 `parent` 必须等于 `S`，而不是 `"1"`。用 Grep 检查是否存在 `parent="1"` 的非 swimlane 元素混在 swimlane 内部——若存在，说明 subagent 未正确设置 parent，需重新生成该模块
 
+**draw.io 模式禁止内容检测**：用 Grep 在所有 `drawio_*_tmp.xml` 中搜索以下关键词，发现则标记该文件并要求修复（删除或移至独立文档）：
+- `关键规则`、`验收线`、`开发注意`、`测试用例`、`TODO`、`待定`、`待补充`
+这些内容不属于原型，不得出现在 mxCell value 中。
+
+**draw.io 模式尺寸合规抽查**：对每个 `drawio_*_tmp.xml`，用 Grep 抽查 `height=` 属性值，检测是否出现明显不合规的尺寸：
+- 按钮/输入框类组件（style 含 `fillColor` 且非背景）height 应在 32–56px 范围内；发现 height > 80 或 height < 24 的非背景组件需标记
+- 表格行高应在 44–56px；发现 height > 80px 的 list row 需标记
+- 记录到自查报告，提示"检测到 N 个组件高度不符合规范，建议检查 [文件名]"；不强制重新生成，由人工复核
+
 发现不合格文件 → 记录并重新生成对应 Agent。
 
 ### 4. 需求覆盖校验
@@ -166,7 +175,12 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 
 **draw.io 模式** → 合并为单一文件 `prototypes/[产品名称].drawio`：
 
-1. **生成导航 diagram**：创建一个 `<diagram name="导航-页面跳转地图">` 用矩形 + 箭头绘制完整页面跳转地图，每个矩形节点标注页面名称和所属模块
+1. **生成导航 diagram**：创建一个 `<diagram name="导航-页面跳转地图">`，规则如下：
+   - **按模块分组**：为每个功能模块创建一个 group 容器（style=`group`），所有页面节点的 `parent` 指向该 group 的 id，不得全部平铺在 `parent="1"`
+   - **模块 group 布局**：各 group 水平排列，group 内的页面节点垂直或网格排列，group 标题用粗体文字标注模块名
+   - **跳转连线**：页面间跳转关系用带箭头的连线（edge）表示，连线上标注触发动作名称
+   - **节点规格**：每个页面矩形 width=120，height=40，圆角 style=`rounded=1;fillColor=#e3f2fd;strokeColor=#1e88e5;`；当前模块内页面用蓝色，跨模块页面用浅灰色
+   - **禁止**：页面节点全部 `parent="1"` 平铺（无分组），导致导航图混乱无序
 2. **合并前 ID 重新编号（必须执行，防止冲突）**：
 
    每个 subagent 生成的 diagram 内部 mxCell id 都从 0 开始，直接合并会大量重复。合并前逐个 diagram 做 id 偏移：
