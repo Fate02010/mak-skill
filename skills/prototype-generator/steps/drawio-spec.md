@@ -27,9 +27,15 @@
 - `root` 下前两个 `mxCell`（id=0 和 id=1）是固定基础层，**不可省略**
 - 所有 UI 元素的 `parent` 必须为 `"1"`
 
-**画布尺寸：**
-- 移动端页面：`pageWidth="375" pageHeight="812"`（iPhone 标准）
-- 后台/Web 页面：`pageWidth="1440" pageHeight="900"`
+**UI 区画布尺寸（页面实际设备宽度）：**
+- 移动端：UI 区宽 `375`，高 `812`（iPhone 标准）
+- 后台/Web：UI 区宽 `1440`，高 `900`
+
+**swimlane 总宽度（含右侧标注区）：**
+- 移动端 swimlane：宽 `595`（375 UI区 + 20 间隔 + 200 标注区）
+- Web swimlane：宽 `1700`（1440 UI区 + 20 间隔 + 240 标注区）
+
+> **标注区 x 起点 = UI 区宽 + 20**（移动端 x=395，Web x=1460）
 
 ---
 
@@ -42,6 +48,44 @@
 | `>` | `&gt;` | value 中出现大于号 |
 | 换行 | `&#xa;` | value 中需要换行 |
 | `"` | `&quot;` | value 中出现双引号 |
+
+---
+
+## 布局区与标注区严格分离（核心排版规则）
+
+每个页面 swimlane 内部划分为两个水平区域，**二者绝不重叠**：
+
+```
+swimlane 内部
+┌─────────────────────────────┬──┬───────────────────┐
+│                             │  │                   │
+│         UI 区               │  │    标注区          │
+│   （仅放真实 UI 组件）        │间│  （业务说明专区）  │
+│                             │隔│                   │
+│  x: 0 ~ UI宽               │  │  x: UI宽+20 起    │
+│  移动端：0~375               │  │  移动端：395~595   │
+│  Web：0~1440                │  │  Web：1460~1700    │
+└─────────────────────────────┴──┴───────────────────┘
+```
+
+### UI 区规则（x: 0 ~ UI宽）
+
+- **只放真实 UI 组件**：导航栏、输入框、按钮、表格、卡片、Tab、Tag、Modal、Pagination 等
+- **坐标精确**：组件位置、尺寸必须符合规则四（间距规格），可直接作为高保真排版参考
+- **禁止放入**：页面说明文字、业务规则说明、跳转注释、状态流程图、任何大文本框
+
+### 标注区规则（x: UI宽+20 起）
+
+- **页面说明卡片**：页面名/用途/角色/主操作/跳转去向，置于标注区顶部
+- **跳转说明**：列出所有按钮对应的跳转目标
+- **业务规则**：字段校验规则、状态枚举、流转说明
+- **状态流程图**：`待支付 → 已支付 → 已发货` 等流转关系（用小型流程图）
+- 所有标注元素样式：`text;html=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;`
+- **禁止**：标注元素的 x 坐标进入 UI 区（x < UI宽），不得与任何 UI 组件重叠
+
+### 快速检验
+
+生成完成后，目视检查：左侧 UI 区截图是否可直接作为高保真设计稿参考图；右侧标注区是否完整包含所有说明文字。
 
 ---
 
@@ -77,7 +121,7 @@
 | 图片占位 | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#90caf9;fontColor=#1565c0;` |
 | 状态标签（成功） | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=none;fontColor=#2e7d32;fontSize=11;` |
 | 状态标签（警告） | `rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=none;fontColor=#f57f17;fontSize=11;` |
-| 跳转说明框 | `text;html=1;strokeColor=#e0e0e0;fillColor=#fafafa;align=left;verticalAlign=top;fontSize=11;fontColor=#9e9e9e;spacingLeft=8;` |
+| 标注区文字（说明/规则/跳转） | `text;html=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;` |
 
 ---
 
@@ -182,22 +226,45 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 同一 `<diagram>` 内，每个页面用 swimlane 容器包裹，水平并排排列，容器间距 40px：
 
 ```xml
-<!-- 模块 diagram 内，页面一（x=20） -->
+<!-- 模块 diagram 内，页面一（移动端）x=20，宽595 -->
 <mxCell id="10" value="登录页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-  <mxGeometry x="20" y="20" width="420" height="900" as="geometry" />
-</mxCell>
-<!-- 容器内元素 parent 指向容器 id -->
-<mxCell id="11" value="登录" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;" vertex="1" parent="10">
-  <mxGeometry x="0" y="0" width="420" height="48" as="geometry" />
+  <mxGeometry x="20" y="20" width="595" height="860" as="geometry" />
 </mxCell>
 
-<!-- 页面二（x = 20 + 420 + 40 = 480） -->
+<!-- ── UI 区（x: 0~375） ── -->
+<!-- 导航栏 -->
+<mxCell id="11" value="登录" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;" vertex="1" parent="10">
+  <mxGeometry x="0" y="0" width="375" height="48" as="geometry" />
+</mxCell>
+<!-- 手机号输入框 -->
+<mxCell id="12" value="请输入手机号" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=12;fontSize=13;fontColor=#9e9e9e;" vertex="1" parent="10">
+  <mxGeometry x="24" y="160" width="327" height="48" as="geometry" />
+</mxCell>
+<!-- 登录按钮 -->
+<mxCell id="13" value="登录" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=15;fontStyle=1;" vertex="1" parent="10" tooltip="→ 用户模块/首页">
+  <mxGeometry x="24" y="280" width="327" height="48" as="geometry" />
+</mxCell>
+
+<!-- ── 标注区（x: 395~595） ── -->
+<!-- 页面说明卡片 -->
+<mxCell id="14" value="页面：用户-登录页&#xa;用途：账号密码登录&#xa;角色：买家&#xa;主操作：登录&#xa;跳转：登录→首页，注册→注册页" style="text;html=1;strokeColor=#e0e0e0;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;spacingLeft=4;" vertex="1" parent="10">
+  <mxGeometry x="395" y="0" width="196" height="100" as="geometry" />
+</mxCell>
+<!-- 业务规则 -->
+<mxCell id="15" value="规则：&#xa;• 手机号11位&#xa;• 密码6-20字符&#xa;• 连续失败5次锁定" style="text;html=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;" vertex="1" parent="10">
+  <mxGeometry x="395" y="110" width="196" height="80" as="geometry" />
+</mxCell>
+
+<!-- 页面二（x = 20 + 595 + 40 = 655） -->
 <mxCell id="50" value="注册页" style="swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;" vertex="1" parent="1">
-  <mxGeometry x="480" y="20" width="420" height="900" as="geometry" />
+  <mxGeometry x="655" y="20" width="595" height="860" as="geometry" />
 </mxCell>
 ```
 
-> swimlane 内所有元素的 `parent` 指向 swimlane 的 `id`，而非 `"1"`。
+> - swimlane 内所有元素的 `parent` 指向 swimlane 的 `id`，而非 `"1"`
+> - swimlane 间距 = 40px，下一个 swimlane x = 上一个 x + 595（移动端）或 1700（Web）+ 40
+> - UI 组件严格约束在 x: 0~375（移动端）/ 0~1440（Web）内
+> - 标注元素严格约束在 x: 395~595（移动端）/ 1460~1700（Web）内
 
 ### 页面/组件/连线命名规则
 
@@ -213,7 +280,7 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 
 ### 通用必备区块
 
-每个页面顶部必须有**页面说明卡片**（用跳转说明框样式），包含以下信息：
+每个页面 swimlane 的**标注区顶部**必须有**页面说明卡片**，x 坐标在标注区范围内（移动端 x=395，Web x=1460）：
 
 ```
 页面：[系统-模块-页面名]
@@ -222,6 +289,8 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 主操作：[该页面最核心的一个操作]
 跳转去向：[操作A → 目标页, 操作B → 目标页]
 ```
+
+> **禁止**：将页面说明卡片放在 UI 区（x < UI宽），不得出现在导航栏下方或覆盖任何 UI 组件。
 
 ### 列表页必须包含四个区块
 
