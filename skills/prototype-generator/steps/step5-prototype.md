@@ -13,7 +13,9 @@
 
 将原型页面拆分为独立任务，每个任务记录：页面名/文件名、需求文档对应章节标题、完整进出跳转关系、视觉风格。写入 `原型任务清单.md`。
 
-## 阶段 5-3：并行启动 subagent 生成 HTML 原型图
+## 阶段 5-3：并行启动 subagent 生成原型图
+
+> 根据 OUTPUT_FORMAT 选择规范文件：HTML → `html-spec.md`；draw.io → `drawio-spec.md`
 
 ### 启动前：向用户展示执行计划
 
@@ -27,7 +29,7 @@
 
 ### 启动方式
 
-Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，填入模块数据后启动。
+Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板（含 HTML 和 draw.io 两套模板），按 OUTPUT_FORMAT 选择对应模板，填入模块数据后启动。
 
 **Claude Code（Agent 工具）：** 单次响应内同时调用所有 Agent，每个 Agent 对应一个模块：
 ```
@@ -77,14 +79,14 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 ### 1. 文件完整性校验
 
 用 `Glob` 扫描 `WORK_DIR/prototypes/` 目录，与原型任务清单对比：
-- 列出所有应生成但**缺失**的 HTML 文件
+- HTML 模式：列出所有应生成但**缺失**的 `.html` 文件
+- draw.io 模式：列出所有应生成但**缺失**的 `.drawio` 文件
 - 对每个缺失文件，重新生成（单独启动 Agent / Task 补充）
 
 ### 2. 跳转链接校验
 
-逐一读取所有生成的 HTML 文件，提取所有 `href` / `onclick` 跳转目标，检查：
-- 目标文件是否在 `prototypes/` 目录中**实际存在**
-- 列出所有指向不存在文件的**断链**，并修复（补充目标页面或修正链接）
+- **HTML 模式**：逐一读取所有 HTML 文件，提取 `href` / `onclick` 跳转目标，检查目标文件是否实际存在，修复断链
+- **draw.io 模式**：逐一读取所有 .drawio 文件，提取 `tooltip` 属性和跳转说明文字框中的目标文件名，检查是否存在，修复缺失引用
 
 ### 3. 需求覆盖校验
 
@@ -102,9 +104,17 @@ result_2 = TaskOutput(task_id=task_2.id, block=true)
 
 > 若存在无法自动修复的问题，向用户说明后继续。
 
-## 阶段 5-6：生成导航首页
+## 阶段 5-6：生成导航首页 / 目录页
 
-更新需求文档后，生成 `prototypes/index.html`：
+更新需求文档后，根据 OUTPUT_FORMAT 生成：
+
+**HTML 模式** → 生成 `prototypes/index.html`：
 - 列出所有原型页面及功能说明，提供跳转链接
 - 显示产品名称和版本信息
 - 可视化展示页面跳转地图（箭头连线）
+
+**draw.io 模式** → 生成 `prototypes/index.drawio`：
+- 用矩形 + 箭头绘制完整页面跳转地图
+- 每个矩形节点标注：页面名称 + 对应文件名（tooltip 注明路径）
+- 用 tooltip 链接到对应 .drawio 文件（`tooltip="打开 [文件名].drawio"`）
+- 标题区域注明产品名称、生成时间、页面总数

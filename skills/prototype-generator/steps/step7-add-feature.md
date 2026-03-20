@@ -57,9 +57,10 @@
 
 ## 阶段 7-4：并行生成新增原型页面
 
-1. Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板
-2. 仅对新增页面启动并行 Agent（已有页面不重新生成）
-3. 向用户展示执行计划并确认，启动方式同 Step 5-3：
+1. 确认 OUTPUT_FORMAT：检查 `WORK_DIR/prototypes/` 下已有文件扩展名（`.html` 或 `.drawio`），与原有格式保持一致
+2. Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，按 OUTPUT_FORMAT 选择对应模板
+3. 仅对新增页面启动并行 Agent（已有页面不重新生成）
+4. 向用户展示执行计划并确认，启动方式同 Step 5-3：
    - **Claude Code**：`Agent` 工具并行调用
    - **Codex**：`Task` + `run_in_background=true`
 
@@ -71,9 +72,10 @@
 2. 逐文件编辑，添加指向新页面的链接/按钮
 3. 确保跳转地图完整，无断头路
 
-## 阶段 7-6：更新导航首页
+## 阶段 7-6：更新导航首页 / 目录页
 
-重新生成 `WORK_DIR/prototypes/index.html`：
-- 在已有页面列表中追加新页面入口
-- 更新页面跳转地图，纳入新增路径
-- 版本号 / 最后更新时间同步更新
+根据 OUTPUT_FORMAT 更新：
+- **HTML 模式** → 重新生成 `WORK_DIR/prototypes/index.html`：在已有页面列表中追加新页面入口，更新跳转地图
+- **draw.io 模式** → 重新生成 `WORK_DIR/prototypes/index.drawio`：在跳转地图中追加新页面节点和连线
+
+版本号 / 最后更新时间同步更新。
