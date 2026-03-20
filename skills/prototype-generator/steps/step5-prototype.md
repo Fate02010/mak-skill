@@ -118,7 +118,9 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 ### 2. 跳转标注校验
 
 - **HTML 模式**：逐一读取所有 HTML 文件，提取 `href` / `onclick` 跳转目标，检查目标文件是否实际存在，修复断链
-- **draw.io 模式**：逐一读取所有 `drawio_*_tmp.xml`，提取 `tooltip` 属性中的跳转目标 diagram name，检查是否在任务清单中存在，修复缺失引用
+- **draw.io 模式**：
+  - 逐一读取所有 `drawio_*_tmp.xml`，提取 `tooltip` 属性中的跳转目标 diagram name，检查是否在任务清单中存在，修复缺失引用
+  - **跨模块跳转完整性校验**：汇总所有模块 tooltip 中引用的跨模块目标（格式"→ 目标模块/目标页面"），对照导航 diagram 中的连线（edge），检查每条跨模块引用是否在导航图中有对应箭头；缺失的连线直接用 Edit 工具追加到导航 diagram XML 中
 
 ### 3. 内容有效性校验
 
@@ -134,6 +136,10 @@ result_3 = TaskOutput(task_id=task_3.id, block=true)
 - 至少一个 `<diagram>` 标签（含 `id` 和 `name` 属性）
 - `<mxGraphModel>` 和 `<root>` 标签
 - 至少 3 个 `<mxCell>` 元素（id=0、id=1 基础层 + 至少一个 UI 元素）
+- **XML 合法性校验**：用 Grep 检查 mxCell `value=""` 属性中是否含有未转义的特殊字符：
+  - 搜索 `value="[^"]*&[^a-z#][^"]*"` 形式（裸 `&` 未转义为 `&amp;`）
+  - 搜索 `value="[^"]*<[^/!][^"]*"` 形式（裸 `<` 未转义为 `&lt;`）
+  - 发现则用 Edit 工具修复对应 value（替换为正确转义），不重新生成整个 Agent
 - **swimlane parent 校验**：文件中每个 swimlane 容器（style 含 `swimlane`）都有一个 `id`（设为 `S`），其内部 UI 元素的 `parent` 必须等于 `S`，而不是 `"1"`。用 Grep 检查是否存在 `parent="1"` 的非 swimlane 元素混在 swimlane 内部——若存在，说明 subagent 未正确设置 parent，需重新生成该模块
 
 **draw.io 模式禁止内容检测**：用 Grep 在所有 `drawio_*_tmp.xml` 中搜索以下关键词，发现则标记该文件并要求修复（删除或移至独立文档）：
