@@ -41,7 +41,11 @@
 - `diagram` 的 `id` 必须唯一，`name` 为页面显示名称
 - `mxGraphModel` 必须包含 `dx`、`dy`、`grid`、`gridSize`、`guides`、`tooltips`、`connect`、`arrows`、`fold`、`page`、`pageScale`、`pageWidth`、`pageHeight`、`math`、`shadow` 全部属性
 - `root` 下前两个 `mxCell`（id=0 和 id=1）是固定基础层，**不可省略**
-- 所有 UI 元素的 `parent` 必须为 `"1"`
+- **parent 规则（按层级区分）：**
+  - 直接放在画布上的元素（非 swimlane 内）：`parent="1"`
+  - swimlane 容器本身：`parent="1"`
+  - **swimlane 内的 UI 元素：`parent` = 该 swimlane 的 `id`，禁止写 `parent="1"`**
+  - 如果没有使用 swimlane（单页面模式）：所有 UI 元素 `parent="1"`
 
 **UI 区画布尺寸（页面实际设备宽度）：**
 - 移动端：UI 区宽 `375`，高 `812`（iPhone 标准）

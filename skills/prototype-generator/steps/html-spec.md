@@ -380,6 +380,26 @@ function switchTab(t){
 - **表单页字段来源**：生成表单页前必须先从需求文档对应章节列出所有字段（字段名 | 类型 | 是否必填），再按列表逐行渲染 Label + Input/Select/Textarea；严禁先画骨架后用序号填充
 - **详情页展示键值对**：详情页展示的是只读键值对（"订单编号：YYG-2024-001"），value 必须是符合业务的示例数据，严禁用空白输入框或 "字段一" 代替
 
+## 链接路径规则（必须遵守，错误路径导致点击后 404）
+
+所有 HTML 原型文件保存在同一目录 `prototypes/` 下，**文件间跳转统一使用同级相对路径**：
+
+```html
+<!-- ✅ 正确：同目录文件直接引用文件名 -->
+<a href="user-list.html">用户列表</a>
+<a href="order-detail.html">订单详情</a>
+location.href = 'login.html';
+
+<!-- ❌ 错误：不要加目录前缀 -->
+<a href="./prototypes/user-list.html">错误写法</a>
+<a href="/prototypes/user-list.html">错误写法</a>
+<a href="../prototypes/user-list.html">错误写法</a>
+```
+
+`index.html` 同样在 `prototypes/` 目录内，链接到其他页面也使用同级路径（`./user-list.html` 或直接 `user-list.html`）。
+
+未生成的目标页面用 `onclick="alert('跳转到[目标功能]')"` 占位，不使用 `href`。
+
 ## 交互要求
 
 - 所有页面跳转用 `<a href="相对路径">` 或 `location.href` 实现，可真实点击

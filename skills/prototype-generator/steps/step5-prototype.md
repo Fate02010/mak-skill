@@ -216,9 +216,10 @@ result_3 = TaskOutput(task_id=task_3.id, block=True, timeout=300000)
 
    每个 subagent 生成的 diagram 内部 mxCell id 都从 0 开始，直接合并会大量重复。合并前逐个 diagram 做 id 偏移：
    - 导航 diagram：id 从 `0` 开始（保持 id=0、id=1 基础层）
-   - 第 1 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `1000`
-   - 第 2 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `2000`
-   - 第 N 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `N×1000`
+   - 第 1 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `10000`
+   - 第 2 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `20000`
+   - 第 N 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `N×10000`
+   > 偏移量使用 10000 而非 1000，确保单个模块 diagram 内有最多 9999 个元素时也不会产生 id 冲突。
    - 同时更新该 diagram 内所有 `source`、`target`、`parent`（非 0、1）引用为偏移后的值
 
 3. **合并所有 diagram**：按模块顺序读取所有 `drawio_*_tmp.xml`，提取其中的 `<diagram>` 元素，连同导航 diagram 一起写入最终文件：
