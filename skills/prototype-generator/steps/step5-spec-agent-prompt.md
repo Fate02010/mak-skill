@@ -49,8 +49,8 @@ Read [SKILL_DIR的实际绝对路径]/steps/step5-component-styles.md
   提取：同上
 
 > [需求文档读取指令] 由主进程替换为以下之一：
-> - 单文件模式：Read [WORK_DIR的实际绝对路径]/详细需求文档.md 中以下章节
-> - 分拆模式：先 Read [WORK_DIR的实际绝对路径]/详细需求文档_overview.md（获取用户角色 §2 和枚举值字典 §5.5）；再 Read [WORK_DIR的实际绝对路径]/详细需求文档_[模块中文名].md 中以下章节
+> - 单文件模式：Read [WORK_DIR的实际绝对路径]/requirements/详细需求文档.md 中以下章节
+> - 分拆模式：① Read [WORK_DIR的实际绝对路径]/requirements/index.md 确认本模块文件路径；② Read [WORK_DIR的实际绝对路径]/requirements/详细需求文档_overview.md §2（用户角色）和 §5.5（枚举值字典）；③ Read 本模块文件中以下章节
 
 提取完成后，在继续之前先将每页的字段列表以文字形式列出（不输出 XML），确认无遗漏后再进入第三步。
 

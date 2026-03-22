@@ -15,7 +15,7 @@
 
 **检查方法：**
 
-1. 读取 `详细需求文档.md`，对每个页面提取「关键交互」列和「操作按钮」描述
+1. 读取 `requirements/详细需求文档.md`，对每个页面提取「关键交互」列和「操作按钮」描述
 2. 逐页对照原型文件中的按钮元素：
    - **HTML 模式**：Grep 搜索 `<button` 和 `onclick`，提取按钮文案
    - **draw.io 模式**：Grep 搜索 style 含 `fillColor=#1e88e5`（主按钮）和 `fillColor=#ffffff;strokeColor=#1e88e5`（次要按钮）的 mxCell，提取 value
@@ -37,7 +37,7 @@
 
 **检查方法：**
 
-1. 读取 `详细需求文档.md`，提取每个功能模块的状态枚举（如「待支付/已支付/已发货/已完成/已取消」）
+1. 读取 `requirements/详细需求文档.md`，提取每个功能模块的状态枚举（如「待支付/已支付/已发货/已完成/已取消」）
 2. 逐页对照原型文件中的状态展示：
    - **HTML 模式**：Grep 搜索 `class="tag"` 或 `class="status"` 相关元素的文案
    - **draw.io 模式**：Grep 搜索 style 含 `fillColor=#e8f5e9`（成功）/`fillColor=#fff8e1`（警告）/`fillColor=#ffebee`（错误）/`fillColor=#e3f2fd`（信息）的 mxCell value
@@ -68,7 +68,7 @@
 
 **检查方法：**
 
-1. 读取 `详细需求文档.md` 的「核心业务流程」章节，提取每条主流程的步骤链
+1. 读取 `requirements/详细需求文档.md` 的「核心业务流程」章节，提取每条主流程的步骤链
 2. 对每条流程逐步验证跳转可达性：
 
 ```

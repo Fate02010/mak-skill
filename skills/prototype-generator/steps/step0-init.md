@@ -21,7 +21,7 @@
 | Step 1 | ✅ 完成 | RountMap.md |
 | Step 2 | ✅ 完成 | 角色设定 |
 | Step 3 | ✅ 完成 | 竞品分析报告.md |
-| Step 4 | 🔄 进行中 | 单文件：详细需求文档.md / 分拆：详细需求文档_overview.md + 详细需求文档_[模块名].md |
+| Step 4 | 🔄 进行中 | 单文件：requirements/详细需求文档.md / 分拆：requirements/index.md + requirements/详细需求文档_overview.md + requirements/详细需求文档_[模块名].md |
 | Step 5 | ⏳ 待执行 | - |
 | Step 6 | ⏳ 待执行 | - |
 
