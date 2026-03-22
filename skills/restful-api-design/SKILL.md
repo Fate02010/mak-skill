@@ -17,6 +17,25 @@ description: |
 
 **关键机制：** 每个 Step 的详细指令存放在 `steps/` 目录下，执行到对应 Step 时用 `Read` 工具加载。`SKILL_DIR` 指本 skill 所在目录。
 
+## 运行环境声明
+
+本 skill 在两种环境中运行，启动时必须识别当前环境并遵循对应规则：
+
+| 项目 | Claude Code | Codex |
+|------|------------|-------|
+| 识别方式 | 可用工具中有 `Agent` | 可用工具中有 `Task` |
+| SKILL_DIR | `~/.claude/skills/restful-api-design` | `~/.codex/skills/restful-api-design` |
+| 并行生成方式 | `Agent(prompt="...", run_in_background=True)` | `Task(prompt="...", run_in_background=True)` + `TaskOutput(task_id=..., block=True)` |
+| 等待结果 | Agent 自动返回结果 | 必须用 `TaskOutput(task_id=..., block=True, timeout=300000)` 阻塞等待 |
+| 成功标志 | Agent 返回含 `✅` | TaskOutput 输出含 `✅` |
+| 失败标志 | Agent 返回含 `❌` 或异常 | TaskOutput 输出含 `❌` 或不含 `✅` |
+
+**Codex 必须遵守的并行规则：**
+
+1. **Step 4 并行生成接口文档时，必须使用 Task 工具**：将每个模块的完整 prompt 作为独立 Task 启动，所有 Task 在同一轮创建以实现真正并行
+2. **Task prompt 必须完全自包含**：不继承父会话的任何变量，所有路径（SKILL_DIR、WORK_DIR）必须是实际的绝对路径字符串
+3. **熔断规则**：所有 Task 完成后统计失败数，失败 > 50% 时停止并告警用户
+
 ## 第零步：确认工作目录（WORK_DIR）
 
 **必须主动询问用户：**

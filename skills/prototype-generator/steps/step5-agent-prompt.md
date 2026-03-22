@@ -142,17 +142,26 @@ UI 区绝不出现"筛选/操作区""表单区""数据区""内容区""操作区"
 列表页表格的每列必须是独立 mxCell，禁止将整行数据挤在一个文本框。
 列标题行 h=44，数据行 h=52，状态列用 Tag 组件，操作列用 Button 组件。
 
-【关键规则 R4 — 标注区隔离】
+【关键规则 R4 — 标注区隔离与宽度限制】
 所有标注文字（字段规则、跳转说明、页面描述）x坐标必须 ≥ UI区宽+20。
 移动端 x≥395，Web x≥1460。违反则遮挡 UI，UI 临摹无法使用。
+标注元素宽度限制（防止溢出相邻 swimlane）：
+- 移动端：width ≤ 180（标注区总宽 200，留 20px 内边距）
+- Web：width ≤ 220（标注区总宽 240，留 20px 内边距）
+- 页面说明卡片 x + width 不得超过 swimlane 右边界，否则会覆盖相邻 swimlane 的 UI 区
+标注区禁止写技术规范（如"按钮高度 36"、"列表卡片 78px"等像素数值），只写业务规则和跳转说明。
 
 【关键规则 R5 — 每个元素只画一次】
 禁止同时画描述标签框（"手机号输入框"）和真实组件。只画真实组件。
 
 【关键规则 R6 — 禁止序号占位内容】
-mxCell 的 value 必须是真实业务名称，禁止使用"字段一/字段二/字段三/InputA/选项1"等序号内容。
-- 表单字段 label 必须来自需求文档的实际字段名（如"品类名称"、"收货人"、"订单编号"）
-- 表格列标题必须是真实业务列名（如"商品名称"、"数量"、"状态"），不能是"列1/列2"
+mxCell 的 value 必须是真实业务名称，禁止以下所有占位写法：
+- ❌ 字段一/字段二/字段三/InputA/选项1
+- ❌ 列表项1/列表项2/数据项N/卡片N（序号列表项）
+- ❌ 真实字段/示例数据/业务卡片（将字段规格说明当 value 填入）
+- ❌ 搜索框/主按钮/状态标签（组件类型名代替实际内容）
+- ✅ 必须：来自需求文档的真实字段名（如"任务标题"、"负责人"、"优先级"）
+- ✅ 必须：真实业务示例数据（如"优化用户登录流程"、"张伟"、"¥1,280"）
 
 【关键规则 R7 — CRUD 操作完整性】
 含有增删改操作的列表 swimlane，必须在同一 diagram 内体现以下四个元素：
@@ -162,6 +171,12 @@ mxCell 的 value 必须是真实业务名称，禁止使用"字段一/字段二/
 
 > **弹窗 swimlane 规格**：style=`swimlane;startSize=30;fillColor=#fff3e0;strokeColor=#ef6c00;fontStyle=1;fontSize=12;`，标明"弹窗"二字，与主列表 swimlane 间距 40px
 
+【关键规则 R8.5 — Tab 页必须拆分为独立 swimlane】
+需求中任何模块若含多个 Tab 切换内容（如"系统管理"含部门管理/角色管理/权限管理/管理员/基础设置），每个 Tab 必须拆分为独立 swimlane，禁止在单一 swimlane 内绘制 Tab 栏后混合多个 Tab 的内容：
+- ❌ 禁止：一个"系统管理" swimlane 内，画 Tab 组件后将所有 Tab 内容堆叠在同一 swimlane 中
+- ✅ 必须：部门管理 → 独立 swimlane（列表模板）；角色管理 → 独立 swimlane（列表模板）；基础设置 → 独立 swimlane（表单模板）
+判断规则：页面功能点数量 > 1 且各功能点通过 Tab 切换展示 → 每个功能点 = 一个独立 swimlane
+
 【关键规则 R8 — XML 特殊字符必须转义】
 所有 mxCell 的 `value` 属性中，出现以下字符必须转义，否则生成的 XML 文件无法在 draw.io 中打开：
 - `&` → `&amp;`（最常见，如"鱼&渔" → "鱼&amp;渔"）
@@ -170,7 +185,32 @@ mxCell 的 value 必须是真实业务名称，禁止使用"字段一/字段二/
 - `"` → `&quot;`（value 中嵌套引号）
 - 换行 → `&#xa;`
 
-第四步：按规范生成本模块的 draw.io 内容，字段必须来自第二步提取的列表，写入输出文件。
+【内联组件 XML 模板（生成时直接参照，禁止用组件类型名充当 value）】
+
+以下是常用组件的 XML 写法，value 必须填真实业务内容，不能填"搜索框/主按钮"等类型名：
+
+顶部导航栏（移动端，y=38，宽度=375）：
+<mxCell id="N" value="消息详情" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="0" y="38" width="375" height="56" as="geometry" /></mxCell>
+
+输入框（label + input 一行，label w=80，input w=240，h=44）：
+<mxCell id="N" value="任务标题 *" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="24" y="110" width="80" height="44" as="geometry" /></mxCell>
+<mxCell id="N" value="请输入任务标题" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;fontSize=13;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="112" y="110" width="240" height="44" as="geometry" /></mxCell>
+
+主按钮（h=44，w=120，蓝底白字）：
+<mxCell id="N" value="新增任务" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="255" y="200" width="120" height="44" as="geometry" /></mxCell>
+
+表格列标题行（每列独立 mxCell，h=44）：
+<mxCell id="N" value="任务标题" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="24" y="280" width="180" height="44" as="geometry" /></mxCell>
+<mxCell id="N" value="负责人" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="204" y="280" width="80" height="44" as="geometry" /></mxCell>
+
+表格数据行（h=52，value 填真实业务数据）：
+<mxCell id="N" value="优化用户登录流程" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="24" y="324" width="180" height="52" as="geometry" /></mxCell>
+<mxCell id="N" value="张伟" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="204" y="324" width="80" height="52" as="geometry" /></mxCell>
+
+状态 Tag（h=24，根据状态选颜色）：
+<mxCell id="N" value="进行中" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=none;fontColor=#1e88e5;fontSize=11;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="300" y="338" width="56" height="24" as="geometry" /></mxCell>
+
+第四步：按规范生成本模块的 draw.io 内容，字段必须来自第二步提取的列表，参照上方组件模板写入输出文件。
 
 【工作目录】[WORK_DIR的实际绝对路径]
 严禁写入 /private/tmp 或其他系统临时目录。
@@ -213,16 +253,36 @@ swimlane 内第一个组件 y ≥ 38（标题栏30px + 间距8px），禁止 y=0
 - 表单/详情页出现"字段一/字段二"等序号字段名 → 替换为需求文档中的实际字段名
 - 登录/注册页出现侧边栏或顶部业务导航 → 删除
 - 标注文字（字段规则、跳转说明）的 x 坐标 < UI区宽 → 移到标注区
+- 标注元素 x + width 超出 swimlane 右边界（移动端>595，Web>1700）→ 缩减 width 至限制值内
+- 标注区出现像素数值规格（如"按钮高度36"、"卡片78px"）→ 删除，只保留业务规则说明
+- value 值为"列表项N/数据项N/真实字段/示例数据/业务卡片"等占位 → 替换为需求文档中的真实业务内容
 - 同一元素绘制了两次（标签框 + 真实组件重复） → 删除标签框，保留真实组件
 - 列表 swimlane 缺少"新增"主按钮 → 在表格上方右侧补充（style 含 fillColor=#1e88e5）
 - 列表 swimlane 操作列只有纯文字"编辑/删除" → 替换为独立 Button mxCell（编辑：次要样式；删除：红色边框）
 - 列表 swimlane 无删除确认弹窗 → 在 UI 区右侧补充 Modal 覆盖层（白色卡片 w=320，含确认文案和两个按钮）
 
+【写入后质量验收（必须通过，不通过先修复再进入三轮精修）】
+
+文件写入后立即执行以下 Grep 检查，发现问题用 Edit 修复：
+
+1. **占位内容检测**：
+   Grep 搜索以下模式（任意命中 → 立即替换为需求文档中的真实业务内容）：
+   `搜索框|主按钮|状态标签|列表项\d|数据项\d|卡片\d|示例数据|业务卡片|真实字段|字段一|字段二|InputA|选项\d`
+
+2. **内容丰富度检测**：
+   统计每个页面 swimlane 内的 mxCell 数量，不足则补充元素：
+   - 列表页 swimlane：mxCell ≥ 20（导航+筛选+表头+3行数据各列+分页+标注）
+   - 表单页 swimlane：mxCell ≥ 15（导航+每字段Label+Input+提交取消按钮+标注）
+   - 详情页 swimlane：mxCell ≥ 12（导航+各字段键值对+操作按钮+标注）
+
+3. **parent 层级检测**：
+   Grep `parent="1"` → 若有非 swimlane 容器本身使用 parent="1"，说明 UI 元素层级错误，需将其 parent 改为所属 swimlane 的 id
+
 【三轮精修（文件写入后自动执行，不得跳过）】
 
 ▶ 第一轮 — 字段完整性精修
 Read 已写入的 drawio_[模块英文名]_tmp.xml，逐 swimlane 对照需求文档对应章节：
-- 用 Grep 搜索 `字段一\|字段二\|字段三\|InputA\|选项1` → 发现则用 Edit 替换为真实字段名
+- 用 Grep 搜索 `字段一\|字段二\|字段三\|InputA\|选项1\|列表项\d\|搜索框\|主按钮` → 发现则用 Edit 替换为真实字段名
 - 表单 swimlane：检查每个字段是否有对应 Label mxCell + Input mxCell，缺少则 Edit 追加
 - 列表 swimlane：检查是否有 ≥3 行数据行且每行每列是独立 mxCell，不足则 Edit 补充
 

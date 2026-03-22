@@ -4,8 +4,24 @@
 
 ## 阶段 5-1：读取需求，功能划分
 
+**⚠️ 功能模块定义（draw.io 模式 sheet 命名强制规则）：**
+
+"功能模块"= **业务域**，以产品功能命名，**不是系统层或技术层**。
+
+| ✅ 正确（业务域）| ❌ 错误（系统层/技术层）|
+|----------------|------------------------|
+| 用户模块 | APP系统 |
+| 商品模块 | 后台管理 |
+| 订单模块 | 移动端 |
+| 支付模块 | Web端 |
+| 营销模块 | 前台 |
+
+> "APP系统"不是一个功能模块，它包含多个功能模块（用户、商品、订单等），必须继续拆分。
+> "后台管理"同理，必须拆分为具体的功能模块（权限管理、内容管理、数据统计等）。
+> **每个 draw.io sheet 只对应一个具体业务域，sheet 名 = 模块名（如"订单模块"）。**
+
 1. 读取 `详细需求文档.md` 中的"原型图清单"
-2. 将所有页面按功能模块分组，估算每页复杂度（简单/中等/复杂）
+2. 将所有页面按**业务域**功能模块分组，估算每页复杂度（简单/中等/复杂）
 3. **绘制页面跳转地图**：梳理所有页面间跳转关系，确保每条路径都有目标页面。发现断头路立即补充到任务清单。
 4. **CRUD 完整性检查**：对任务清单中每个"列表页/管理页"，检查是否已包含以下四个关联元素。缺少任何一项立即补充到任务清单：
 
@@ -26,38 +42,42 @@
 
 ## 阶段 5-3：并行启动 subagent 生成原型图
 
-> 根据 OUTPUT_FORMAT 选择规范文件：HTML → `html-spec.md`；draw.io → `drawio-spec.md`
+> - **HTML 模式**：直接启动生成 Agent，使用 `step5-agent-prompt.md` 中的 HTML 模板。
+> - **draw.io 模式**：两阶段架构——先并行启动规格化 Agent（阶段 5-3A），再并行启动渲染 Agent（阶段 5-3B）。
 
 ### 启动前：向用户展示执行计划
 
 列出每个 Agent 负责的模块、页面列表、页面数量，告知输出目录和预计文件数，**等待用户确认后**再启动。
 
-### 分模块规则
+---
+
+### HTML 模式
+
+#### 分模块规则
 
 - 一个功能模块 → 一个 Agent
 - 单模块超过 6 页时拆分为 2 个 Agent
 - 最多同时启动 **6 个并行 Agent**
+- 每个 Task（Codex）建议负责 ≤ 4 页
 
-### 启动方式
+#### 启动方式
 
-Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板（含 HTML 和 draw.io 两套模板），按 OUTPUT_FORMAT 选择对应模板。
+Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，使用 HTML 模板。
 
-**启动前必须完成的占位符替换（两种运行环境均强制要求）：**
+**占位符替换清单（两种运行环境均强制要求）：**
 
 | 占位符 | Claude Code 替换为 | Codex 替换为 |
 |--------|-------------------|-------------|
 | `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` | `/Users/xxx/.codex/skills/prototype-generator` |
 | `[WORK_DIR]` | 用户确认的工作目录绝对路径 | 同左，必须是绝对路径 |
 | `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 | 同左 |
-| `[模块名称]` | diagram 的 name 值（如 `用户模块`） | 同左 |
 | `[页面名称N]` | 该模块负责的具体页面名 | 同左 |
 | `[章节名]` | 需求文档中对应章节标题 | 同左 |
-| `[画布宽]` / `[画布高]` | 移动端 595/860；Web 1700/960 | 同左 |
 | `[风格]` / `[颜色]` | 实际设计风格和主色调 | 同左 |
 
-> **替换前必须自检**：在发送任何 prompt 前，搜索 prompt 文本中是否还有 `[` 字符——若有则说明有占位符未替换，必须先补全再发送。
+> **替换前必须自检**：搜索 prompt 文本中是否还有 `[` 字符——若有则先补全再发送。
 
-**Claude Code（Agent 工具）：** 单次响应内同时调用所有 Agent：
+**Claude Code（Agent 工具）：**
 
 ```
 Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...")
@@ -68,41 +88,139 @@ Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...")
 **Codex（Task 工具）：**
 
 ```python
-# 步骤1：批量创建后台任务（所有 Task 在同一轮创建，实现真正并行）
-# Codex 每个 Task 建议最多 4 页（避免单 Task 超时）
 task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=True)
 task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=True)
-task_3 = Task(prompt="...模块3 完整 prompt...", run_in_background=True)
 
-# 步骤2：阻塞等待所有任务完成，逐一检查输出
 result_1 = TaskOutput(task_id=task_1.id, block=True, timeout=300000)
 result_2 = TaskOutput(task_id=task_2.id, block=True, timeout=300000)
-result_3 = TaskOutput(task_id=task_3.id, block=True, timeout=300000)
-
-# 步骤3：检测每个任务的成功/失败
 # 成功标志：输出包含 "✅ [模块名] 完成"
-# 失败标志：输出包含 "❌" 或不包含 "✅"
+```
+
+---
+
+### draw.io 模式（两阶段架构）
+
+draw.io 生成分为两个独立阶段：
+
+**架构说明：**
+- 阶段 A（规格化）：业务决策层——读取需求文档，确定每个页面的 UI 元素、字段内容、坐标，输出结构化的 `page_spec_[模块英文名].md`
+- 阶段 B（渲染）：格式转换层——读取 page_spec + 样式字典，纯机械地将每行转换为 `<mxCell>` XML，输出 `drawio_[模块英文名]_tmp.xml`
+
+**优势：** 规格化和渲染职责分离，渲染 Agent 不做任何业务判断，消除坐标计算错误和占位符内容问题。
+
+---
+
+#### 阶段 5-3A：并行启动规格化 Agent
+
+Read `SKILL_DIR/steps/step5-spec-agent-prompt.md` 获取规格化 Agent 提示词模板。
+
+**分模块规则：**
+- 一个功能模块 → 一个规格化 Agent
+- 单模块超过 4 页时拆分为 2 个 Agent（每个负责 ≤ 4 页，Codex 建议 ≤ 2 页）
+- 最多同时启动 **6 个并行 Agent**
+
+**占位符替换清单：**
+
+| 占位符 | Claude Code 替换为 | Codex 替换为 |
+|--------|-------------------|-------------|
+| `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` | `/Users/xxx/.codex/skills/prototype-generator` |
+| `[WORK_DIR]` | 用户确认的工作目录绝对路径 | 同左 |
+| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 | 同左 |
+| `[页面名称N]` / `[章节名]` | 具体页面名 / 对应需求文档章节 | 同左 |
+| `[对象名]` | 该模块管理的业务对象（如「用户」「订单」） | 同左 |
+
+**Claude Code：**
+
+```
+Agent(prompt="...模块1 规格化 prompt（所有占位符已替换）...")
+Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...")
+...  # 所有规格化 Agent 在同一响应中并行启动
+```
+
+**Codex：**
+
+```python
+spec_1 = Task(prompt="...模块1 规格化 prompt...", run_in_background=True)
+spec_2 = Task(prompt="...模块2 规格化 prompt...", run_in_background=True)
+
+result_spec_1 = TaskOutput(task_id=spec_1.id, block=True, timeout=300000)
+result_spec_2 = TaskOutput(task_id=spec_2.id, block=True, timeout=300000)
+# 成功标志：输出包含 "✅ [模块名] page_spec 完成"
+```
+
+**熔断规则（同后续渲染阶段）：** 失败 Agent 数 > 50% → 停止，告警用户选择重试/忽略/中止。
+
+---
+
+#### 阶段 5-3B：并行启动渲染 Agent
+
+所有规格化 Agent 完成后，确认每个模块的 `page_spec_[模块英文名].md` 均已写入 `WORK_DIR`，然后启动渲染 Agent。
+
+Read `SKILL_DIR/steps/step5-render-agent-prompt.md` 获取渲染 Agent 提示词模板。
+
+**分模块规则：**
+- 一个模块的 page_spec → 一个渲染 Agent（与规格化 Agent 一一对应）
+- Codex：每个渲染 Task 对应一个 page_spec 文件（包含 ≤ 2 页的规格）
+
+**占位符替换清单：**
+
+| 占位符 | Claude Code 替换为 | Codex 替换为 |
+|--------|-------------------|-------------|
+| `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` | `/Users/xxx/.codex/skills/prototype-generator` |
+| `[WORK_DIR]` | 用户确认的工作目录绝对路径 | 同左 |
+| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 | 同左 |
+
+**Claude Code：**
+
+```
+Agent(prompt="...模块1 渲染 prompt（所有占位符已替换）...")
+Agent(prompt="...模块2 渲染 prompt（所有占位符已替换）...")
+...  # 所有渲染 Agent 在同一响应中并行启动
+```
+
+**Codex：**
+
+```python
+render_1 = Task(prompt="...模块1 渲染 prompt...", run_in_background=True)
+render_2 = Task(prompt="...模块2 渲染 prompt...", run_in_background=True)
+
+result_render_1 = TaskOutput(task_id=render_1.id, block=True, timeout=300000)
+result_render_2 = TaskOutput(task_id=render_2.id, block=True, timeout=300000)
+# 成功标志：输出包含 "✅ [模块名] 渲染完成"
 ```
 
 **Codex 特别注意事项：**
-- Task prompt 完全自包含，不继承父会话任何变量，所有路径必须是实际字符串
+- Task prompt 完全自包含，所有路径必须是实际字符串
 - SKILL_DIR 使用 `~/.codex/skills/prototype-generator`（不是 `.claude`）
-- 如果 spec 文件 Read 失败，Task 应用 prompt 内联的 R1-R5 规则继续执行，并在输出中标注 `⚠️ spec文件读取失败，已用内联规则`
-- 每个 Task 建议负责 ≤ 4 页；超过 4 页的模块在 Codex 环境下拆分为 2 个 Task
+- 如果 styles 文件 Read 失败，渲染 Agent 使用 prompt 内联的兜底样式继续执行，标注 `⚠️ styles文件读取失败`
+- draw.io 渲染 Task：每个 Task 对应 ≤ 2 页的 page_spec（规格化阶段已按此拆分）
+- **HTML 模式**：每个 Task 建议负责 ≤ 4 页
 
 ### 启动后进度
 
 每个 Agent 完成时，同步更新 `WORK_DIR/执行状态.md` 的"Step 5 Agent 状态"表格。
 
-展示每个 Agent 状态，等待全部完成后进入下一阶段：
+**HTML 模式** — 展示每个生成 Agent 状态：
 ```
   ⏳ Agent 1 │ [模块名]（生成中...含三轮精修）
   ✅ Agent 2 │ [模块名]（已完成，N 个文件，含三轮精修）
 ```
 
-> 每个 subagent 内部已执行三轮精修（字段完整性 → 内容真实性 → 交互闭环），汇报行包含"含三轮精修"字样时说明精修已完成。
+**draw.io 模式（两阶段）** — 分阶段展示：
+```
+【阶段 A — 规格化】
+  ⏳ 规格化 1 │ [模块名]（page_spec 生成中...）
+  ✅ 规格化 2 │ [模块名]（page_spec 完成，M 个 swimlane，N 个元素）
 
-**熔断规则：** 所有 Agent 完成后统计失败数量：
+【阶段 B — 渲染】（规格化全部完成后启动）
+  ⏳ 渲染 1 │ [模块名]（XML 渲染中...）
+  ✅ 渲染 2 │ [模块名]（渲染完成，M 个 swimlane，N 个 mxCell）
+```
+
+> HTML 模式：每个 subagent 内部已执行三轮精修（字段完整性 → 内容真实性 → 交互闭环）。
+> draw.io 模式：规格化 Agent 负责业务决策与坐标计算；渲染 Agent 只做格式转换，不做业务判断。
+
+**熔断规则：** 每阶段所有 Agent 完成后统计失败数量：
 - 失败 Agent 数 ≤ 总数 50%：记录失败项，继续后续流程，最后统一补充生成
 - 失败 Agent 数 > 总数 50%：**立即停止**，向用户告警：
 
@@ -128,11 +246,53 @@ result_3 = TaskOutput(task_id=task_3.id, block=True, timeout=300000)
 3. 编辑 `详细需求文档.md`，末尾追加"变更记录"章节
 4. 将变更汇总记录到 `原型任务清单.md` 末尾的"需求变更汇总"区块
 
+## ⚠️ Codex 强制：TaskOutput 收集后的主进程验收（不可跳过）
+
+> **仅 Codex 环境适用。** 所有 Task 的 TaskOutput 返回后，Codex 主进程在进入阶段 5-5 之前，必须完成以下快速验收，发现问题立即重跑对应 Task：
+
+### 1. 模块产出统计验收
+
+逐模块读取 TaskOutput 内容，提取 `✅ [模块名] 完成` 行中的 swimlane 数量，与原型任务清单对照：
+
+```
+模块 [X]：任务清单要求 N 个 swimlane，Task 报告 M 个 →
+  M < N：缺少 swimlane，必须重跑该模块 Task
+  M ≥ N：通过
+```
+
+### 2. Tab 页拆分验收
+
+对每个已生成的 drawio_*_tmp.xml 文件（或 HTML 文件），检查是否存在以下情况：
+
+```
+Grep 搜索 "部门管理|角色管理|权限管理|管理员" 等同属一个 Tab 的功能点是否出现在同一个 swimlane 标题 (name=) 中
+```
+
+- 若多个 Tab 功能点在同一个 swimlane 内 → 说明 Tab 未拆分，重新生成该模块 Task，要求每个 Tab 独立 swimlane
+- 每个 swimlane 应只包含一个功能点的内容
+
+### 3. 关键按钮缺失验收
+
+对每个详情页/表单页（HTML 模式：`.html` 文件；draw.io 模式：`page_spec_*.md` 或 `drawio_*_tmp.xml`），检查需求文档中标注的"主操作"按钮是否在 UI 区存在：
+
+```
+读取 WORK_DIR/原型任务清单.md，找到每个页面的"主操作"字段
+对照原型文件中是否有对应按钮（Grep 搜索按钮名称）
+缺失 → 用 Edit 工具直接追加对应按钮 mxCell 或 HTML 元素，不重跑整个 Task
+```
+
+验收通过后，才进入阶段 5-5 执行全量质量校验。
+
+---
+
 ## 阶段 5-5：强制自查（质量校验）
 
 生成导航首页之前，**必须完成以下校验**，发现问题立即修复，不得跳过。
 
+> **Codex 特别注意：** 阶段5-5 是 Codex 主进程必须亲自执行的步骤，不得以"Task 已完成三轮精修"为由跳过。Task 的三轮精修是模块内自检，5-5 是跨模块全局校验，二者不可替代。
+
 > draw.io 模式：Read `SKILL_DIR/steps/drawio-design-rules.md` 获取输出文件规则和校验标准。
+> 通用：Read `SKILL_DIR/steps/step5-acceptance-rules.md` 获取 A/B/C 三类验收规则。
 
 ### 1. 文件完整性校验
 
@@ -145,6 +305,10 @@ result_3 = TaskOutput(task_id=task_3.id, block=True, timeout=300000)
 - **draw.io 模式**：
   - 逐一读取所有 `drawio_*_tmp.xml`，提取 `tooltip` 属性中的跳转目标 diagram name，检查是否在任务清单中存在，修复缺失引用
   - **跨模块跳转完整性校验**：汇总所有模块 tooltip 中引用的跨模块目标（格式"→ 目标模块/目标页面"），对照导航 diagram 中的连线（edge），检查每条跨模块引用是否在导航图中有对应箭头；缺失的连线直接用 Edit 工具追加到导航 diagram XML 中
+
+### 2.5 主流程闭环校验（规则 A5）
+
+按 `step5-acceptance-rules.md` 中 A5 的检查方法执行：读取需求文档「核心业务流程」，逐条验证跳转链路可达性，覆盖 CRUD 闭环、查看闭环、登录闭环。输出闭环校验结果，缺失跳转立即修复。
 
 ### 3. 内容有效性校验
 
@@ -177,17 +341,95 @@ result_3 = TaskOutput(task_id=task_3.id, block=True, timeout=300000)
 
 发现不合格文件 → 记录并重新生成对应 Agent。
 
+### 3.5 模板合规校验（规则 B1/B2/B4，draw.io 两阶段模式执行）
+
+按 `step5-acceptance-rules.md` 中 B 类规则执行：
+
+- **B1 页面类型校验**：对照需求文档中页面功能描述，确认 page_spec 的类型标注和模板选择正确（列表页不能用表单模板，登录页不能带侧边栏）
+- **B2 骨架完整性校验**：逐页统计骨架必备元素（nav/筛选区/表格/分页/提交取消等），输出骨架完整度百分比
+- **B4 布局顺序校验**：按 y 坐标排列所有元素，检查 style_key 出现顺序是否符合模板定义（筛选区在表格上方、提交按钮在字段下方等）
+
+不通过 → 用 Edit 修改 page_spec 后重新渲染。
+
 ### 4. 需求覆盖校验
 
-对照 `详细需求文档.md` 的"原型图清单"，确认每一行对应的文件均已生成，输出校验结果：
+对照 `详细需求文档.md` 的"原型图清单"，确认每一行对应的文件均已生成。
+
+### 5. 字段级 coverage 校验（逐页强制执行，含 A3/A4）
+
+> 本校验检查的不是"文件是否存在"，而是"每个页面内的字段是否与需求文档一一对应"。
+
+**执行流程：**
+
+1. 读取 `详细需求文档.md`，对每个有字段规格的功能点，提取以下信息：
+   - 列表页：筛选条件列表 + 列表展示列名列表
+   - 表单页：表单字段名列表（含控件类型、是否必填）
+   - 详情页：展示字段名列表
+   - **主操作列表（A3）**：每个页面的核心操作按钮（新增/编辑/删除/提交/导出等）
+   - **状态枚举（A4）**：每个模块定义的状态值（待支付/已支付/已发货等）
+
+2. 逐页对照原型文件中实际包含的字段：
+   - **draw.io 模式**：读取 `page_spec_*.md`（若两阶段架构）或 `drawio_*_tmp.xml`，提取所有 mxCell 的 value 值，与需求文档字段列表逐一比对
+   - **HTML 模式**：读取 `.html` 文件，提取所有 `<label>`、`<th>`、`<input placeholder>`、键值对的 label 文字，与需求文档字段列表逐一比对
+
+3. 输出 coverage 报告：
+
+```
+=== 字段 coverage 校验 ===
+
+[页面名1]（列表页）
+  筛选条件：✅ 关键词 | ✅ 状态 | ❌ 时间范围（缺失）
+  列表列名：✅ 订单编号 | ✅ 客户名称 | ✅ 金额 | ✅ 状态 | ❌ 创建时间（缺失）
+  coverage: 7/9 = 78%
+
+[页面名2]（表单页）
+  表单字段：✅ 用户名 | ✅ 手机号 | ✅ 邮箱 | ❌ 所属角色（缺失）| ❌ 备注（缺失）
+  coverage: 3/5 = 60%
+
+[页面名3]（详情页）
+  展示字段：✅ 订单编号 | ✅ 客户名称 | ✅ 金额 | ✅ 状态
+  coverage: 4/4 = 100%
+
+=== 总体字段 coverage: 14/18 = 78%，缺失 4 个字段 ===
+
+=== 主操作 coverage（A3）===
+[页面名1]：✅ 新增 | ✅ 编辑 | ✅ 删除 | ❌ 导出（缺失）
+[页面名2]：✅ 提交 | ✅ 取消
+
+=== 状态 coverage（A4）===
+[模块名]：需求定义 5 种状态，原型展示 3 种，覆盖率 60%
+  ✅ 待支付 | ✅ 已发货 | ❌ 已完成 | ❌ 已取消 | ✅ 已支付
+```
+
+4. **修复缺失项：**
+   - 缺失字段：用 Edit 补充到对应文件
+   - 缺失主操作（A3）：补充操作按钮（含 tooltip 跳转标注）
+   - 缺失状态（A4）：在列表页数据行中补充缺失状态的示例行，在详情页标注区补充状态流转
+   - draw.io 两阶段架构：优先修改 `page_spec_*.md`，然后重新运行对应模块的渲染 Agent
+   - HTML 模式：直接 Edit 对应 `.html` 文件
+   - 修复后重新执行 coverage 计算，确认达到 100%
+
+**质量门禁：**
+- 字段 coverage < 80% 的页面 → 必须修复
+- 主操作 coverage < 100% → 必须修复（每个主操作按钮都不可缺）
+- 状态 coverage < 80% → 必须修复
+
+---
+
+### 校验总结报告
 
 ```
 === 自查报告 ===
 
-✅ 文件完整性：N 个文件全部生成
-✅ 内容有效性：N 个文件结构校验通过（⚠️ X 个文件已重新生成）
-⚠️ 断链修复：发现 X 处断链，已修复
-❌ 缺失页面：[页面名] 未生成，已补充生成
+1. ✅ 文件完整性：N 个文件全部生成
+2. ✅ 跳转标注：N 处跳转全部可达（⚠️ 修复了 X 处断链）
+3. ✅ 主流程闭环（A5）：N 条核心流程全部闭环
+4. ✅ 内容有效性：N 个文件结构校验通过（⚠️ X 个已重新生成）
+5. ✅ 模板合规（B1/B2/B4）：所有页面类型正确、骨架完整、布局有序
+6. ✅ 需求覆盖：原型图清单 N 项全部对应
+7. ✅ 字段 coverage：所有页面 100%
+8. ✅ 主操作 coverage（A3）：所有主操作按钮已就位
+9. ✅ 状态 coverage（A4）：所有状态枚举覆盖率 ≥ 80%
 
 自查通过，进入下一阶段。
 ```
