@@ -9,6 +9,7 @@
 |------|------|
 | 产品名称 | [产品名称] |
 | OUTPUT_FORMAT | html / drawio |
+| DOC_MODE | single（单文件）/ split（分拆，模块数>3） |
 | WORK_DIR | [绝对路径] |
 | 整体状态 | 进行中 / 已完成 |
 | 最后更新 | [时间] |
@@ -20,7 +21,7 @@
 | Step 1 | ✅ 完成 | RountMap.md |
 | Step 2 | ✅ 完成 | 角色设定 |
 | Step 3 | ✅ 完成 | 竞品分析报告.md |
-| Step 4 | 🔄 进行中 | - |
+| Step 4 | 🔄 进行中 | 单文件：详细需求文档.md / 分拆：详细需求文档_overview.md + 详细需求文档_[模块名].md |
 | Step 5 | ⏳ 待执行 | - |
 | Step 6 | ⏳ 待执行 | - |
 
