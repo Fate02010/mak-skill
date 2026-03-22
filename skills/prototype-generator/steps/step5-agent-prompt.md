@@ -278,6 +278,14 @@ swimlane 内第一个组件 y ≥ 38（标题栏30px + 间距8px），禁止 y=0
 3. **parent 层级检测**：
    Grep `parent="1"` → 若有非 swimlane 容器本身使用 parent="1"，说明 UI 元素层级错误，需将其 parent 改为所属 swimlane 的 id
 
+4. **暗色背景检测**：
+   Grep `fillColor=#[01][0-9a-fA-F]` → 若命中元素为 bg 类组件（component_type=bg 或 style 含 `strokeColor=none` 且 width≥300），说明背景色过深会遮盖内容，用 Edit 将 fillColor 替换为 `#f5f5f5`
+
+5. **移动端主导航页底栏检测**：
+   对需求文档中标注为"主导航页"的每个移动端 swimlane，Grep `bottom_bar` 是否存在于该 swimlane 的元素中：
+   - 缺失 → 在该 swimlane 末尾追加：`<mxCell id="N" value="{{Tab1}} · {{Tab2}} · {{Tab3}} · {{Tab4}}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;fontSize=11;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="0" y="804" width="375" height="56" as="geometry" /></mxCell>`
+   - 并将该 swimlane 的 bg 元素 height 改为 654（确保不覆盖底栏区域）
+
 【三轮精修（文件写入后自动执行，不得跳过）】
 
 ▶ 第一轮 — 字段完整性精修
