@@ -36,11 +36,34 @@
    Grep 搜索以下模式（任意命中 → 立即替换为需求文档中的真实业务内容）：
    `搜索框|主按钮|状态标签|列表项\d|数据项\d|卡片\d|示例数据|业务卡片|真实字段|字段一|字段二|InputA|选项\d`
 
-2. **内容丰富度检测**：
-   统计每个页面 swimlane 内的 mxCell 数量，不足则补充元素：
-   - 列表页 swimlane：mxCell ≥ 20（导航+筛选+表头+3行数据各列+分页+标注）
-   - 表单页 swimlane：mxCell ≥ 15（导航+每字段Label+Input+提交取消按钮+标注）
-   - 详情页 swimlane：mxCell ≥ 12（导航+各字段键值对+操作按钮+标注）
+2. **元素丰富度硬检查（不通过则阻断，必须修复后才能进入三轮精修）**：
+
+   统计 `drawio_*.xml` 或 `page_spec_*.md` 中每个 swimlane 的元素数量：
+
+   **最低元素数量要求（UI 临摹品质标准）：**
+   - 移动端列表页（含卡片流）：≥ 25 个 mxCell（列表页含弹窗则 ≥ 35）
+   - 移动端表单页：≥ 20 个 mxCell
+   - Web 列表页：≥ 35 个 mxCell
+   - Web 表单页：≥ 25 个 mxCell
+   - 登录/注册页：≥ 10 个 mxCell
+   - 弹窗 swimlane：≥ 8 个 mxCell
+
+   **检查方法：**
+   ```bash
+   # draw.io 模式（两阶段架构）：检查 page_spec
+   grep -c "^| [0-9]" page_spec_*.md
+
+   # 或检查已渲染的 XML
+   grep -c '<mxCell id="[0-9]' drawio_*_tmp.xml
+   ```
+
+   **不足时的处理：**
+   - draw.io 两阶段模式：修改 `page_spec_*.md` 对应 swimlane 行，补充缺失元素行，重跑该模块渲染 Agent
+   - HTML 模式：用 Edit 工具直接在 HTML 文件中补充缺失元素
+
+   **禁止跳过：**
+   - 禁止以"已三轮精修"为由绕过此检查
+   - 元素数量不足时，必须修复后才能继续
 
 3. **parent 层级检测**：
    Grep `parent="1"` → 若有非 swimlane 容器本身使用 parent="1"，说明 UI 元素层级错误，需将其 parent 改为所属 swimlane 的 id

@@ -118,6 +118,47 @@ Grep 搜索 "部门管理|角色管理|权限管理|管理员" 等同属一个 T
 缺失 → 用 Edit 工具直接追加对应按钮 mxCell 或 HTML 元素，不重跑整个 Task
 ```
 
+### 4. page_spec 格式验证（draw.io 模式必须执行）
+
+对每个 Spec Task 生成的 `page_spec_*.md`，验证以下内容：
+
+**格式完整性检查：**
+```bash
+# 检查文件是否包含必需的表格标题
+grep -q "## swimlane 布局" page_spec_*.md
+grep -q "## 元素列表" page_spec_*.md
+
+# 统计元素列表行数（| id | 前缀行）
+grep -c "^| [0-9]" page_spec_*.md
+```
+
+**元素数量检查：**
+- 移动端列表页：≥ 25 行
+- 移动端表单页：≥ 20 行
+- Web 列表页：≥ 35 行
+- Web 表单页：≥ 25 行
+
+**格式错误判定：**
+若文件满足以下任一条件，则标记为 `SPEC_INVALID`：
+- 不包含 "## 元素列表" 标题
+- 元素列表行数不足最低要求
+- 文件内容为描述性文字（如 `- 顶部：标题"xxx"，右侧消息图标`）而非表格
+
+**重试策略：**
+标记为 `SPEC_INVALID` 的模块，重新发送 Spec Task，在 prompt 末尾追加：
+
+```
+⚠️ 警告：上次输出格式错误（描述性文字而非坐标表格）。
+
+本次必须严格按照 page_spec 表格格式输出：
+- 必须包含 "## swimlane 布局" 和 "## 元素列表" 两个表格
+- 每行一个 mxCell 元素，包含 id/parent/value/x/y/w/h/style_key 列
+- 禁止输出描述性文字（如"- 轮播区：3张图"）
+- 移动端列表页最少 25 行，Web 列表页最少 35 行
+
+参考正确格式示例（见 step5-spec-agent-prompt.md 中的"完整业务示例"）。
+```
+
 验收通过后，才进入阶段 5-5 执行全量质量校验。
 
 ---
@@ -138,3 +179,123 @@ result_2 = TaskOutput(task_id=task_2.id, block=True, timeout=300000)
 ## Step 7 增量模式：Task 启动方式
 
 新增页面并行生成时，使用 `Task` + `run_in_background=true`，启动方式同 Step 5。
+
+---
+
+## Codex 5.4 Spec Agent 上下文优化（减少 token 消耗）
+
+> 本节规则仅适用于 draw.io 模式的规格化 Agent（阶段 A）。
+
+Spec Agent 在生成 page_spec 时需要读取多个文件，容易导致上下文耗尽。按以下精简策略执行：
+
+### 文件读取策略
+
+**1. step5-component-styles.md（样式字典）**
+- 只需读取 style_key 名称列（第一列）
+- 跳过完整 style 字符串（第二列）
+- 使用 Read 工具时指定 limit 参数，只读前 100 行
+
+**2. step5-page-templates.md（页面模板）**
+- 只读取与本模块页面类型匹配的模板（1-2 个）
+- 跳过其他页面类型的模板
+- 例如：移动端列表页只读"移动端列表页模板"，跳过"Web 表单页模板"
+
+**3. overview.md（项目概览）**
+- 只读 §2（用户角色与权限）+ §5.5（枚举值字典）
+- 跳过：§1（项目背景）、§3（技术栈）、§4（通用规范）
+- 如果 overview.md 超过 80 行，使用 Read 工具分段读取：
+  - 先 Grep 查找 §2 和 §5.5 的行号
+  - 再用 Read 工具的 offset + limit 参数精确读取这两个章节
+
+**4. 模块需求文档（app.md / admin.md / 其他模块）**
+- 全量读取（必须）
+- 这是 Spec Agent 的核心输入，不可精简
+
+### 上下文预算警告
+
+在构建 Spec Agent prompt 时，检查总文件大小：
+
+```bash
+# 计算所有待读取文件的总大小
+du -sh step5-component-styles.md step5-page-templates.md overview.md app.md
+```
+
+- 如总文件大小 > 30KB，启用摘要模式
+- 摘要模式：创建 `step5-spec-context.md` 预消化需求为 Codex 就绪格式
+
+### 摘要模式（总文件 > 30KB 时启用）
+
+创建 `WORK_DIR/step5-spec-context.md`，包含以下精简内容：
+
+```markdown
+# Spec Agent 上下文摘要
+
+## 可用 style_key 列表
+nav, bg_mobile, bg_web, filter_bar, label_required, select, card, badge_warning, badge_info, badge_success, text_primary, text_secondary, text_price, text_placeholder, button_primary, button_secondary, icon, list_container, pagination, note_card, text_note
+
+## 用户角色（来自 overview.md §2）
+[复制粘贴 §2 内容]
+
+## 枚举值字典（来自 overview.md §5.5）
+[复制粘贴 §5.5 内容]
+
+## 页面模板（仅本模块相关）
+[复制粘贴匹配的 1-2 个模板]
+
+## 模块需求（来自 app.md / admin.md）
+[全文复制]
+```
+
+Spec Agent prompt 中，将所有文件读取指令替换为：
+```
+读取 [WORK_DIR]/step5-spec-context.md
+```
+
+---
+
+## Codex 5.4 模块化展开方法（提升元素密度）
+
+由于 Codex 5.4 上下文限制，采用"模块化展开"策略，确保每个 swimlane 达到最低元素数量要求：
+
+### 展开顺序（按区块逐步展开）
+
+1. **先写骨架**（5-8 行）
+   - 导航栏（nav）
+   - 背景（bg）
+   - 主容器（container）
+
+2. **再写筛选区**（5-10 行）
+   - 每个筛选条件独立展开：label + input/select
+   - 移动端：2-3 个筛选条件
+   - Web 端：4-6 个筛选条件
+
+3. **再写表格/列表**（15-25 行）
+   - 列表页：列标题（3-8 列）+ 3 行数据（每行每列独立）
+   - 移动端卡片流：3 张卡片，每张卡片 6 个元素（订单号/状态/商品/金额/按钮×2）
+
+4. **再写表单**（10-20 行）
+   - 每个字段 2 行：label + input
+   - 不遗漏任何字段
+
+5. **再写操作区**（3-5 行）
+   - 所有按钮 + tooltip
+
+6. **最后写标注区**（2-3 行）
+   - 页面说明卡片
+
+### 展开检查点
+
+每完成一个区块，统计累计行数：
+```bash
+grep -c "^| [0-9]" page_spec_*.md
+```
+
+不足最低要求时，继续展开下一区块。
+
+### 强制补充规则
+
+如果所有区块展开完毕，行数仍不足：
+- 列表页：补充更多数据行（不同状态）
+- 表单页：回查需求文档，补齐遗漏字段
+- 详情页：补充更多展示字段
+
