@@ -23,23 +23,16 @@ description: |
 
 本 skill 在两种环境中运行，启动时必须识别当前环境并遵循对应规则：
 
-| 项目 | Claude Code | Codex |
-|------|------------|-------|
-| 识别方式 | 可用工具中有 `Agent` | 可用工具中有 `Task` |
-| SKILL_DIR | `~/.claude/skills/prototype-generator` | `~/.codex/skills/prototype-generator` |
-| 并行生成方式 | `Agent(prompt="...", run_in_background=True)` | `Task(prompt="...", run_in_background=True)` + `TaskOutput(task_id=..., block=True)` |
-| 等待结果 | Agent 自动返回结果 | 必须用 `TaskOutput(task_id=..., block=True, timeout=300000)` 阻塞等待 |
-| 成功标志 | Agent 返回含 `✅` | TaskOutput 输出含 `✅` |
-| 失败标志 | Agent 返回含 `❌` 或异常 | TaskOutput 输出含 `❌` 或不含 `✅` |
+| 项目 | Claude Code |
+|------|------------|
+| 识别方式 | 可用工具中有 `Agent` |
+| SKILL_DIR | `~/.claude/skills/prototype-generator` |
+| 并行生成方式 | `Agent(prompt="...", run_in_background=True)` |
+| 等待结果 | Agent 自动返回结果 |
+| 成功标志 | Agent 返回含 `✅` |
+| 失败标志 | Agent 返回含 `❌` 或异常 |
 
-**Codex 必须遵守的并行规则：**
-
-1. **Step 5 并行生成原型时，必须使用 Task 工具**：将每个模块的完整 prompt 作为独立 Task 启动，所有 Task 在同一轮创建以实现真正并行
-2. **Task prompt 必须完全自包含**：不继承父会话的任何变量，所有路径（SKILL_DIR、WORK_DIR）必须是实际的绝对路径字符串，不能用变量引用
-3. **draw.io 模式两阶段**：先并行创建所有规格化 Task（阶段 A），全部完成后再并行创建所有渲染 Task（阶段 B）
-4. **Task 容量限制**：draw.io 模式每个 Task ≤ 2 页（XML 坐标计算复杂）；HTML 模式每个 Task ≤ 4 页
-5. **超过容量时拆分**：单模块超过容量上限时，拆为多个 Task，每个 Task 负责部分页面
-6. **熔断规则**：所有 Task 完成后统计失败数，失败 > 50% 时停止并告警用户
+> Codex 环境：Read `SKILL_DIR/steps/codex-rules.md` 获取完整环境声明和并行规则。
 
 ## 启动时：判断运行模式
 
@@ -128,7 +121,7 @@ Step 7: 理解新增需求 → 补全功能需求 → 用户确认 → 更新需
 | 2 | `SKILL_DIR/steps/step2-pm-prompt.md` | 生成产品经理角色 prompt |
 | 3 | `SKILL_DIR/steps/step3-competitor.md` | 竞品分析（不可跳过） |
 | 4 | `SKILL_DIR/steps/step4-requirements.md` | 生成详细需求文档（大型文档按需 Read step4-parallel.md） |
-| 5 | `SKILL_DIR/steps/step5-prototype.md` | 并行生成 HTML 原型图 |
+| 5 | 先 Read `SKILL_DIR/steps/step5-common.md`，再按 OUTPUT_FORMAT Read `step5-html.md` 或 `step5-drawio.md` | 并行生成原型图 |
 | 6 | `SKILL_DIR/steps/step6-iteration.md` | 改进建议与迭代 |
 | 7 | `SKILL_DIR/steps/step7-add-feature.md` | 增量新增功能原型 |
 
@@ -145,6 +138,7 @@ WORK_DIR/
 ├── 执行状态.md              ← 第一步初始化，每步更新（支持断点恢复）
 ├── RountMap.md              ← Step 1 生成
 ├── 竞品分析报告.md           ← Step 3 生成（需求文档前必须完成）
+├── 竞品亮点摘要.md           ← Step 3 生成（≤200字精简摘要，供 Step 5 subagent 引用）
 │
 │  【需求文档 — Step 4 生成，所有需求文档统一存放在 requirements/ 子目录】
 ├── requirements/                ← Step 4 生成，所有需求文档统一存放

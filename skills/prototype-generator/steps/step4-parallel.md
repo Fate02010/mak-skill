@@ -91,16 +91,7 @@ Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...")
 ...  # 所有调用在同一响应中发出，并行执行
 ```
 
-**Codex（Task 工具）：**
-
-```python
-task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=True)
-task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=True)
-
-result_1 = TaskOutput(task_id=task_1.id, block=True, timeout=300000)
-result_2 = TaskOutput(task_id=task_2.id, block=True, timeout=300000)
-# 成功标志：输出包含 "✅ 详细需求文档_[模块中文名].md 完成"
-```
+> Codex 环境请参考 `SKILL_DIR/steps/codex-rules.md`。
 
 ---
 

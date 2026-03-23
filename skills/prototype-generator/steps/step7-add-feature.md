@@ -62,7 +62,7 @@
 3. 仅对新增页面启动并行 Agent（已有页面不重新生成）
 4. 向用户展示执行计划并确认，启动方式同 Step 5-3：
    - **Claude Code**：`Agent` 工具并行调用
-   - **Codex**：`Task` + `run_in_background=true`
+   > Codex 环境请参考 `SKILL_DIR/steps/codex-rules.md`。
 
 ## 阶段 7-5：修改受影响的已有页面 / diagram
 
