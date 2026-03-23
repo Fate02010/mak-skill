@@ -36,6 +36,52 @@ Create a professional infographic with the following specifications:
 - No decorative clutter that reduces readability
 ```
 
+## 语言版本模板
+
+根据用户选择的 `--lang`，切换对应模板：
+
+### 英文版（lang=en，推荐 nano-banana / Midjourney / DALL-E / Flux）
+
+> 上方基础模板即为英文版，直接使用。
+> 图中所有标签（卡片标题、副标签、数据值说明）全部使用英文。
+
+### 中文版（lang=zh，推荐通义万象 DashScope）
+
+```
+创作一张专业信息图，规格如下：
+
+**格式**：信息图，{{ASPECT_RATIO}} 比例，白色或浅色背景
+**布局**：{{LAYOUT}} — {{LAYOUT_SUMMARY}}
+**风格**：{{STYLE}} — {{STYLE_SUMMARY}}
+
+**布局结构**：
+{{LAYOUT_GUIDELINES_ZH}}
+
+**视觉风格**：
+{{STYLE_GUIDELINES_ZH}}
+
+**图中需要展示的文字内容**：
+{{STRUCTURED_CONTENT_LABELS_ZH}}
+
+**排版规则**（影响可读性，务必遵守）：
+- 主标题：大字加粗，顶部居中，最多 8 个汉字
+- 各区块标签：中等加粗，每个标签最多 4 个汉字
+- 数据数值：超大字体，高对比度，数字+单位格式
+- 全图字体：清晰无衬线字体，小尺寸下仍可辨读
+- 禁止在标签中使用完整句子，只用关键词
+
+**设计规则**：
+- 专业干净的信息图风格
+- 文字与背景高度对比
+- 每个区块视觉上清晰区分，有明确边界
+- 全图图标风格统一
+- 留白充足，区块间不拥挤
+- 无多余装饰，以可读性为第一优先
+```
+
+> 使用中文模板时，在提示词末尾加注：
+> `请使用清晰的中文字体，确保所有汉字标签准确渲染，不要出现乱码或英文替代。`
+
 ## 变量说明
 
 | 变量 | 来源 | 说明 |
