@@ -21,7 +21,9 @@ Read `SKILL_DIR/steps/step5-spec-agent-prompt.md` 获取规格化 Agent 提示�
 
 **分模块规则：**
 - 一个功能模块 → 一个规格化 Agent
-- 单模块超过 4 页时拆分为 2 个 Agent（每个负责 ≤ 4 页，Codex 建议 ≤ 2 页）
+- **模块粒度必须符合 step5-common.md 的硬限制**：每模块 ≤ 2 个业务实体，≤ 6 个 swimlane，≤ 2 个列表页
+- ⚠️ 若阶段 5-1 分组结果中存在 > 2 个列表页的模块，**必须在启动 Agent 前先拆分模块**
+- 单模块页面数（含 CRUD 弹窗 swimlane）> 4 时拆分为 2 个 Agent（每个负责 ≤ 4 页，Codex 建议 ≤ 2 页）
 - 最多同时启动 **6 个并行 Agent**
 
 **占位符替换清单：**
@@ -69,10 +71,18 @@ Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...")
    ```
 
 3. **最低元素数量要求：**
-   - 移动端列表页：≥ 25 行
-   - 移动端表单页：≥ 20 行
-   - Web 列表页：≥ 35 行
-   - Web 表单页：≥ 25 行
+   - 移动端列表页：≥ 35 行
+   - 移动端表单页：≥ 30 行
+   - Web 列表页：≥ 50 行
+   - Web 表单页：≥ 35 行
+   - Dashboard/数据看板：≥ 40 行
+   - 移动端首页/商城首页：≥ 45 行
+
+4. **CRUD 弹窗 swimlane 检查：**
+   对每个 page_spec 文件，检查列表类 swimlane 是否有对应的 modal swimlane：
+   - 从元素列表中查找含 btn_sm（编辑按钮）或 btn_sm_danger（删除按钮）的 swimlane
+   - 检查同一 page_spec 中是否存在对应的 type=modal swimlane（新增/编辑弹窗 + 删除确认弹窗）
+   - 若列表 swimlane 有编辑/删除按钮但无对应 modal swimlane → 标记 CRUD_INCOMPLETE
 
 ### 格式错误判定
 
@@ -80,6 +90,7 @@ Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...")
 - 不包含 "## 元素列表" 标题
 - 元素列表行数不足最低要求
 - 文件内容为描述性文字（如 `- 顶部：标题"xxx"，右侧消息图标`）而非表格
+- 标记为 CRUD_INCOMPLETE（列表页有编辑/删除按钮但缺少弹窗 swimlane）
 
 ### 重试策略
 

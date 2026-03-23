@@ -71,10 +71,11 @@
 4. **暗色背景检测**：
    Grep `fillColor=#[01][0-9a-fA-F]` → 若命中元素为 bg 类组件（component_type=bg 或 style 含 `strokeColor=none` 且 width≥300），说明背景色过深会遮盖内容，用 Edit 将 fillColor 替换为 `#f5f5f5`
 
-5. **移动端主导航页底栏检测**：
+5. **移动端主导航页底栏检测**（与 spec 阶段双重执行）：
+   > 注意：底栏检测在 spec 阶段（step5-spec-agent-prompt.md 自查）和渲染后（本节）双重执行，确保不遗漏。
    对需求文档中标注为"主导航页"的每个移动端 swimlane，Grep `bottom_bar` 是否存在于该 swimlane 的元素中：
    - 缺失 → 在该 swimlane 末尾追加：`<mxCell id="N" value="{{Tab1}} · {{Tab2}} · {{Tab3}} · {{Tab4}}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;fontSize=11;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="0" y="804" width="375" height="56" as="geometry" /></mxCell>`
-   - 并将该 swimlane 的 bg 元素 height 改为 654（确保不覆盖底栏区域）
+   - 并将该 swimlane 的 bg 元素 height 改为 710（确保不覆盖底栏区域）
 
 ### 三轮精修（文件写入后自动执行，不得跳过）
 
