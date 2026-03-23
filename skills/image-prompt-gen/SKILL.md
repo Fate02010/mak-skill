@@ -1,182 +1,205 @@
 ---
 name: image-prompt-gen
 description: |
-  为 AI 图片生成（Midjourney、DALL-E/GPT-Image、Stable Diffusion、Flux、通义万象等）生成高质量、结构化的提示词。分析用户意图，推荐风格组合，输出精准的英文提示词（可附中文说明）。当用户想要：
-  - 生成 AI 图片提示词 / image prompt / prompt词
-  - 说"帮我写个画图提示词"、"生成 Midjourney prompt"、"SD 提示词"时
-  - 说"我想生成一张图，帮我写提示词"、"写个绘图描述"时
-  - 根据描述或参考内容生成风格化图片
-  - 说"照片风格"、"插画风格"、"水墨风格"、"anime"、"电影感"、"国风"等风格关键词时
-  请务必使用此 skill。即使用户没有明确说"提示词"，只要他们想生成任何类型的 AI 图片，都应触发此 skill。
+  专业信息图提示词生成器：分析内容，推荐布局×风格组合，生成可直接用于 AI 图片生成（nano-banana、DALL-E/GPT-Image、Midjourney、Stable Diffusion、Flux、通义万象）的结构化信息图提示词。当用户想要：
+  - 把文章/数据/流程/概念生成信息图
+  - 说"生成信息图提示词"、"把这个内容做成信息图"时
+  - 说"帮我生成一张可以展示流程的图"、"做个数据可视化图"时
+  - 说"帮我写个信息图 prompt"、"infographic prompt"时
+  - 把文章/PRD/报告/笔记转化为可视化图片时
+  - 说"用 AI 生成信息图"、"AI 画信息图"时
+  请务必使用此 skill。即使用户没说"信息图"，只要是把结构化内容转化为可视化图片，都应触发此 skill。
 ---
 
-# 图片提示词生成器
+# 信息图提示词生成器
 
-两个维度：**主题**（画面内容）× **风格**（视觉美学）。任意组合。
+两个维度：**布局**（信息结构）× **风格**（视觉美学）。自由组合。
+
+**关键机制：** 每种布局/风格的详细定义存放在 `references/` 目录下，按需加载。`SKILL_DIR` 指本 skill 所在目录。
 
 ## 用法
 
 ```bash
-/image-prompt-gen 一只在雨中行走的猫咪，电影感
-/image-prompt-gen --style cinematic-photography --ar 16:9 --model midjourney
-/image-prompt-gen path/to/reference.md --style chinese-ink --lang zh
+/image-prompt-gen path/to/article.md
+/image-prompt-gen --layout linear-flow --style flat-vector --ar 16:9 --model nano-banana
+/image-prompt-gen  # 然后粘贴内容
 ```
 
 ## 选项
 
 | 选项 | 值 |
 |------|-----|
-| `--style` | 20 种风格（见风格库），默认 auto（自动推荐） |
-| `--ar` | 比例：`1:1` `16:9` `9:16` `4:3` `3:4` `2:1` 等 |
-| `--model` | `midjourney` `dalle` `flux` `dashscope` `sd`，默认 `generic` |
-| `--lang` | 输出语言：`en`（默认）`zh`（中英双语） |
+| `--layout` | 10 种布局（见布局库），默认 auto |
+| `--style` | 20 种风格（见风格库），默认 auto |
+| `--ar` | `16:9`（默认）`9:16` `1:1` `4:3` `3:4` 等 |
+| `--model` | `nano-banana` `dalle` `midjourney` `flux` `dashscope` `sd`，默认 `generic` |
+| `--lang` | `zh`（默认）`en` |
 
-## 风格库
+## 布局库（Layout Gallery）
 
-### 摄影类（Photography）
+| 布局 | 最适合 |
+|------|--------|
+| `linear-flow` | 流程、步骤、教程、操作指南 |
+| `timeline` | 时间线、历史演变、里程碑 |
+| `comparison` | A vs B、优缺点、对比分析 |
+| `pyramid` | 层级、优先级、马斯洛式结构 |
+| `hub-spoke` | 一个核心概念辐射多个关联点 |
+| `funnel` | 转化漏斗、筛选流程、递进关系 |
+| `circular-flow` | 循环过程、迭代流程、生命周期 |
+| `bento-grid` | 多主题总览、特性展示、摘要面板 |
+| `dashboard` | 数据指标、KPI、统计数据 |
+| `magazine` | 单主题深度、文章封面、视觉叙事 |
 
-| 风格 | 描述 | 适合主题 |
-|------|------|----------|
-| `portrait-photo` | 人像摄影，散景背景，自然光 | 人物、肖像 |
-| `landscape-photo` | 风光摄影，广角，黄金时刻 | 自然、建筑、城市 |
-| `product-photo` | 产品摄影，纯净背景，戏剧光影 | 产品、物品展示 |
-| `street-photo` | 街拍，纪实，黑白或胶片感 | 城市、人文 |
-| `cinematic-photo` | 电影感，宽幅，色调分级 | 叙事性场景 |
+完整定义：`references/layouts/<layout>.md`
 
-### 插画类（Illustration）
+## 风格库（Style Gallery）
 
-| 风格 | 描述 | 适合主题 |
-|------|------|----------|
-| `watercolor` | 水彩插画，柔和流动，纸张纹理 | 花卉、童话、自然 |
-| `digital-illustration` | 数字插画，干净线条，鲜艳配色 | 角色设计、概念图 |
-| `anime` | 日系动漫风格，细腻线稿 | 人物、奇幻场景 |
-| `storybook` | 绘本插画，温柔，儿童感 | 儿童内容、温情故事 |
-| `concept-art` | 概念艺术，暗黑细致，专业感 | 游戏、电影场景 |
+### 摄影类
+| 风格 | 描述 |
+|------|------|
+| `portrait-photo` | 人像摄影感，散景背景 |
+| `cinematic-photo` | 电影感，宽幅，色调分级 |
+| `product-photo` | 产品摄影，纯净背景 |
 
-### 传统艺术类（Fine Art）
+### 插画类
+| 风格 | 描述 |
+|------|------|
+| `flat-vector` | 扁平矢量，现代简洁（信息图首选） |
+| `digital-illustration` | 数字插画，干净线条 |
+| `watercolor` | 水彩，柔和流动 |
+| `storybook` | 绘本风，温柔可爱 |
+| `concept-art` | 概念艺术，暗黑精细 |
+| `anime` | 日系动漫 |
 
-| 风格 | 描述 | 适合主题 |
-|------|------|----------|
-| `oil-painting` | 油画，厚重质感，古典构图 | 人物、静物、风景 |
-| `impressionism` | 印象派，笔触松散，光影变化 | 户外场景、自然光 |
-| `art-nouveau` | 新艺术运动，装饰性线条，花卉元素 | 装饰图案、人物 |
+### 传统艺术类
+| 风格 | 描述 |
+|------|------|
+| `oil-painting` | 油画，厚重质感 |
+| `impressionism` | 印象派，笔触松散 |
+| `art-nouveau` | 新艺术运动，装饰线条 |
 
-### 中国风格类（Chinese Art）
+### 中国风格类
+| 风格 | 描述 |
+|------|------|
+| `chinese-ink` | 水墨画，留白意境 |
+| `gongbi` | 工笔画，精细雅致 |
+| `new-chinese` | 新中式，东方现代美学 |
 
-| 风格 | 描述 | 适合主题 |
-|------|------|----------|
-| `chinese-ink` | 水墨画，留白，意境深远 | 山水、花鸟、禅意 |
-| `gongbi` | 工笔画，细致精工，色彩雅致 | 花卉、人物、工笔重彩 |
-| `new-chinese` | 新中式，东方美学与现代设计结合 | 品牌、空间、人文 |
+### 数字/3D 类
+| 风格 | 描述 |
+|------|------|
+| `cinematic-3d` | 电影级 CGI |
+| `pixel-art` | 像素艺术，复古感 |
+| `cyberpunk` | 赛博朋克，霓虹未来 |
 
-### 数字/3D 类（Digital & 3D）
-
-| 风格 | 描述 | 适合主题 |
-|------|------|----------|
-| `cinematic-3d` | 电影级 CGI，写实材质，戏剧光影 | 产品、角色、场景 |
-| `flat-vector` | 扁平插画，鲜亮色块，简洁 | 图标、UI、品牌 |
-| `pixel-art` | 像素艺术，复古 8-bit | 游戏、怀旧风格 |
-| `cyberpunk` | 赛博朋克，霓虹灯，未来都市 | 科技、未来、城市 |
-
-完整风格定义：`references/styles/<style>.md`
+完整定义：`references/styles/<style>.md`
 
 ## 推荐组合
 
-| 场景 | 主题类型 | 风格 |
-|------|----------|------|
-| 社交媒体封面 | 人物/品牌 | `portrait-photo` / `flat-vector` |
-| 国风配图 | 自然/人文 | `chinese-ink` / `new-chinese` |
-| 游戏概念图 | 角色/场景 | `concept-art` / `cinematic-3d` |
-| 儿童内容 | 故事/角色 | `storybook` / `watercolor` |
-| 产品展示 | 物品 | `product-photo` / `cinematic-3d` |
-| 科技感 | 未来/城市 | `cyberpunk` / `cinematic-photo` |
-| 艺术创作 | 自由主题 | `oil-painting` / `impressionism` |
-| 动漫人物 | 人物/故事 | `anime` / `concept-art` |
+| 内容类型 | 布局 | 风格 |
+|----------|------|------|
+| 流程/教程 | `linear-flow` | `flat-vector` |
+| 技术架构 | `linear-flow` / `hub-spoke` | `concept-art` |
+| 数据报告 | `dashboard` | `flat-vector` |
+| 历史演变 | `timeline` | `watercolor` / `flat-vector` |
+| 功能对比 | `comparison` | `flat-vector` |
+| 层级体系 | `pyramid` | `flat-vector` |
+| 生命周期 | `circular-flow` | `flat-vector` |
+| 多主题总览 | `bento-grid` | `flat-vector` |
+| 概念辐射 | `hub-spoke` | `flat-vector` |
+| 文章封面 | `magazine` | `cinematic-photo` |
+
+默认：`bento-grid` + `flat-vector`
 
 ## 输出结构
 
 ```
 image-prompts/{topic-slug}/
-├── brief.md          ← 意图分析
-├── prompt.md         ← 最终提示词（主输出）
-└── image.png         ← 生成的图片（如调用图片生成 skill）
+├── analysis.md           ← Step 1 内容分析
+├── structured-content.md ← Step 2 结构化提炼
+├── prompt.md             ← Step 5 最终信息图提示词（主输出）
+└── infographic.png       ← Step 6 生成的图片（可选）
 ```
+
+Slug：从主题取 2-4 个关键词，kebab-case。
 
 ## 工作流
 
-### Step 1：理解用户意图
+### Step 1：扫描分析内容
 
-分析用户输入，提取：
-- **主体**（Subject）：画面的核心描绘对象
-- **动作/状态**（Action）：主体在做什么
-- **环境/背景**（Setting）：场景在哪里
-- **情绪/氛围**（Mood）：希望传递的情感
-- **用途**（Purpose）：封面图、插画、头像、背景等
+Read `SKILL_DIR/references/analysis-framework.md` 获取分析框架，执行：
 
-如果意图不够明确，用 `AskUserQuestion` 一次性询问关键缺失信息（不要分多次问）。
+1. 读取用户提供的内容（文件/粘贴/URL）
+2. 分析：主题、数据类型、复杂度、语气、受众
+3. 提取关键数据点（原文原句，不改写）
+4. 保存分析到 `analysis.md`
 
-Read `references/prompt-formula.md` 了解提示词构建原则。
+### Step 2：生成结构化内容提纲
 
-### Step 2：推荐风格
+Read `SKILL_DIR/references/structured-content-template.md` 获取格式规范，执行：
 
-如果用户未指定 `--style`：
-1. 根据主题类型和用途，推荐 2-3 个风格选项
-2. 每个选项附简短理由
-3. 如果用户输入包含明确风格关键词（如"水墨"→`chinese-ink`，"电影感"→`cinematic-photo`），直接自动选取
+1. 将内容转化为信息图结构：标题、各节关键概念、视觉元素、文字标签
+2. 提炼所有数字/统计数据（原文原句）
+3. 输出 `structured-content.md`
 
-如果用户已指定 `--style`，Read `references/styles/<style>.md` 获取该风格的完整定义。
+**规则**：
+- 只用来源内容，不新增信息
+- 严格保留所有数字、引语、专有名词
+- 文字标签精简：每个标签 ≤ 4 个汉字 / 3 个英文单词
 
-### Step 3：确认参数（可选）
+### Step 3：推荐布局 × 风格组合
 
-若以下任一参数未确定，用单次 `AskUserQuestion` 同时确认：
+**优先检查关键词捷径**（见下方关键词映射表），命中则直接自动选取，跳过推荐步骤。
+
+否则根据以下依据推荐 3 个组合：
+- 内容数据结构 → 匹配布局
+- 内容语气/受众 → 匹配风格
+- 用户明确的设计指令
+
+### Step 4：确认参数
+
+用**单次 `AskUserQuestion`** 同时确认以下参数（不要分多次提问）：
 
 | 参数 | 何时询问 |
 |------|----------|
-| **风格** | 未指定且推荐了多个 |
-| **比例（--ar）** | 未指定且用途对比例有明显要求 |
-| **目标模型** | 未指定（影响提示词语法） |
+| 布局×风格 | 未指定且推荐了多个 |
+| 比例（`--ar`） | 未指定 |
+| 目标模型 | 未指定（影响提示词语法和文字限制） |
 
-重要：不要拆成多次提问。
+### Step 5：生成信息图提示词 → `prompt.md`
 
-### Step 4：生成提示词 → `prompt.md`
-
-Read 已选风格的 `references/styles/<style>.md`，结合 `references/prompt-formula.md`，按以下结构生成：
-
-```markdown
-# [图片主题]
-
-## 提示词（Prompt）
-
-[完整英文提示词]
-
-## 负面提示词（Negative Prompt）
-[仅 SD/Flux 模式输出；其他模型跳过]
-
-## 参数
-- 比例：[ar]
-- 目标模型：[model]
-- 风格：[style]
-
-## 中文说明
-[对提示词的简要中文解读，帮助用户理解和调整]
-```
+1. Read `SKILL_DIR/references/layouts/<layout>.md` 获取布局定义
+2. Read `SKILL_DIR/references/styles/<style>.md` 获取风格定义
+3. Read `SKILL_DIR/references/base-prompt.md` 获取基础提示词模板
+4. 将布局定义 + 风格定义 + 结构化内容 + 模型优化 组合为完整提示词
 
 **提示词质量要求**：
-- 英文输出，结构清晰（主体 → 风格 → 技术参数）
-- 具体而不空泛：用"golden hour, soft diffused light"而非"good lighting"
-- 避免空洞词：不用"beautiful"、"amazing"等形容词堆砌
-- 根据目标模型调整语法（见 `references/model-formats.md`）
+- 按 `--model` 调整语法（见 `references/model-formats.md`）
+- 文字标签必须短（AI 图片生成文字渲染能力有限）
+- 布局描述要明确空间关系（上/下/左/右/中心）
+- 每个内容区域都有对应视觉元素描述
 
-### Step 5：输出与选择
+### Step 6：生成图片（可选）
 
-展示生成的提示词，询问用户：
-1. 是否要**调整**（风格、细节、参数）
-2. 是否要**直接生成图片**（调用可用的图片生成 skill）
+询问用户是否直接生成图片。如果确认，调用可用的图片生成 skill（如 `baoyu-image-gen`），以 `prompt.md` 作为 `--promptfiles` 参数。
 
-如果用户要生成图片，调用 `baoyu-image-gen`（如可用），以 `prompt.md` 作为 `--promptfiles` 参数。
+## 关键词捷径
+
+| 用户关键词 | 自动选取布局 | 推荐风格 | 默认比例 |
+|------------|------------|---------|---------|
+| 流程图 / 步骤 / how-to | `linear-flow` | `flat-vector` | `16:9` |
+| 对比 / vs / 比较 | `comparison` | `flat-vector` | `16:9` |
+| 时间线 / 历史 / timeline | `timeline` | `flat-vector` / `watercolor` | `16:9` |
+| 数据 / 报告 / 统计 | `dashboard` | `flat-vector` | `16:9` |
+| 总览 / 概览 / overview | `bento-grid` | `flat-vector` | `16:9` |
+| 循环 / 周期 / 生命周期 | `circular-flow` | `flat-vector` | `1:1` |
+| 封面 / cover / 海报 | `magazine` | `cinematic-photo` | `9:16` |
 
 ## 参考文件
 
-- `references/prompt-formula.md` — 提示词构建原则
-- `references/styles/<style>.md` — 20 种风格的完整定义
-- `references/model-formats.md` — 不同模型的语法差异
+- `references/analysis-framework.md` — 内容分析方法论
+- `references/structured-content-template.md` — 结构化内容格式
+- `references/base-prompt.md` — 信息图提示词基础模板
+- `references/layouts/<layout>.md` — 10 种布局定义
+- `references/styles/<style>.md` — 20 种风格定义
+- `references/model-formats.md` — 不同模型语法差异
