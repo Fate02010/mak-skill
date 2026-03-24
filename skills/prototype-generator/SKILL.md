@@ -13,218 +13,101 @@ description: |
   请务必使用此 skill。即使用户没有明确说"原型图"，只要提到要把产品资料/需求文档转化为可视化界面、线框图、交互稿，或在现有原型上新增功能，也应触发此 skill。
 ---
 
-# 原型生成工作流
+# Prototype Generator
 
-你是一位经验丰富的产品经理 + 前端原型设计专家。当用户提供产品资料文件夹路径时，按照以下工作流执行。
+这是一个给产品经理提供“一键上传资料并生成原型”体验的门面 Skill。
+对 Codex 内部，必须拆成可门禁、可回退的流水线，禁止 `原始资料 -> 直接画图`。
 
-**关键机制：** 每个 Step 的详细指令存放在 `steps/` 目录下，执行到对应 Step 时用 `Read` 工具加载，避免一次性加载全部指令。`SKILL_DIR` 指本 skill 所在目录。
+## 触发条件
 
-## 运行环境声明
+当用户要求以下任一任务时使用本 Skill：
+- 根据资料生成 HTML 原型
+- 根据资料生成 draw.io 原型
+- 生成线框图、交互稿、产品界面
+- 在现有原型上增量新增页面或功能
 
-本 skill 在两种环境中运行，启动时必须识别当前环境并遵循对应规则：
+## 阶段顺序
 
-| 项目 | Claude Code |
-|------|------------|
-| 识别方式 | 可用工具中有 `Agent` |
-| SKILL_DIR | `~/.claude/skills/prototype-generator` |
-| 并行生成方式 | `Agent(prompt="...", run_in_background=True)` |
-| 等待结果 | Agent 自动返回结果 |
-| 成功标志 | Agent 返回含 `✅` |
-| 失败标志 | Agent 返回含 `❌` 或异常 |
+### 全量模式
 
-> Codex 环境：Read `SKILL_DIR/steps/codex-rules.md` 获取完整环境声明和并行规则。
+1. **资料提炼**：扫描资料并生成 `RountMap.md`
+2. **产品语境**：生成产品经理视角角色与系统边界
+3. **竞品分析**：生成 `竞品分析报告.md`
+4. **需求文档**：生成 `requirements/` 下的详细需求文档
+5. **页面清单**：生成 `原型任务清单.md` 和 `原型DoD.md`
+6. **页面规格冻结**：统一写入 `page_specs/page_spec_*.md`
+7. **原型渲染**：
+   - draw.io：`page_model -> build_page_spec.py -> render.py -> validate.py -> merge.py`
+   - HTML：从 `page_specs/` 渲染页面文件
+8. **一致性校验**：覆盖率、一致性、缺页、缺字段检查
+9. **最终交付**：输出 `prototypes/` 下最终原型
 
-## 启动时：判断运行模式
+### 增量模式
 
-**首先检查 `WORK_DIR` 下是否存在 `执行状态.md`：**
+1. 理解新增需求
+2. 更新需求文档
+3. 更新页面清单
+4. 冻结新增页面规格到 `page_specs/`
+5. 渲染与校验
+6. 更新最终原型
 
-- **存在且状态为"进行中"** → 检测到中断，询问用户：
+## 输入与输出
 
-```
-检测到上次执行未完成：
-  当前进度：Step [X] [步骤名]（[已完成 N 个，共 M 个 Agent]）
-  工作目录：[WORK_DIR]
+### 输入
 
-请选择：
-1. 从断点继续（跳过已完成的 Step，继续未完成部分）
-2. 重新生成（从头开始，覆盖已有文件）
-3. 取消
-```
+- 产品资料目录
+- 输出格式：`html` 或 `drawio`
+- 工作目录 `WORK_DIR`
 
-- **存在且状态为"已完成"** → 询问用户：
+### 输出
 
-```
-检测到已有原型成果，请选择：
-1. 新增功能（在现有基础上增量生成）→ 进入 Step 7
-2. 改进现有原型 → 进入 Step 6
-3. 重新生成（从头开始） → 从 Step 1 开始
-```
+- `WORK_DIR/RountMap.md`
+- `WORK_DIR/竞品分析报告.md`
+- `WORK_DIR/requirements/`
+- `WORK_DIR/原型任务清单.md`
+- `WORK_DIR/原型DoD.md`
+- `WORK_DIR/page_model_*.json`
+- `WORK_DIR/page_specs/page_spec_*.md`
+- `WORK_DIR/prototypes/`
 
-- **不存在** → 全量模式：从第零步开始完整执行
+## 门禁规则
 
-## 工作流概览
+### 全局门禁
 
-```
-【全量模式】
-Step 1: 扫描产品资料 → 展示文件列表 → 用户确认核心/参考/跳过 → 生成 RountMap.md
-Step 2: 提炼产品特性 → 生成产品经理视角的系统 prompt → 设置角色
-Step 3: 竞品调研分析 → 生成 竞品分析报告.md（必须在需求文档之前完成）
-Step 4: 深度阅读资料 + 结合竞品洞察 → 展示系统与功能列表 → 用户确认 → 生成需求文档（大型项目：overview 主进程写 + 模块文件并行 Agent 写） → 功能完整性检查与自动补全 → 用户确认 → 更新详细需求文档.md
-Step 5: 解析需求 → 规划跳转地图 → 并行生成原型图 → 收集需求变更回写文档 → 强制自查（文件完整性 + 断链 + 需求覆盖）
-Step 6: 审视原型 → 提出改进建议 → 用户确认 → 迭代改进（可多轮）
+- 没有 `RountMap.md`，禁止进入需求文档阶段
+- 没有 `requirements/`，禁止进入原型阶段
+- 没有 `原型任务清单.md`，禁止进入渲染阶段
+- 没有 `page_specs/`，禁止进入任何渲染阶段
+- 渲染阶段禁止回读原始资料，只允许读取冻结后的 `page_specs/`、样式规范、任务清单、导航映射
+- 最终输出前，必须通过 `validate.py` 与 `check_prototype_consistency.py`
 
-【增量模式】
-Step 7: 理解新增需求 → 补全功能需求 → 用户确认 → 更新需求文档 → 并行生成新增页面 → 修改受影响已有页面 → 更新导航首页
-```
+### draw.io 专属门禁
 
-### ⚡ 并行执行原则
+- 必须先生成 `page_model_*.json`
+- 必须再生成 `page_specs/page_spec_*.md`
+- `validate.py` 或一致性检查失败时，必须回退到 `page_specs` 或更上游重建，禁止直接把最终 `.drawio` 当主修复面
 
-**能并发就并发**。以下场景必须使用并行执行，禁止逐个串行：
+### 用户交互门禁
 
-| 场景 | 并行方式 | 说明 |
-|------|---------|------|
-| Step 5-3A 规格化 Agent | 同一响应中启动所有 Agent | 各模块独立无依赖 |
-| Step 5-3B render.py 渲染 | 同一响应中启动所有 Bash 命令（`run_in_background=true`） | 各模块独立无依赖 |
-| Step 4 大型项目模块文档 | overview 写完后，所有模块 Agent 同一响应启动 | 各模块只依赖 overview |
-| Step 5 HTML Agent | 同一响应中启动所有 Agent | 各模块独立无依赖 |
-| Step 6 七维度审视 | 维度 1-5 可并行（5 个独立 Agent），维度 6-7 需等 1-5 完成后顺序执行 | 维度 6 依赖修复结果 |
+以下节点必须等待用户确认：
+- 输出格式
+- 工作目录
+- 文件优先级分类
+- 系统与功能列表确认
+- 原型完成标准确认
+- Step 6 改进建议确认
 
-> **判断标准**：两个任务之间没有数据依赖（不读写同一文件、不依赖对方产出物）→ 必须并行。
+## 详细规则位置
 
-## 执行方式
+只在需要时按阶段读取：
 
-### 第零步：确认输出格式与工作目录
-
-**第一问：选择输出格式（OUTPUT_FORMAT）**
-
-```
-请选择原型输出格式：
-1. HTML（交互式网页原型，浏览器直接预览，支持点击跳转）
-2. draw.io（线框图，可在 draw.io / Diagrams.net 中编辑，生成 .drawio 文件）
-```
-
-**必须等待用户回复**，记录为 `OUTPUT_FORMAT = html` 或 `OUTPUT_FORMAT = drawio`。后续所有步骤按此格式生成，子 Agent 必须继承此设置。
-
-> ⛔ **STOP — 必须等待用户回复**
-> 在用户明确回复输出格式之前，禁止执行后续任何步骤。
-> 不得假设用户会选择某个默认选项，不得自动继续。
-
----
-
-**第二问：确认工作目录（WORK_DIR）**
-
-```
-所有生成文件将保存在同一目录下。
-请指定保存目录，或直接回复"当前目录"使用默认路径。
-```
-
-- 用户指定路径 → 使用该路径
-- 用户回复"当前目录"或未指定 → `Bash: pwd` 获取，再告知用户实际路径
-
-**必须等待用户确认**后才能进入 Step 1。所有文件（RountMap.md、需求文档、原型文件等）都必须保存在 `WORK_DIR` 下，**严禁写入 `/private/tmp` 或其他系统临时目录。**
-
-> ⛔ **STOP — 必须等待用户确认工作目录**
-> 在用户明确确认 WORK_DIR 之前，禁止进入 Step 1。
-> 不得使用默认路径自动继续。
-
-### 第一步：创建执行计划，初始化执行状态
-
-工作流启动后：
-1. 用 `TaskCreate` 为每个 Step（1-6）创建任务，用 `TaskUpdate` 标记 `in_progress` / `completed`
-2. Read `SKILL_DIR/steps/step0-init.md` 获取执行状态文件格式，写入 `WORK_DIR/执行状态.md`，后续每个 Step 开始/完成时更新
-
-### 第二步：按需加载指令，逐步执行
-
-**⛔ 步骤门禁规则（Gate Check）— 每个 Step 开始前必须执行：**
-
-> 进入任何 Step 前，先用 `Glob` 或 `Read` 检查该 Step 的前置产物是否存在。
-> **前置产物缺失 = 前置 Step 未执行，必须先回退执行前置 Step，禁止跳过。**
-
-| Step | 前置产物检查 | 缺失时动作 |
-|------|-------------|-----------|
-| 1 | 无（起始步骤） | — |
-| 2 | `WORK_DIR/RountMap.md` 存在 | 回退执行 Step 1 |
-| 3 | `WORK_DIR/RountMap.md` 存在 | 回退执行 Step 1→2 |
-| 4 | `WORK_DIR/竞品分析报告.md` 存在 | 回退执行 Step 3 |
-| 5 | `WORK_DIR/requirements/` 目录存在且含 `.md` 文件 | 回退执行 Step 4 |
-| 6 | `WORK_DIR/prototypes/` 目录存在且含最终产物 | 回退执行 Step 5 |
-
-每个 Step 开始前，先 Read 对应的指令文件，然后按指令执行：
-
-| Step | 指令文件 | 说明 |
-|------|---------|------|
-| 1 | `SKILL_DIR/steps/step1-scan.md` | 扫描资料，生成 RountMap.md |
-| 2 | `SKILL_DIR/steps/step2-pm-prompt.md` | 生成产品经理角色 prompt |
-| 3 | `SKILL_DIR/steps/step3-competitor.md` | 竞品分析（不可跳过） |
-| 4 | `SKILL_DIR/steps/step4-requirements.md` | 生成详细需求文档（大型文档按需 Read step4-parallel.md） |
-| 5 | 先 Read `SKILL_DIR/steps/step5-common.md`，再按 OUTPUT_FORMAT Read `step5-html.md` 或 `step5-drawio.md` | 并行生成原型图 |
-| 6 | `SKILL_DIR/steps/step6-iteration.md` | 改进建议与迭代 |
-| 7 | `SKILL_DIR/steps/step7-add-feature.md` | 增量新增功能原型 |
-
-子任务生成原型时按 OUTPUT_FORMAT 加载规范：
-- HTML 模式：`SKILL_DIR/steps/html-spec.md`
-- draw.io 模式：`SKILL_DIR/steps/drawio-spec.md`
-
-## 输出文件结构
-
-所有文件统一保存在 `WORK_DIR` 下：
-
-```
-WORK_DIR/
-├── 执行状态.md              ← 第一步初始化，每步更新（支持断点恢复）
-├── RountMap.md              ← Step 1 生成
-├── 竞品分析报告.md           ← Step 3 生成（需求文档前必须完成）
-├── 竞品亮点摘要.md           ← Step 3 生成（≤200字精简摘要，供 Step 5 subagent 引用）
-│
-│  【需求文档 — Step 4 生成，所有需求文档统一存放在 requirements/ 子目录】
-├── requirements/                ← Step 4 生成，所有需求文档统一存放
-│   │
-│   │  【单文件模式（DOC_MODE=single，模块数≤3）】
-│   ├── 详细需求文档.md          ← Step 4 生成，Step 5-4 / Step 6 迭代更新
-│   │
-│   │  【分拆模式（DOC_MODE=split，模块数>3）永久保留，不合并】
-│   ├── index.md                 ← 索引：列出每个模块对应的文件路径，subagent 先读此文件
-│   ├── 详细需求文档_overview.md ← 产品概述/用户角色/核心流程/数据模型/枚举值字典/原型图清单
-│   ├── 详细需求文档_[模块名].md ← 每个模块独立文件，只含该模块功能点+字段规格
-│   └── 详细需求文档_[模块名].md ← Step 5 各 subagent 只加载 overview + 自己的模块文件
-│
-├── 原型任务清单.md           ← Step 5-2 生成（含跳转地图和需求变更汇总）
-├── 需求提炼_临时.md          ← 如内容太长时的中间文件（可选）
-│
-│  【draw.io 模式专有（永久保留，用于增量修复）】
-├── page_spec_[模块英文名].md ← Step 5-3A 生成，每次修复优先 Edit 此文件再重渲染
-│
-└── prototypes/
-    │
-    │  【HTML 模式（OUTPUT_FORMAT=html）】
-    ├── index.html           ← 导航首页 + 跳转地图
-    ├── login.html
-    ├── home.html
-    └── ...
-    │
-    │  【draw.io 模式（OUTPUT_FORMAT=drawio）】
-    └── [产品名称].drawio    ← 单文件，每页一个 diagram（第一个 diagram 为导航跳转地图）
-```
-
-> `WORK_DIR` 由用户指定，未指定时默认为当前终端工作目录（`pwd`）。
-
-## 注意事项
-
-1. **⛔ 强制用户交互点（违反 = 严重错误，必须等待用户回复才能继续）：**
-   - **第零步（格式选择）**：⛔ 展示格式选项后 STOP，等用户回复 html/drawio
-   - **第零步（工作目录）**：⛔ 展示目录确认后 STOP，等用户确认路径
-   - **Step 1 阶段 1-2**：⛔ 展示文件列表和优先级后 STOP，等用户回复核心/参考/跳过分类
-   - **Step 4 阶段 4-0**：⛔ 展示系统与功能列表后 STOP，等用户确认模块和功能划分
-   - **Step 4 阶段 4-2**：⛔ 展示功能补全清单后 STOP，等用户选择接受/跳过
-   - **Step 5-3A→5-3B（draw.io）**：⛔ 展示 Spec 摘要后 STOP，等用户回复"确认"
-   - **Step 6**：⛔ 展示改进建议后 STOP，等用户决策
-2. **⛔ 步骤必须顺序执行，禁止跳过：** Step 1→2→3→4→5→6 严格顺序，每个 Step 开始前必须检查前置产物（见门禁规则表），缺失则回退执行。特别注意：**Step 3 竞品分析不可跳过**，必须在 Step 4 之前完成
-3. **⛔ 中间产物必须写入文件：** RountMap.md、竞品分析报告.md、竞品亮点摘要.md、需求文档（requirements/ 目录）是必须生成的中间产物，不得只在对话中口头输出而不写文件
-3. **功能闭环是底线：** 任何按钮、链接、表单提交都必须有明确的去向或反馈
-4. **需求文档是活文档：** Step 5 生成原型过程中发现的需求遗漏，必须同步回写到需求文档
-5. **改进循环不强制：** Step 6 以用户意愿为准
-6. **分块读取：** 资料多时优先读取 RountMap.md 中标记"高优先级"的文件
-7. **中间文件：** 超过 200 行的内容保存为过程文件，后续通过 Read 读取
-8. **错误恢复：** 并行任务失败时记录在执行状态.md 和原型任务清单中，最后统一补充；失败 Agent 超过总数 50% 时触发熔断，停止并告警用户
-9. **路径处理：** 使用绝对路径操作文件，确保子任务也能正确找到文件位置
-10. **禁止自动推进：** 在上述强制交互点，严禁假设用户意图或使用默认值自动继续，必须明确等待用户输入
+- 运行环境规则：`steps/codex-rules.md` / `steps/claude-rules.md`
+- Step 1：`steps/step1-scan.md`
+- Step 4：`steps/step4-requirements.md`
+- Step 5 通用：`steps/step5-common.md`
+- Step 5 draw.io：`steps/step5-drawio.md`
+- Step 5 HTML：`steps/step5-html.md`
+- 页面规格冻结契约：`steps/page-spec-freeze.md`
+- draw.io 规范：`steps/drawio-spec.md`
+- 页面模型契约：`steps/page-model-spec.md`
+- 校验脚本：`scripts/validate.py`、`scripts/check_prototype_consistency.py`

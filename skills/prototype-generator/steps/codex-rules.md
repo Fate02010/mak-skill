@@ -6,308 +6,150 @@
 
 ## 运行环境声明
 
-| 项目 | Codex |
-|------|-------|
-| 识别方式 | 可用工具中有 `Task` |
-| SKILL_DIR | `~/.codex/skills/prototype-generator` |
-| 并行生成方式 | `Task(prompt="...", run_in_background=True)` + `TaskOutput(task_id=..., block=True)` |
-| 等待结果 | 必须用 `TaskOutput(task_id=..., block=True, timeout=300000)` 阻塞等待 |
-| 成功标志 | TaskOutput 输出含 `✅` |
-| 失败标志 | TaskOutput 输出含 `❌` 或不含 `✅` |
+当前 Codex 环境以实际可用工具为准，不再使用历史文档中的 `Task` / `TaskOutput` / `Read` / `Glob` / `Edit` / `Bash` 术语。
+
+| 能力 | Codex 当前做法 |
+|------|----------------|
+| 文件读取 | 用 `exec_command` 执行 `sed` / `rg` / `ls` / `find` 等命令读取文件与目录 |
+| 并行子任务 | 用 `spawn_agent` 启动子 agent，必要时用 `wait_agent` 收集结果 |
+| 并行 shell | 用 `multi_tool_use.parallel` 并行发出多个 `exec_command` |
+| 文件编辑 | 用 `apply_patch` 修改文件 |
+| 进度计划 | 用 `update_plan` 维护步骤状态 |
+
+**识别方式：**
+- 当前会话可用 `spawn_agent`、`wait_agent`、`exec_command`
+- 不要假设存在 `Task` / `TaskOutput`
 
 ---
 
 ## Codex 必须遵守的并行规则
 
-1. **Step 5 并行生成原型时，必须使用 Task 工具**：将每个模块的完整 prompt 作为独立 Task 启动，所有 Task 在同一轮创建以实现真正并行
-2. **Task prompt 必须完全自包含**：不继承父会话的任何变量，所有路径（SKILL_DIR、WORK_DIR）必须是实际的绝对路径字符串，不能用变量引用
-3. **draw.io 模式两阶段**：先并行创建所有规格化 Task（阶段 A），全部完成后再并行创建所有渲染 Task（阶段 B）
-4. **Task 容量限制**：draw.io 模式每个 Task ≤ 2 页（XML 坐标计算复杂）；HTML 模式每个 Task ≤ 4 页
-5. **超过容量时拆分**：单模块超过容量上限时，拆为多个 Task，每个 Task 负责部分页面
-6. **熔断规则**：所有 Task 完成后统计失败数，失败 > 50% 时停止并告警用户
-7. **模块粒度预检**：创建 Task 前，检查每个模块是否包含 > 2 个业务实体（> 2 个列表页）。若是，先按 step5-common.md 规则拆分模块再创建 Task。禁止将 3+ 个业务实体的 CRUD 放入同一个 Task
+1. **独立写作任务优先使用 `spawn_agent`**：Step 4 模块需求文档、Step 5 HTML 页面、Step 5 draw.io 规格化，均可按模块拆给子 agent。
+2. **子 agent prompt 必须自包含**：所有路径都写成绝对路径，不依赖父会话变量。
+3. **并发上限**：任一时刻最多只允许 3 个子 agent 同时运行；任务数超过 3 时必须分批启动。
+4. **等待策略**：每批子任务全部启动后统一 `wait_agent`，不要边启动边等待；上一批完成后再启动下一批。
+5. **shell 并行只用于互不写同一文件的命令**：例如多个 `render.py` 渲染命令可以并行；同一文件的连续修改不可并行。
+6. **熔断规则**：并行子任务失败数超过 50% 时暂停，并提示用户选择重试或中止。
+7. **模块粒度预检**：创建子任务前，先按 `step5-common.md` 的业务域限制拆好模块，避免单个子任务承担过多页面。
 
 ---
 
-## Step 5 HTML 模式：Task 启动示例
+## Step 4 需求文档并行生成
 
-```python
-task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=True)
-task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=True)
+大型项目需求文档拆分时：
 
-result_1 = TaskOutput(task_id=task_1.id, block=True, timeout=300000)
-result_2 = TaskOutput(task_id=task_2.id, block=True, timeout=300000)
-# 成功标志：输出包含 "✅ [模块名] 完成"
+1. 主进程先生成 `requirements/详细需求文档_overview.md`
+2. 再按模块用 `spawn_agent` 分批并行生成各模块文档，每批最多 3 个
+3. 所有 agent 完成后，由主进程汇总并写入 `requirements/index.md`
+
+**Codex 示例：**
+
+```text
+spawn_agent(agent_type="worker", message="负责 用户模块 需求文档 ...")
+spawn_agent(agent_type="worker", message="负责 商品模块 需求文档 ...")
+spawn_agent(agent_type="worker", message="负责 订单模块 需求文档 ...")
+wait_agent(ids=[...], timeout_ms=300000)
+# 若仍有剩余模块，再启动下一批，确保同时运行数不超过 3
 ```
 
-## Step 5 占位符替换差异
-
-Codex 环境下，占位符替换规则与 Claude Code 相同，唯一差异：
-
-| 占位符 | Codex 替换为 |
-|--------|-------------|
-| `[SKILL_DIR]` | `/Users/xxx/.codex/skills/prototype-generator`（注意是 `.codex` 不是 `.claude`） |
-
-其余占位符（`[WORK_DIR]`、`[模块名]`、`[模块英文名]`、`[页面名称N]`、`[章节名]`、`[风格]`/`[颜色]`、`[需求文档读取指令]`）替换规则与 Claude Code 完全一致。
+成功标志统一为子 agent 最终输出含 `✅ [文件名] 完成`。
 
 ---
 
-## Step 5 draw.io 阶段 A（规格化）：Task 启动示例
+## Step 5 HTML 模式
 
-```python
-spec_1 = Task(prompt="...模块1 规格化 prompt...", run_in_background=True)
-spec_2 = Task(prompt="...模块2 规格化 prompt...", run_in_background=True)
+HTML 模式按模块拆分为独立子任务：
 
-result_spec_1 = TaskOutput(task_id=spec_1.id, block=True, timeout=300000)
-result_spec_2 = TaskOutput(task_id=spec_2.id, block=True, timeout=300000)
-# 成功标志：输出包含 "✅ [模块名] page_spec 完成"
-```
+1. 先由主进程准备共享文件，例如 `prototypes/common.css`
+2. 每个子任务必须先冻结 `page_specs/page_spec_[模块英文名].md`
+3. 再从 `page_spec` 渲染 HTML 页面，render 阶段不得回读原始资料或需求文档原文
+4. 全部完成后，主进程执行 `check_prototype_consistency.py`、冒烟检查和缺失修复
 
-## Step 5 draw.io 阶段 B（渲染）：Task 启动示例
-
-```python
-render_1 = Task(prompt="...模块1 渲染 prompt...", run_in_background=True)
-render_2 = Task(prompt="...模块2 渲染 prompt...", run_in_background=True)
-
-result_render_1 = TaskOutput(task_id=render_1.id, block=True, timeout=300000)
-result_render_2 = TaskOutput(task_id=render_2.id, block=True, timeout=300000)
-# 成功标志：输出包含 "✅ [模块名] 渲染完成"
-```
-
-## Codex 特别注意事项
-
-- Task prompt 完全自包含，所有路径必须是实际字符串
-- SKILL_DIR 使用 `~/.codex/skills/prototype-generator`（不是 `.claude`）
-- 如果 styles 文件 Read 失败，渲染 Agent 使用 prompt 内联的兜底样式继续执行，标注 `⚠️ styles文件读取失败`
-- draw.io 渲染 Task：每个 Task 对应 ≤ 2 页的 page_spec（规格化阶段已按此拆分）
-- **HTML 模式**：每个 Task 建议负责 ≤ 4 页
+**建议容量：**
+- 单个子任务负责 ≤ 4 页
+- 单模块超过 6 页时拆分为多个子任务
 
 ---
 
-## ⚠️ Codex 强制：TaskOutput 收集后的主进程验收（不可跳过）
+## Step 5 draw.io 模式
 
-> 所有 Task 的 TaskOutput 返回后，Codex 主进程在进入阶段 5-5 之前，必须完成以下快速验收，发现问题立即重跑对应 Task：
+draw.io 统一走强约束链路：
 
-### 1. 模块产出统计验收
+### 启动前门禁
 
-逐模块读取 TaskOutput 内容，提取 `✅ [模块名] 完成` 行中的 swimlane 数量，与原型任务清单对照：
+- 主进程必须先生成并检查 `WORK_DIR/原型DoD.md`
+- 主进程必须先生成并检查 `WORK_DIR/drawio-完成标准.md`
+- 主进程必须先检查每个 `page_model.module_name` 是否为**最终 sheet 名**，不得带 `page_spec:` 前缀，不得是“后台-商品与内容”这类聚合命名
+- 若“完成定义 / 交付前检查清单 / 最终 validate 门槛”任一未明确，Codex 不得启动 draw.io 子 agent
 
-```
-模块 [X]：任务清单要求 N 个 swimlane，Task 报告 M 个 →
-  M < N：缺少 swimlane，必须重跑该模块 Task
-  M ≥ N：通过
-```
+### 阶段 A：语义建模
 
-### 2. Tab 页拆分验收
+- 用 `spawn_agent` 按模块分批并行生成 `page_model_[模块英文名].json`，每批最多 3 个子 agent
+- 每个子任务负责 ≤ 2 个真实页面；超过则强制拆分
+- 子任务只负责页面类型、字段、列表列、状态枚举、跳转、CRUD 标记
+- 子任务输出必须直接写入 `WORK_DIR/page_model_[模块英文名].json`
 
-对每个已生成的 drawio_*_tmp.xml 文件（或 HTML 文件），检查是否存在以下情况：
+### 阶段 B：构建与渲染
 
-```
-Grep 搜索 "部门管理|角色管理|权限管理|管理员" 等同属一个 Tab 的功能点是否出现在同一个 swimlane 标题 (name=) 中
-```
+- 主进程先调用 `build_page_spec.py`
+- 再调用 `render.py`
+- 多个模块的 `build_page_spec.py` / `render.py` 命令可通过 `multi_tool_use.parallel` 并行执行
 
-- 若多个 Tab 功能点在同一个 swimlane 内 → 说明 Tab 未拆分，重新生成该模块 Task，要求每个 Tab 独立 swimlane
-- 每个 swimlane 应只包含一个功能点的内容
+**Codex shell 示例：**
 
-### 3. 关键按钮缺失验收
-
-对每个详情页/表单页（HTML 模式：`.html` 文件；draw.io 模式：`page_spec_*.md` 或 `drawio_*_tmp.xml`），检查需求文档中标注的"主操作"按钮是否在 UI 区存在：
-
-```
-读取 WORK_DIR/原型任务清单.md，找到每个页面的"主操作"字段
-对照原型文件中是否有对应按钮（Grep 搜索按钮名称）
-缺失 → 用 Edit 工具直接追加对应按钮 mxCell 或 HTML 元素，不重跑整个 Task
+```text
+exec_command(cmd="mkdir -p .../page_specs")
+exec_command(cmd="python3 .../build_page_spec.py .../page_model_user.json .../page_specs/page_spec_user.md")
+exec_command(cmd="python3 .../render.py .../step5-component-styles.md .../page_specs/page_spec_user.md .../drawio_user_tmp.xml")
 ```
 
-### 4. page_spec 格式验证（draw.io 模式必须执行）
+补充强约束：
 
-对每个 Spec Task 生成的 `page_spec_*.md`，验证以下内容：
-
-**格式完整性检查：**
-```bash
-# 检查文件是否包含必需的表格标题
-grep -q "## swimlane 布局" page_spec_*.md
-grep -q "## 元素列表" page_spec_*.md
-
-# 统计元素列表行数（| id | 前缀行）
-grep -c "^| [0-9]" page_spec_*.md
-```
-
-**元素数量检查：**
-- 移动端列表页：≥ 25 行
-- 移动端表单页：≥ 20 行
-- Web 列表页：≥ 35 行
-- Web 表单页：≥ 25 行
-
-**格式错误判定：**
-若文件满足以下任一条件，则标记为 `SPEC_INVALID`：
-- 不包含 "## 元素列表" 标题
-- 元素列表行数不足最低要求
-- 文件内容为描述性文字（如 `- 顶部：标题"xxx"，右侧消息图标`）而非表格
-
-**重试策略：**
-标记为 `SPEC_INVALID` 的模块，重新发送 Spec Task，在 prompt 末尾追加：
-
-```
-⚠️ 警告：上次输出格式错误（描述性文字而非坐标表格）。
-
-本次必须严格按照 page_spec 表格格式输出：
-- 必须包含 "## swimlane 布局" 和 "## 元素列表" 两个表格
-- 每行一个 mxCell 元素，包含 id/parent/value/x/y/w/h/style_key 列
-- 禁止输出描述性文字（如"- 轮播区：3张图"）
-- 移动端列表页最少 25 行，Web 列表页最少 35 行
-
-参考正确格式示例（见 step5-spec-agent-prompt.md 中的"完整业务示例"）。
-```
-
-验收通过后，才进入阶段 5-5 执行全量质量校验。
+- `build_page_spec.py` 的输出路径必须显式指向 `WORK_DIR/page_specs/page_spec_[模块英文名].md`
+- 若发现新生成的 `WORK_DIR/page_spec_[模块英文名].md` 落在根目录，视为流程错误，必须修正路径后重跑
+- render 阶段只允许读取 `WORK_DIR/page_specs/` 下的 page_spec，不得读取根目录历史文件
 
 ---
 
-## Step 4 需求文档并行生成：Task 启动示例
+## 文件读取策略
 
-```python
-task_1 = Task(prompt="...模块1 完整 prompt...", run_in_background=True)
-task_2 = Task(prompt="...模块2 完整 prompt...", run_in_background=True)
+Codex 中凡是历史文档写着 “Read 某文件 / 某章节”，都按下面方式执行：
 
-result_1 = TaskOutput(task_id=task_1.id, block=True, timeout=300000)
-result_2 = TaskOutput(task_id=task_2.id, block=True, timeout=300000)
-# 成功标志：输出包含 "✅ 详细需求文档_[模块中文名].md 完成"
-```
+- 整文件读取：`exec_command(cmd="sed -n '1,220p' <file>")`
+- 章节定位：先用 `rg -n "^## |^### " <file>` 找行号，再用 `sed -n '<start>,<end>p'`
+- 文件存在性检查：`test -f` / `test -d` / `rg --files`
 
----
-
-## Step 7 增量模式：Task 启动方式
-
-新增页面并行生成时，使用 `Task` + `run_in_background=true`，启动方式同 Step 5。
+不要在 Codex 环境里继续输出 “Read 工具”、“Glob 工具” 这类不存在的工具名。
 
 ---
 
-## Codex 5.4 Spec Agent 上下文优化（减少 token 消耗）
+## page_model 契约
 
-> 本节规则仅适用于 draw.io 模式的规格化 Agent（阶段 A）。
+Codex draw.io 模式统一先输出 `page_model_[模块英文名].json`：
 
-Spec Agent 在生成 page_spec 时需要读取多个文件，容易导致上下文耗尽。按以下精简策略执行：
-
-### 文件读取策略
-
-**1. step5-component-styles.md（样式字典）**
-- 只需读取 style_key 名称列（第一列）
-- 跳过完整 style 字符串（第二列）
-- 使用 Read 工具时指定 limit 参数，只读前 100 行
-
-**2. step5-page-templates.md（页面模板）**
-- 只读取与本模块页面类型匹配的模板（1-2 个）
-- 跳过其他页面类型的模板
-- 例如：移动端列表页只读"移动端列表页模板"，跳过"Web 表单页模板"
-
-**3. overview.md（项目概览）**
-- 只读 §2（用户角色与权限）+ §5.5（枚举值字典）
-- 跳过：§1（项目背景）、§3（技术栈）、§4（通用规范）
-- 如果 overview.md 超过 80 行，使用 Read 工具分段读取：
-  - 先 Grep 查找 §2 和 §5.5 的行号
-  - 再用 Read 工具的 offset + limit 参数精确读取这两个章节
-
-**4. 模块需求文档（app.md / admin.md / 其他模块）**
-- 全量读取（必须）
-- 这是 Spec Agent 的核心输入，不可精简
-
-### 上下文预算警告
-
-在构建 Spec Agent prompt 时，检查总文件大小：
-
-```bash
-# 计算所有待读取文件的总大小
-du -sh step5-component-styles.md step5-page-templates.md overview.md app.md
-```
-
-- 如总文件大小 > 30KB，启用摘要模式
-- 摘要模式：创建 `step5-spec-context.md` 预消化需求为 Codex 就绪格式
-
-### 摘要模式（总文件 > 30KB 时启用）
-
-创建 `WORK_DIR/step5-spec-context.md`，包含以下精简内容：
-
-```markdown
-# Spec Agent 上下文摘要
-
-## 可用 style_key 列表
-nav, bg_mobile, bg_web, filter_bar, label_required, select, card, badge_warning, badge_info, badge_success, text_primary, text_secondary, text_price, text_placeholder, button_primary, button_secondary, icon, list_container, pagination, note_card, text_note
-
-## 用户角色（来自 overview.md §2）
-[复制粘贴 §2 内容]
-
-## 枚举值字典（来自 overview.md §5.5）
-[复制粘贴 §5.5 内容]
-
-## 页面模板（仅本模块相关）
-[复制粘贴匹配的 1-2 个模板]
-
-## 模块需求（来自 app.md / admin.md）
-[全文复制]
-```
-
-Spec Agent prompt 中，将所有文件读取指令替换为：
-```
-读取 [WORK_DIR]/step5-spec-context.md
-```
+- 契约文件：`SKILL_DIR/steps/page-model-spec.md`
+- 新内容统一写 JSON，不再让子任务直接输出 `page_spec`
+- `page_spec` 仅作为脚本生成的中间产物保留，供 render/修复使用
 
 ---
 
-## Codex 5.4 模块化展开方法（提升元素密度）
+## 主进程验收（不可跳过）
 
-由于 Codex 5.4 上下文限制，采用"模块化展开"策略，确保每个 swimlane 达到最低元素数量要求：
+所有子任务完成后，主进程必须完成以下快速验收：
 
-### 展开顺序（按区块逐步展开）
+1. **产出完整性**：检查任务清单中的每个模块是否都有对应 `page_model_*.json`
+2. **page_model 校验**：确认 JSON 合法且页面数 ≤ 2
+3. **构建前校验**：对每个模型执行 `build_page_spec.py`；脚本报错则不进入 render
+4. **渲染后校验**：对每个 `drawio_*_tmp.xml` 执行 `validate.py`
+5. **一致性门禁**：执行 `check_prototype_consistency.py WORK_DIR/requirements WORK_DIR/page_specs --json`
+6. **自动重建**：若触发 `C10/C11`、`FAIL`、缺页、缺字段或低覆盖率，必须回到 `page_specs` 或 `page_model` 重建
+7. **失败熔断**：失败数超过 50% 时暂停流程
 
-1. **先写骨架**（5-8 行）
-   - 导航栏（nav）
-   - 背景（bg）
-   - 主容器（container）
+---
 
-2. **再写筛选区**（5-10 行）
-   - 每个筛选条件独立展开：label + input/select
-   - 移动端：2-3 个筛选条件
-   - Web 端：4-6 个筛选条件
+## 特别注意事项
 
-3. **再写表格/列表**（25-40 行）
-   - 列表页：列标题（3-8 列）+ 5 行数据（每行每列独立，每行不同状态）
-   - 移动端卡片流：5 张卡片，每张卡片 6 个元素（订单号/状态/商品/金额/按钮×2，每张不同状态）
-
-4. **再写表单**（10-20 行）
-   - 每个字段 2 行：label + input
-   - 不遗漏任何字段
-
-5. **再写操作区**（3-5 行）
-   - 所有按钮 + tooltip
-
-6. **最后写标注区**（2-3 行）
-   - 页面说明卡片
-
-### 展开检查点
-
-每完成一个区块，统计累计行数：
-```bash
-grep -c "^| [0-9]" page_spec_*.md
-```
-
-不足最低要求时，继续展开下一区块。
-
-### 强制补充规则
-
-如果所有区块展开完毕，行数仍不足：
-- 列表页：补充更多数据行（不同状态）
-- 表单页：回查需求文档，补齐遗漏字段
-- 详情页：补充更多展示字段
-
-**Dashboard/工作台展开（16-20 行）：**
-   - 4 张统计卡片，每卡 4 元素（容器+指标名+数值+趋势）= 16 行
-   - 图表占位区 2-3 行
-   - 待办/快捷操作列表 5-8 行
-
-**移动端首页/商城首页展开（20-30 行）：**
-   - 搜索 + 轮播 + 指示器 = 3 行
-   - 分类图标区：5 个图标 × 2 元素 = 10 行
-   - 商品卡片：6 张 × 4 元素 = 24 行
-   - 底栏 1 行
-
+- 不要继续使用 `TaskOutput`、`run_in_background=true` 这种旧接口描述
+- 不要让 Codex 手工排坐标、复制骨架、补 CRUD 弹窗
+- 渲染阶段出现 `style_key` 缺失、空 `swimlane_label`、缺表头时，应直接报错，不要静默降级
+- 新链路统一使用 `page_model -> build_page_spec -> render`

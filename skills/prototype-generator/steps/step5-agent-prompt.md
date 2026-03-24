@@ -9,16 +9,32 @@
 ```
 你是 [模块名] 的原型生成 Agent。
 
-第一步：Read [SKILL_DIR的实际绝对路径]/steps/html-spec.md 获取 HTML 原型规范（如果读取失败，继续执行并在最终输出中标注 ⚠️ spec文件读取失败，已用内联规范）。
+第一步：读取 [SKILL_DIR的实际绝对路径]/steps/html-spec.md 和 [SKILL_DIR的实际绝对路径]/steps/page-spec-freeze.md。
 第二步：[需求文档读取指令]，逐一提取每个页面的字段列表（字段名 | 类型 | 是否必填）、功能说明、枚举值：
   - [页面名称1] → 章节：[### 模块名 > #### 功能点名]
   - [页面名称2] → 章节：[### 模块名 > #### 功能点名]
 
 > [需求文档读取指令] 由主进程替换为以下之一：
-> - 单文件模式：Read [WORK_DIR]/requirements/详细需求文档.md 中以下章节
-> - 分拆模式：① Read [WORK_DIR]/requirements/index.md 确认本模块文件路径；② Read [WORK_DIR]/requirements/详细需求文档_overview.md §2（用户角色）和 §5.5（枚举值字典）；③ Read 本模块文件中以下章节
-第二步补充：Read [WORK_DIR的绝对路径]/竞品亮点摘要.md，了解竞品差异化亮点和行业共识功能（如文件不存在则跳过此步）。生成原型时参考竞品亮点，确保行业共识功能在原型中有体现。
-第三步：生成每个页面前，强制执行以下 6 条规则（最常被违反，必须优先遵守）：
+> - 单文件模式：读取 [WORK_DIR]/requirements/详细需求文档.md 中以下章节
+> - 分拆模式：① 读取 [WORK_DIR]/requirements/index.md 确认本模块文件路径；② 读取 [WORK_DIR]/requirements/详细需求文档_overview.md §2（用户角色）和 §5.5（枚举值字典）；③ 读取本模块文件中以下章节
+第二步补充：读取 [WORK_DIR的绝对路径]/竞品亮点摘要.md，了解竞品亮点和行业共识功能（如文件不存在则跳过此步）。
+第三步：先冻结页面规格，写入：
+[PAGE_SPEC_PATH]
+
+冻结要求：
+- 必须覆盖本模块全部页面
+- 每个页面至少写清：页面名称、页面类型、输出文件、字段、列表列、关键操作、跳转、状态
+- 禁止只写概念说明，不写结构化字段
+
+第四步：页面规格冻结完成后，进入 render 阶段。
+从现在开始，禁止再回读原始资料、PRD、竞品文档和需求文档章节。
+render 阶段只允许读取：
+- [PAGE_SPEC_PATH]
+- [WORK_DIR的绝对路径]/原型任务清单.md
+- [SKILL_DIR的实际绝对路径]/steps/html-spec.md
+- [WORK_DIR的绝对路径]/prototypes/common.css
+
+第五步：生成每个页面前，强制执行以下 7 条规则（最常被违反，必须优先遵守）：
 
 【关键规则 H1 — 禁止空容器】
 卡片/分组容器内必须有真实 UI 内容，严禁只写区块标题（"基础信息"、"状态与处理"、"收货地址卡片"）而内部为空。
@@ -53,7 +69,7 @@
 3. **删除确认弹窗**：点击"删除"按钮时弹出 Modal，显示"确认删除《被删项名称》？此操作不可撤销"，红色"确认删除"按钮 + 灰色"取消"按钮；**禁止点击删除后直接执行删除**
 4. **操作反馈**：新增/编辑提交成功后跳转回列表页并有 Toast 提示；删除成功后刷新列表
 
-第四步：生成每个页面，保存到 WORK_DIR/prototypes/。
+第六步：生成每个页面，保存到 WORK_DIR/prototypes/。
 
 **⚠️ 样式引用规则（必须遵守）：**
 - 每个 HTML 文件用 `<link rel="stylesheet" href="common.css">` 引用共享样式
@@ -80,6 +96,10 @@ HTML 骨架：
 【工作目录】
 WORK_DIR = [WORK_DIR的绝对路径]
 所有文件必须保存在 WORK_DIR/prototypes/ 下，严禁写入 /private/tmp 或其他系统临时目录。
+
+【页面规格冻结文件】
+[PAGE_SPEC_PATH]
+render 阶段必须以此文件为唯一页面结构输入。
 
 【本模块负责的页面】
 1. [页面名称1] → 保存为 prototypes/[文件名1].html
@@ -109,7 +129,7 @@ WORK_DIR = [WORK_DIR的绝对路径]
 - 缺少删除确认弹窗 → 补充 Modal（包含确认文案 + 红色确认按钮 + 取消按钮）
 
 【三轮精修（所有页面写入后自动执行，不得跳过）】
-Read [SKILL_DIR的实际绝对路径]/steps/step5-refinement.md 获取精修规则，按 HTML 模式逐轮执行。
+读取 [SKILL_DIR的实际绝对路径]/steps/step5-refinement.md 获取精修规则，按 HTML 模式逐轮执行。
 
 【需求变更记录要求】
 发现假设决策/遗漏/新增时，在对应 HTML 文件末尾追加注释：
@@ -129,20 +149,20 @@ Read [SKILL_DIR的实际绝对路径]/steps/step5-refinement.md 获取精修规�
 
 ## draw.io 模式（OUTPUT_FORMAT=drawio）
 
-> 使用前将所有 `[占位符]` 替换为实际值，确保 prompt 完全自包含（Codex Task 环境无父会话上下文）。
+> 使用前将所有 `[占位符]` 替换为实际值，确保 prompt 完全自包含（Codex 子任务环境无父会话上下文）。
 
 ```
 你是 [模块名] 的 draw.io 原型生成 Agent。
 
-第一步：Read [SKILL_DIR的实际绝对路径]/steps/drawio-spec.md 获取规范（包含 XML 格式、swimlane 布局、UI 组件样式、区域分离规则）。如果读取失败，继续执行并在最终输出中标注 ⚠️ spec文件读取失败，已用内联规则。
+第一步：读取 [SKILL_DIR的实际绝对路径]/steps/drawio-spec.md 获取规范（包含 XML 格式、swimlane 布局、UI 组件样式、区域分离规则）。如果读取失败，继续执行并在最终输出中标注 ⚠️ spec文件读取失败，已用内联规则。
 第二步：[需求文档读取指令]，逐一提取每个页面的完整字段列表（字段名 | 类型 | 是否必填）：
   - [页面名称1] → 章节：[### 模块名 > #### 功能点名]
   - [页面名称2] → 章节：[### 模块名 > #### 功能点名]
 
 > [需求文档读取指令] 由主进程替换为以下之一：
-> - 单文件模式：Read [WORK_DIR]/requirements/详细需求文档.md 中以下章节
-> - 分拆模式：① Read [WORK_DIR]/requirements/index.md 确认本模块文件路径；② Read [WORK_DIR]/requirements/详细需求文档_overview.md §2（用户角色）和 §5.5（枚举值字典）；③ Read 本模块文件中以下章节
-第二步补充：Read [WORK_DIR的绝对路径]/竞品亮点摘要.md，了解竞品差异化亮点和行业共识功能（如文件不存在则跳过此步）。生成原型时参考竞品亮点，确保行业共识功能在原型中有体现。
+> - 单文件模式：读取 [WORK_DIR]/requirements/详细需求文档.md 中以下章节
+> - 分拆模式：① 读取 [WORK_DIR]/requirements/index.md 确认本模块文件路径；② 读取 [WORK_DIR]/requirements/详细需求文档_overview.md §2（用户角色）和 §5.5（枚举值字典）；③ 读取本模块文件中以下章节
+第二步补充：读取 [WORK_DIR的绝对路径]/竞品亮点摘要.md，了解竞品差异化亮点和行业共识功能（如文件不存在则跳过此步）。生成原型时参考竞品亮点，确保行业共识功能在原型中有体现。
 第三步：生成每个页面前，强制执行以下 6 条规则（这是最常被违反的，必须优先遵守）：
 
 【关键规则 R1 — 禁止占位框和空容器】
@@ -206,7 +226,7 @@ mxCell 的 value 必须是真实业务名称，禁止以下所有占位写法：
 - `"` → `&quot;`（value 中嵌套引号）
 - 换行 → `&#xa;`
 
-第三步补充：Read [SKILL_DIR的实际绝对路径]/steps/step5-page-templates.md 获取页面骨架模板和组件 XML 写法（draw.io 模式必须执行，如读取失败则参照 drawio-spec.md 中的规范生成）。
+第三步补充：读取 [SKILL_DIR的实际绝对路径]/steps/step5-page-templates.md 获取页面骨架模板和组件 XML 写法（draw.io 模式必须执行，如读取失败则参照 drawio-spec.md 中的规范生成）。
 
 第四步：按规范生成本模块的 draw.io 内容，字段必须来自第二步提取的列表，参照页面骨架模板写入输出文件。
 
@@ -223,7 +243,7 @@ mxCell 的 value 必须是真实业务名称，禁止以下所有占位写法：
 【画布宽度计算（必须执行）】
 pageWidth = Σ各swimlane宽 + (N-1)×40 + 80
 本模块共 N 个页面，计算结果填入 mxGraphModel pageWidth 属性。
-swimlane 内第一个组件 y ≥ 38（标题栏30px + 间距8px），禁止 y=0。
+swimlane 内第一个组件 y ≥ 40，禁止 y=0。
 
 【CRUD 弹窗清单（必须为每个列表页生成对应的弹窗 swimlane）】
 [CRUD 页面清单]
@@ -267,7 +287,7 @@ swimlane 内第一个组件 y ≥ 38（标题栏30px + 间距8px），禁止 y=0
 - 列表 swimlane 无删除确认弹窗 → 在 UI 区右侧补充 Modal 覆盖层（白色卡片 w=320，含确认文案和两个按钮）
 
 【写入后质量验收 + 三轮精修（文件写入后自动执行，不得跳过）】
-Read [SKILL_DIR的实际绝对路径]/steps/step5-refinement.md 获取质量验收和精修规则，按 draw.io 模式逐步执行。
+读取 [SKILL_DIR的实际绝对路径]/steps/step5-refinement.md 获取质量验收和精修规则，按 draw.io 模式逐步执行。
 
 【需求变更记录】发现假设/遗漏/新增时，在文件末尾追加：
 REQUIREMENT_CHANGES: [变更类型] | 页面:[页面名] | [描述] | 建议章节:[章节]

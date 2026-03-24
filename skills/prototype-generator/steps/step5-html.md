@@ -4,6 +4,14 @@
 
 ---
 
+## HTML 两段式规则
+
+HTML 模式也必须走：
+
+`requirements -> page_specs/page_spec_*.md -> HTML render`
+
+禁止从需求文档直接生成最终 HTML。
+
 ### 前置准备：复制共享 CSS 到 prototypes 目录
 
 启动 subagent 之前，先将共享样式文件复制到输出目录：
@@ -16,39 +24,68 @@ cp SKILL_DIR/templates/common.css WORK_DIR/prototypes/common.css
 > 所有 HTML 页面通过 `<link rel="stylesheet" href="common.css">` 引用此文件。
 > subagent 生成的 HTML 中**禁止在 `<style>` 中重复定义 `:root` 变量和通用组件样式**。
 
+同时读取：
+
+- `SKILL_DIR/steps/page-spec-freeze.md`
+
+主进程必须先确认本轮 HTML 任务会为每个模块写出：
+
+- `WORK_DIR/page_specs/page_spec_[模块英文名].md`
+
 ### 分模块规则
 
 - 一个功能模块 → 一个 Agent
 - 单模块超过 6 页时拆分为 2 个 Agent
-- 最多同时启动 **6 个并行 Agent**
-- 每个 Task（Codex）建议负责 ≤ 4 页
+- 最多同时启动 **3 个并行 Agent**
+- 每个 Codex 子任务建议负责 ≤ 4 页
+
+## 子任务职责
+
+每个 HTML 子任务必须按顺序完成两件事：
+
+1. 读取需求文档并冻结本模块 `page_spec`
+2. 只基于 `page_spec` 渲染 HTML 页面
+
+第二阶段禁止再次回读原始资料、PRD、竞品文档或需求文档原文。
 
 ### 启动方式
 
-Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，使用 HTML 模板。
+读取 `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，使用 HTML 模板。
 
 **占位符替换清单（两种运行环境均强制要求）：**
 
 | 占位符 | 替换为 |
 |--------|--------|
-| `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` |
+| `[SKILL_DIR]` | 当前环境下的实际 skill 绝对路径（如 Claude：`/Users/xxx/.claude/skills/prototype-generator`；Codex：`/Users/xxx/.codex/skills/prototype-generator`） |
 | `[WORK_DIR]` | 用户确认的工作目录绝对路径 |
 | `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 |
 | `[页面名称N]` | 该模块负责的具体页面名 |
 | `[章节名]` | 需求文档中对应章节标题 |
 | `[风格]` / `[颜色]` | 实际设计风格和主色调 |
+| `[PAGE_SPEC_PATH]` | `WORK_DIR/page_specs/page_spec_[模块英文名].md` |
 | `[CRUD 页面清单]` | 从阶段 5-2 CRUD 完整性检查结果中提取，格式：`- [列表页名] → 需要：新增/编辑[对象名]弹窗/页面 + 删除确认弹窗`；若该模块无 CRUD 操作则填 `无 CRUD 操作` |
-| `[需求文档读取指令]` | **单文件模式**：`Read [WORK_DIR]/requirements/详细需求文档.md 中以下章节`<br>**分拆模式**：`先 Read [WORK_DIR]/requirements/详细需求文档_overview.md（获取用户角色 §2 和枚举值字典 §5.5）；再 Read [WORK_DIR]/requirements/详细需求文档_[模块中文名].md 中以下章节` |
+| `[需求文档读取指令]` | **单文件模式**：`读取 [WORK_DIR]/requirements/详细需求文档.md 中以下章节`<br>**分拆模式**：`先读取 [WORK_DIR]/requirements/详细需求文档_overview.md（获取用户角色 §2 和枚举值字典 §5.5）；再读取 [WORK_DIR]/requirements/详细需求文档_[模块中文名].md 中以下章节` |
 
 > **替换前必须自检**：搜索 prompt 文本中是否还有 `[` 字符——若有则先补全再发送。
 
-**Claude Code（Agent 工具）— 所有 Agent 必须在同一响应中并行启动：**
+**Claude Code（Agent 工具）— 分批并行启动，每批最多 3 个 Agent：**
 
 ```
-# 禁止逐个启动等待，必须一次性并行发出
+# 每批最多 3 个，先并行发出本批，再等待本批完成
 Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...", run_in_background=True)
 Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...", run_in_background=True)
-...  # 所有调用在同一响应中发出，并行执行
+Agent(prompt="...模块3 完整 prompt（所有占位符已替换）...", run_in_background=True)
+# 若还有剩余模块，下一批重复相同步骤
 ```
 
-> Codex 环境请参考 `SKILL_DIR/steps/codex-rules.md`。
+> Claude Code 请参考 `SKILL_DIR/steps/claude-rules.md`；Codex 请参考 `SKILL_DIR/steps/codex-rules.md`。
+
+**Codex：**
+
+```
+# 用 spawn_agent 按模块分批并行启动 HTML 生成子任务，每批最多 3 个
+spawn_agent(agent_type="worker", message="...模块1 完整 prompt（所有占位符已替换）...")
+spawn_agent(agent_type="worker", message="...模块2 完整 prompt（所有占位符已替换）...")
+spawn_agent(agent_type="worker", message="...模块3 完整 prompt（所有占位符已替换）...")
+# wait 当前批完成后，再启动下一批
+```
