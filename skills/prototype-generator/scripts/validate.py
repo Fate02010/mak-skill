@@ -65,8 +65,8 @@ def _get_geometry(cell: ET.Element):
 def _annotation_x_threshold(swimlane_width: float) -> float:
     """根据 swimlane 宽度推断标注区起点。"""
     if swimlane_width <= 700:
-        return 380.0  # 移动端
-    return 1400.0  # Web
+        return 400.0  # 移动端 (标注区 x >= 400)
+    return 1464.0  # Web (标注区 x >= 1464)
 
 
 def _is_in_ui_area(cell: ET.Element, threshold: float) -> bool:

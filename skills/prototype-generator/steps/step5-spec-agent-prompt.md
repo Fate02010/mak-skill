@@ -60,7 +60,7 @@ Read [SKILL_DIR的实际绝对路径]/steps/step5-component-styles.md
 - swimlane 内组件 y 起点 ≥ 40（标题栏30 + 对齐到8倍数）
 - 顶部导航 y=40 h=56，正文第一个组件 y=104
 - label w=80，input w=240，同行 y 相同，label x=24 input x=112
-- 标注区：移动端 x≥395 width≤180；Web x≥1460 width≤220
+- 标注区：移动端 x≥400 width≤176；Web x≥1464 width≤216
 
 ---
 
@@ -315,7 +315,7 @@ swimlane_height = max(最后一个元素的 y + height + 16, 最低高度)
 | 39 | S1 | text | 商品：礼盒鲜鲩 2kg × 1 | 24 | 750 | 322 | 20 | text_body | |
 | 40 | S1 | text | 金额：¥328.00 | 24 | 778 | 150 | 20 | text_price | |
 | 41 | S1 | text | 暂无更多订单 | 16 | 850 | 358 | 40 | text_hint | 空状态提示 |
-| 42 | S1 | card | 页面说明 | 395 | 38 | 180 | 120 | annotation_card | |
+| 42 | S1 | card | 页面说明 | 400 | 40 | 176 | 120 | annotation_card | |
 | 43 | S1 | text | 订单列表页\n展示用户所有订单\n支持按状态筛选\n点击卡片查看详情 | 403 | 46 | 164 | 104 | text_hint | |
 
 **关键要点：**
@@ -363,7 +363,7 @@ pageWidth = [Σ所有swimlane宽 + (N-1)×40 + 80]
 | 7 | S1 | table_header | [列名1] | 16 | 160 | 100 | 48 | table_header | |
 | 8 | S1 | table_header | [列名2] | 116 | 160 | 80 | 48 | table_header | |
 ...
-| 100 | S1 | annotation_card | 页面：[名]\n用途：[说明]\n用户角色：[角色]\n主操作：[操作]\n跳转去向：[A→B] | 395 | 38 | 180 | 120 | annotation_card | |
+| 100 | S1 | annotation_card | 页面：[名]\n用途：[说明]\n用户角色：[角色]\n主操作：[操作]\n跳转去向：[A→B] | 400 | 40 | 176 | 120 | annotation_card | |
 ```
 
 ---

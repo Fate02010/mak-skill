@@ -16,7 +16,7 @@ Spec Agent 加载本文件。样式字典在 `step5-component-styles.md`（由 r
 
 **3. 表格必须列式独立 mxCell** — 列表页的表格中，每列数据是独立的 mxCell，列标题行和数据行按列对齐。禁止将整行数据挤在一个 mxCell 里（如"记录1|编号XX|状态YY"）。
 
-**4. 标注说明不得进入 UI 区** — 字段规则、跳转说明等所有标注文字，x 坐标必须 ≥ UI区宽+20（移动端x≥395，Web x≥1460）。
+**4. 标注说明不得进入 UI 区** — 字段规则、跳转说明等所有标注文字，x 坐标必须 ≥ 标注区起点（移动端x≥400，Web x≥1464）。
 
 **5. 每个元素只画一次** — 禁止同时画标签框（"手机号输入框"）和真实组件（实际 Input）。只画真实组件，不画描述性标签框。
 
@@ -68,7 +68,7 @@ Spec Agent 加载本文件。样式字典在 `step5-component-styles.md`（由 r
 - 移动端 swimlane：宽 `595`（375 UI区 + 20 间隔 + 200 标注区），高 `860`
 - Web swimlane：宽 `1700`（1440 UI区 + 20 间隔 + 240 标注区），高 `960`
 
-> **标注区 x 起点 = UI 区宽 + 20**（移动端 x=395，Web x=1460）
+> **标注区 x 起点**：移动端 x=400，Web x=1464（均为 8 倍数）
 
 **混合系统画布尺寸规则（App + 后台同系统）：**
 同一 diagram 内可以同时包含移动端页面和 Web 页面，每个 swimlane 根据其所属页面类型**独立选择宽度**：
@@ -150,25 +150,10 @@ Spec Agent 加载本文件。样式字典在 `step5-component-styles.md`（由 r
 
 ---
 
-## 常用 UI 元素样式表
+## 常用 UI 元素样式
 
-| 元素 | style 值 |
-|------|----------|
-| 顶部导航栏 | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;` |
-| 页面背景 | `rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;` |
-| 卡片 | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;shadow=1;` |
-| 主按钮 | `rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;` |
-| 次要按钮 | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1e88e5;fontColor=#1e88e5;fontSize=13;` |
-| 输入框 | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;` |
-| 文字标签 | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;` |
-| 标题文字 | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=16;fontStyle=1;` |
-| 底部标签栏 | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;fontSize=11;` |
-| 分割线 | `line;strokeColor=#e0e0e0;fillColor=none;` |
-| 列表行 | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#eeeeee;align=left;spacingLeft=12;` |
-| 图片占位 | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#90caf9;fontColor=#1565c0;` |
-| 状态标签（成功） | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e8f5e9;strokeColor=none;fontColor=#2e7d32;fontSize=11;` |
-| 状态标签（警告） | `rounded=1;whiteSpace=wrap;html=1;fillColor=#fff8e1;strokeColor=none;fontColor=#f57f17;fontSize=11;` |
-| 标注区文字（说明/规则/跳转） | `text;html=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;` |
+> 完整样式字典见 `step5-component-styles.md`（render.py 脚本直接使用该文件）。
+> Spec Agent 生成 page_spec 时只需使用 style_key 名称（如 `nav`、`btn_primary`、`input`），无需记忆完整 style 字符串。
 
 ---
 
@@ -228,7 +213,7 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 - **移动端** swimlane 宽 595（375 UI区 + 20 + 200 标注区），高 860
 - **Web** swimlane 宽 1700（1440 UI区 + 20 + 240 标注区），高 960
 - swimlane 内元素 `parent` 指向 swimlane 的 `id`（不是 `"1"`）
-- UI 组件 x: 0~UI宽；标注元素 x: UI宽+20 起（移动端 x≥395，Web x≥1460）
+- UI 组件 x: 0~UI宽；标注元素 x: 标注区起点起（移动端 x≥400，Web x≥1464）
 
 ### 页面/组件/连线命名规则
 
@@ -265,7 +250,7 @@ swimlane [页面名] width=595
 ├─────────────────────┤                │
 │ 首页 商品 我的│                │  y=804 bottom_bar h=56
 └─────────────────────┴────────────────┘  y=860
-  ←— UI区(0~375) —→←标注区(395~595)→
+  ←— UI区(0~375) —→←标注区(400~595)→
 ```
 
 ### Web 后台列表页（宽1440）
@@ -318,7 +303,7 @@ swimlane [页面名] width=1700
 
 ### 通用必备区块
 
-每个页面 swimlane 的**标注区顶部**必须有**页面说明卡片**，x 坐标在标注区范围内（移动端 x=395，Web x=1460）：
+每个页面 swimlane 的**标注区顶部**必须有**页面说明卡片**，x 坐标在标注区范围内（移动端 x=400，Web x=1464）：
 
 ```
 页面：[系统-模块-页面名]
