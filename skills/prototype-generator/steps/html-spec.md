@@ -4,74 +4,56 @@
 
 ---
 
-## 设计 Token（所有页面必须注入 :root，禁止使用魔法数字）
+## 共享样式引用（禁止内联复制）
 
-每个 HTML 文件的 `<style>` 最开头必须包含完整的 CSS 变量定义：
+所有 HTML 页面通过外部样式表引用共享 CSS，**禁止在 `<style>` 中重复定义设计 Token 和组件样式**：
 
-```css
-:root {
-  /* ── 颜色 ── */
-  --primary:       #1e88e5;
-  --primary-dark:  #1565c0;
-  --primary-light: #e3f2fd;
-  --success:       #2e7d32;
-  --success-bg:    #e8f5e9;
-  --warning:       #f57f17;
-  --warning-bg:    #fff8e1;
-  --danger:        #c62828;
-  --danger-bg:     #ffebee;
-  --text-primary:  #212121;
-  --text-secondary:#757575;
-  --text-hint:     #9e9e9e;
-  --bg-page:       #f5f5f5;
-  --bg-card:       #ffffff;
-  --border:        #e0e0e0;
-  --border-light:  #eeeeee;
-  --shadow-sm:     0 1px 3px rgba(0,0,0,.12);
-  --shadow-md:     0 2px 8px rgba(0,0,0,.15);
-
-  /* ── 间距（8pt 网格）── */
-  --sp-1: 4px;   --sp-2: 8px;   --sp-3: 12px;
-  --sp-4: 16px;  --sp-5: 20px;  --sp-6: 24px;
-  --sp-8: 32px;  --sp-10: 40px; --sp-12: 48px;
-
-  /* ── 字号 ── */
-  --text-xs:   11px;  /* 辅助说明、标签 */
-  --text-sm:   13px;  /* 次要正文、表格内容 */
-  --text-base: 15px;  /* 正文 */
-  --text-md:   16px;  /* 小标题 */
-  --text-lg:   18px;  /* 卡片标题 */
-  --text-xl:   20px;  /* 页面标题 */
-  --text-2xl:  24px;  /* Hero 标题 */
-
-  /* ── 组件高度 ── */
-  --h-nav:          56px;
-  --h-tabbar:       56px;
-  --h-input:        44px;
-  --h-btn-primary:  44px;
-  --h-btn-sm:       32px;
-  --h-btn-xs:       24px;
-  --h-table-header: 44px;
-  --h-table-row:    52px;
-  --h-card-header:  48px;
-  --h-tag:          24px;
-  --h-breadcrumb:   40px;
-  --h-pagination:   40px;
-
-  /* ── 圆角 ── */
-  --radius-sm:  4px;
-  --radius-md:  8px;
-  --radius-lg:  12px;
-  --radius-full:100px;
-
-  /* ── 页面宽度 ── */
-  --w-mobile: 375px;
-  --w-content-mobile: 327px; /* 375 - 24*2 */
-  --w-web: 1440px;
-  --w-content-web: 1200px;
-  --w-sidebar: 240px;
-}
+```html
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>页面标题</title>
+  <link rel="stylesheet" href="common.css">
+  <style>
+    /* 仅放页面特有样式，禁止重复 :root 变量和通用组件样式 */
+  </style>
+</head>
 ```
+
+> `common.css` 已包含：`:root` 设计 Token、全局重置、页面动效、布局（移动端/Web/登录页）、
+> 导航栏、按钮、输入框、卡片、Tag、表格、分页、标签栏、弹窗、面包屑、空态、表单组。
+> 所有变量名和 class 名参见 `SKILL_DIR/templates/common.css`。
+
+**可用的 CSS 变量**（在 `<style>` 和行内 `style` 中直接使用）：
+
+- 颜色：`--primary` `--primary-dark` `--primary-light` `--success` `--warning` `--danger` 及对应 `-bg` 变体
+- 文字：`--text-primary` `--text-secondary` `--text-hint`
+- 背景：`--bg-page` `--bg-card`
+- 边框：`--border` `--border-light`
+- 阴影：`--shadow-sm` `--shadow-md`
+- 间距：`--sp-1`(4) `--sp-2`(8) `--sp-3`(12) `--sp-4`(16) `--sp-5`(20) `--sp-6`(24) `--sp-8`(32) `--sp-10`(40) `--sp-12`(48)
+- 字号：`--text-xs`(11) `--text-sm`(13) `--text-base`(15) `--text-md`(16) `--text-lg`(18) `--text-xl`(20) `--text-2xl`(24)
+- 高度：`--h-nav` `--h-tabbar` `--h-input` `--h-btn-primary` `--h-btn-sm` `--h-btn-xs` `--h-table-header` `--h-table-row` `--h-tag` `--h-pagination`
+- 圆角：`--radius-sm`(4) `--radius-md`(8) `--radius-lg`(12) `--radius-full`(100)
+- 宽度：`--w-mobile`(375) `--w-content-mobile`(327) `--w-web`(1440) `--w-content-web`(1200) `--w-sidebar`(240)
+
+**可用的 CSS class**（直接在 HTML 中使用）：
+
+| 类别 | class 名 |
+|------|---------|
+| 布局 | `mobile`(body) `layout` `sidebar` `main-content` `login-page` `login-card` |
+| 导航 | `nav-bar` `nav-item` `nav-item.active` |
+| 按钮 | `btn-primary` `btn-secondary` `btn-danger` `btn-sm` `btn-xs` |
+| 输入 | `input` |
+| 卡片 | `card` |
+| 标签 | `tag` `tag-success` `tag-warning` `tag-danger` `tag-default` |
+| 表格 | `table` |
+| 分页 | `pagination` `pagination-btn` `pagination-btn.active` |
+| 移动端 | `tab-bar` `tab-bar-item` `tab-bar-item.active` |
+| 弹窗 | `modal-overlay` `modal-overlay.show` `modal` |
+| 面包屑 | `breadcrumb` |
+| 空态 | `empty-state` |
+| 表单 | `form-group` `.required` |
 
 ---
 
@@ -79,41 +61,15 @@
 
 ### 固定宽度（UI 参照一致性）
 
-- **移动端页面**：`body` 宽度固定 `var(--w-mobile)`，居中显示，不做响应式拉伸
-- **Web/后台页面**：`body` 最大宽度 `var(--w-web)`，内容区 `var(--w-content-web)`，居中
-- **后台登录页**：属于未登录独立页，禁止带左侧菜单、顶部业务导航，必须使用单卡片居中布局
-
-```css
-/* 移动端 */
-body { width: var(--w-mobile); margin: 0 auto; background: var(--bg-page); }
-
-/* Web 后台 */
-.layout { display: flex; min-height: 100vh; }
-.sidebar { width: var(--w-sidebar); background: var(--bg-card); }
-.main-content { flex: 1; padding: var(--sp-6); }
-
-/* Web 后台登录页 */
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(180deg, #f7f9fc 0%, #eef3f8 100%);
-}
-.login-card {
-  width: 420px;
-  padding: var(--sp-8);
-  background: var(--bg-card);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-md);
-}
-```
+- **移动端页面**：`<body class="mobile">`，宽度固定 375px，居中显示
+- **Web/后台页面**：使用 `.layout` > `.sidebar` + `.main-content` 结构
+- **后台登录页**：属于未登录独立页，使用 `.login-page` > `.login-card` 结构，禁止带左侧菜单、顶部业务导航
 
 ### 登录页专用规则
 
 - 后台登录页禁止出现 `.sidebar`、业务菜单、面包屑、模块切换入口。
 - 默认字段为账号、密码；验证码仅在需求文档明确写明时才允许渲染。
-- 如果是短信验证码登录，必须在资料中有“验证码登录”或同义描述，不能由模型自行脑补。
+- 如果是短信验证码登录，必须在资料中有"验证码登录"或同义描述，不能由模型自行脑补。
 
 ### 间距规则
 
@@ -125,157 +81,6 @@ body { width: var(--w-mobile); margin: 0 auto; background: var(--bg-page); }
 
 ---
 
-## 组件规范
-
-### 导航栏
-
-```css
-.nav-bar {
-  height: var(--h-nav);
-  background: var(--primary);
-  color: #fff;
-  display: flex;
-  align-items: center;
-  padding: 0 var(--sp-4);
-  font-size: var(--text-md);
-  font-weight: 600;
-  box-shadow: var(--shadow-sm);
-}
-```
-
-### 主按钮 / 次要按钮
-
-```css
-.btn-primary {
-  height: var(--h-btn-primary);
-  padding: 0 var(--sp-6);
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform .1s;
-}
-.btn-primary:active { transform: scale(0.97); }
-
-.btn-secondary {
-  height: var(--h-btn-primary);
-  padding: 0 var(--sp-6);
-  background: var(--bg-card);
-  color: var(--primary);
-  border: 1px solid var(--primary);
-  border-radius: var(--radius-md);
-  font-size: var(--text-base);
-  cursor: pointer;
-}
-
-.btn-danger { background: var(--danger); color: #fff; border: none; }
-.btn-sm { height: var(--h-btn-sm); padding: 0 var(--sp-4); font-size: var(--text-sm); border-radius: var(--radius-sm); }
-```
-
-### 输入框
-
-```css
-.input {
-  height: var(--h-input);
-  width: 100%;
-  padding: 0 var(--sp-3);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  font-size: var(--text-base);
-  color: var(--text-primary);
-  background: var(--bg-card);
-  box-sizing: border-box;
-}
-.input:focus { outline: none; border-color: var(--primary); }
-.input::placeholder { color: var(--text-hint); }
-```
-
-### 卡片
-
-```css
-.card {
-  background: var(--bg-card);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-sm);
-  border: 1px solid var(--border-light);
-  padding: var(--sp-4);
-  margin-bottom: var(--sp-4);
-}
-```
-
-### Tag 状态标签
-
-```css
-.tag { display: inline-flex; align-items: center; height: var(--h-tag); padding: 0 var(--sp-2); border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 500; }
-.tag-success  { background: var(--success-bg);  color: var(--success); }
-.tag-warning  { background: var(--warning-bg);  color: var(--warning); }
-.tag-danger   { background: var(--danger-bg);   color: var(--danger); }
-.tag-default  { background: var(--border-light); color: var(--text-secondary); }
-```
-
-### 表格（后台列表页）
-
-```css
-.table { width: 100%; border-collapse: collapse; }
-.table th {
-  height: var(--h-table-header);
-  background: var(--bg-page);
-  border-bottom: 1px solid var(--border);
-  font-size: var(--text-sm);
-  color: var(--text-secondary);
-  font-weight: 500;
-  text-align: left;
-  padding: 0 var(--sp-3);
-}
-.table td {
-  height: var(--h-table-row);
-  border-bottom: 1px solid var(--border-light);
-  font-size: var(--text-sm);
-  color: var(--text-primary);
-  padding: 0 var(--sp-3);
-  vertical-align: middle;
-}
-```
-
-### 分页
-
-```css
-.pagination { display: flex; align-items: center; gap: var(--sp-2); height: var(--h-pagination); }
-.pagination-btn { height: 32px; min-width: 32px; padding: 0 var(--sp-2); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--bg-card); font-size: var(--text-sm); cursor: pointer; }
-.pagination-btn.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-```
-
-### 底部标签栏（移动端）
-
-```css
-.tab-bar {
-  position: fixed;
-  bottom: 0; left: 50%;
-  transform: translateX(-50%);
-  width: var(--w-mobile);
-  height: var(--h-tabbar);
-  background: var(--bg-card);
-  border-top: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-}
-.tab-bar-item {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  font-size: var(--text-xs);
-  color: var(--text-hint);
-  cursor: pointer;
-}
-.tab-bar-item.active { color: var(--primary); }
-```
-
----
-
 ## 页面骨架隔离规则（禁止跨类型复用导航）
 
 > 骨架由**页面类型**决定，不由**系统类型**决定。同一个后台系统的登录页与列表页是不同类型，必须用不同骨架。
@@ -284,7 +89,7 @@ body { width: var(--w-mobile); margin: 0 auto; background: var(--bg-page); }
 
 | 独立页面类型 | 正确骨架 |
 |------------|---------|
-| 登录页 / 注册页 | `body` 居中 flex，登录卡片 `width:400px`（Web）或 `width:100%`（移动），无任何导航 |
+| 登录页 / 注册页 | `.login-page` > `.login-card`，无任何导航 |
 | 落地页 / 欢迎页 | 全宽 hero 区，无侧边栏 |
 | 错误页（404/无权限/异常） | 居中插图 + 文案 + 返回按钮，无导航 |
 | 支付结果页 | 居中结果卡片，无侧边栏 |
@@ -341,24 +146,18 @@ function switchTab(t){
 同一产品所有带导航的页面（非独立页面），导航栏菜单项必须完全一致：
 
 - **菜单项相同**：所有页面的导航栏包含相同的菜单项，顺序一致
-- **active 状态**：当前页对应的菜单项加 `.active` class，其他菜单项不加
-- **实现方式**：将导航栏 HTML 提取为相同结构，各页面只修改 active 项：
+- **active 状态**：当前页对应的菜单项加 `.active` class
+- **实现方式**：
 
 ```html
-<!-- 每个页面的导航栏结构必须完全相同，只有 active class 不同 -->
 <nav class="nav-bar">
   <span style="font-size:var(--text-lg);font-weight:700;">产品名称</span>
   <div style="display:flex;gap:var(--sp-6);margin-left:var(--sp-10);">
-    <a href="page-a.html" class="nav-item active">功能A</a>  <!-- 当前页加 active -->
+    <a href="page-a.html" class="nav-item active">功能A</a>
     <a href="page-b.html" class="nav-item">功能B</a>
     <a href="page-c.html" class="nav-item">功能C</a>
   </div>
 </nav>
-```
-
-```css
-.nav-item { color: rgba(255,255,255,.75); text-decoration:none; font-size:var(--text-sm); }
-.nav-item.active { color: #fff; font-weight:600; border-bottom:2px solid #fff; padding-bottom:2px; }
 ```
 
 **禁止**：A 页有 5 个菜单项，B 页只有 3 个；或各页面菜单顺序不一致。
@@ -368,8 +167,9 @@ function switchTab(t){
 ## 技术规范
 
 - 纯 HTML + CSS + 原生 JS（不依赖外部库）
-- 禁止使用魔法数字：所有尺寸/颜色/间距必须引用 `:root` 变量
-- 每个文件完整独立（含完整 `<html><head><body>`）
+- 禁止使用魔法数字：所有尺寸/颜色/间距必须引用 `:root` 变量或 common.css 中的 class
+- 每个文件完整独立（含完整 `<html><head><body>`），通过 `<link>` 引用 common.css
+- **禁止在 `<style>` 中重复定义 `:root` 变量或 common.css 已有的组件样式**
 
 ## 内容规范
 
@@ -382,7 +182,7 @@ function switchTab(t){
 
 ## 链接路径规则（必须遵守，错误路径导致点击后 404）
 
-所有 HTML 原型文件保存在同一目录 `prototypes/` 下，**文件间跳转统一使用同级相对路径**：
+所有 HTML 原型文件和 `common.css` 保存在同一目录 `prototypes/` 下，**文件间跳转统一使用同级相对路径**：
 
 ```html
 <!-- ✅ 正确：同目录文件直接引用文件名 -->
@@ -403,14 +203,14 @@ location.href = 'login.html';
 ## 交互要求
 
 - 所有页面跳转用 `<a href="相对路径">` 或 `location.href` 实现，可真实点击
-- 页面进入淡入动效（opacity 0→1，300ms）
-- 按钮点击缩放反馈（scale 0.97，100ms）
+- 页面进入淡入动效（已内置在 common.css）
+- 按钮点击缩放反馈（scale 0.97，100ms）— 已内置在 `.btn-primary:active`
 - 表单提交有加载态（按钮文字变"处理中..."，disabled）
-- 弹窗用动效展开（translateY/scale，200ms）
+- 弹窗用 `.modal-overlay` + `.modal`，JS 控制 `.show` class
 - 未生成的目标页面用 `alert("跳转到[目标功能]")` 占位，不得留空
 
 ## 功能闭环
 
 - 所有按钮和链接必须有明确去向
 - 表单提交后必须有成功/失败反馈
-- 列表空态必须有引导操作
+- 列表空态必须有引导操作（使用 `.empty-state`）

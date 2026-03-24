@@ -55,6 +55,28 @@
 
 第四步：生成每个页面，保存到 WORK_DIR/prototypes/。
 
+**⚠️ 样式引用规则（必须遵守）：**
+- 每个 HTML 文件用 `<link rel="stylesheet" href="common.css">` 引用共享样式
+- `common.css` 已包含 `:root` 变量、全局重置、布局、导航、按钮、输入框、卡片、Tag、表格、分页、弹窗、面包屑、空态、表单组
+- `<style>` 标签中**只写页面特有样式**，禁止重复定义 `:root` 变量和 common.css 已有的 class
+
+HTML 骨架：
+```html
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>页面标题</title>
+  <link rel="stylesheet" href="common.css">
+  <style>/* 仅页面特有样式 */</style>
+</head>
+<body>
+  ...
+</body>
+</html>
+```
+
 【工作目录】
 WORK_DIR = [WORK_DIR的绝对路径]
 所有文件必须保存在 WORK_DIR/prototypes/ 下，严禁写入 /private/tmp 或其他系统临时目录。

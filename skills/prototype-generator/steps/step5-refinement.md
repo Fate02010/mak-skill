@@ -23,6 +23,8 @@
 - 每个 `<a>` 和带 `onclick` 的按钮是否有明确目标（href 或 location.href）
 - 列表页是否有空态 HTML（无数据时的引导文案 + 引导按钮）
 - 表单页提交按钮是否有"处理中..."加载态和成功/失败反馈
+- `<style>` 中是否重复定义了 `:root` 变量或 common.css 已有的 class（如 `.btn-primary` `.card` `.table`）→ 删除重复定义，仅保留页面特有样式
+- `<head>` 中是否缺少 `<link rel="stylesheet" href="common.css">` → 补充
 
 ---
 

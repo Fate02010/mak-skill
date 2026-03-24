@@ -4,6 +4,18 @@
 
 ---
 
+### 前置准备：复制共享 CSS 到 prototypes 目录
+
+启动 subagent 之前，先将共享样式文件复制到输出目录：
+
+```bash
+mkdir -p WORK_DIR/prototypes
+cp SKILL_DIR/templates/common.css WORK_DIR/prototypes/common.css
+```
+
+> 所有 HTML 页面通过 `<link rel="stylesheet" href="common.css">` 引用此文件。
+> subagent 生成的 HTML 中**禁止在 `<style>` 中重复定义 `:root` 变量和通用组件样式**。
+
 ### 分模块规则
 
 - 一个功能模块 → 一个 Agent
