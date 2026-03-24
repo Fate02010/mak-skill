@@ -94,7 +94,10 @@ Read [WORK_DIR的实际绝对路径]/page_spec_[模块英文名].md
 
 - 若 tooltip 列不为空：添加 `tooltip="[tooltip值]"` 属性
 - 若 component_type 为 edge（连线）：改用 `edge="1" source="[source]" target="[target]"` 属性，`<mxGeometry relative="1" as="geometry" />`
-- 若 style_key 在样式字典中不存在：使用 `text_default` 对应样式
+- 若 style_key 在样式字典中不存在：按以下顺序尝试降级匹配
+  1. 前缀别名映射：`badge_` → `tag_`，`button_` → `btn_`，`bg_mobile` → `bg`（如 `badge_warning` → 查找 `tag_warning`）
+  2. 去尾缀匹配：`card_mobile` → `card`，`input_mobile` → `input`
+  3. 以上均无匹配 → 使用 `text_default` 对应样式，并在完成汇报中标注 `⚠️ 未匹配 style_key: [具体key]`
 
 ### 3.4 value 中的特殊字符必须转义
 

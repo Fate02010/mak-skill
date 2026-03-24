@@ -17,12 +17,12 @@
 |-----------|---------------------|
 | `swimlane` | `swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;` |
 | `swimlane_modal` | `swimlane;startSize=30;fillColor=#fff3e0;strokeColor=#ef6c00;fontStyle=1;fontSize=12;` |
-| `nav` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;` |
+| `nav` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;shadow=1;` |
 | `nav_back` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1565c0;strokeColor=none;fontColor=#ffffff;fontSize=13;align=left;spacingLeft=12;` |
 | `bg` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;` |
-| `card` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;shadow=1;` |
-| `input` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;fontSize=13;` |
-| `select` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;fontSize=13;` |
+| `card` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;shadow=1;arcSize=8;` |
+| `input` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;` |
+| `select` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;` |
 | `textarea` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;verticalAlign=top;fontSize=13;` |
 | `label` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;` |
 | `label_required` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;fontColor=#d32f2f;` |
@@ -32,7 +32,7 @@
 | `text_hint` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#9e9e9e;` |
 | `text_value` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;fontColor=#212121;` |
 | `text_default` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;` |
-| `btn_primary` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;` |
+| `btn_primary` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;shadow=1;arcSize=4;` |
 | `btn_secondary` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1e88e5;fontColor=#1e88e5;fontSize=13;` |
 | `btn_danger` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f44336;fontColor=#f44336;fontSize=13;` |
 | `btn_danger_filled` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#f44336;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;` |
@@ -48,6 +48,18 @@
 | `tag_error` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffebee;strokeColor=none;fontColor=#c62828;fontSize=11;` |
 | `tag_info` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=none;fontColor=#1565c0;fontSize=11;` |
 | `tag_default` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;fontColor=#616161;fontSize=11;` |
+| `tag_pending` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#fff3e0;strokeColor=none;fontColor=#ef6c00;fontSize=11;` |
+| `tag_processing` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=none;fontColor=#1565c0;fontSize=11;` |
+| `text_price` | `text;html=1;strokeColor=none;fillColor=none;fontSize=15;fontColor=#e53935;fontStyle=1;align=left;verticalAlign=middle;` |
+| `icon` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=none;fontColor=#1565c0;fontSize=16;fontStyle=1;verticalAlign=middle;align=center;` |
+| `avatar` | `ellipse;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=#bdbdbd;fontColor=#757575;fontSize=11;` |
+| `list_row` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#f5f5f5;align=left;spacingLeft=16;fontSize=13;verticalAlign=middle;` |
+| `separator` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#eeeeee;strokeColor=none;` |
+| `search_input` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=#e0e0e0;align=left;spacingLeft=32;fontColor=#9e9e9e;fontSize=13;arcSize=20;` |
+| `switch_on` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#4caf50;strokeColor=none;fontColor=#ffffff;fontSize=11;arcSize=50;` |
+| `switch_off` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e0e0e0;strokeColor=none;fontColor=#757575;fontSize=11;arcSize=50;` |
+| `checkbox_checked` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=#1565c0;fontColor=#ffffff;fontSize=12;fontStyle=1;verticalAlign=middle;align=center;` |
+| `checkbox_unchecked` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;fontColor=#ffffff;fontSize=12;verticalAlign=middle;align=center;` |
 | `tab_bar` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;fontSize=13;` |
 | `tab_active` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;` |
 | `tab_inactive` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=none;fontColor=#757575;fontSize=13;` |
@@ -59,13 +71,19 @@
 | `divider` | `line;strokeColor=#e0e0e0;fillColor=none;` |
 | `breadcrumb` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=12;fontColor=#757575;` |
 | `pagination` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;fontSize=12;` |
-| `modal_bg` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;shadow=1;` |
+| `modal_bg` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;shadow=1;arcSize=8;` |
 | `modal_title` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=15;fontStyle=1;` |
 | `annotation` | `text;html=1;strokeColor=none;fillColor=none;fontSize=10;fontColor=#9e9e9e;align=left;verticalAlign=top;` |
 | `annotation_card` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=10;fontColor=#5d4037;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;` |
 | `edge_default` | `edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;` |
 | `nav_node` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1e88e5;fontSize=12;` |
 | `nav_group` | `swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#bdbdbd;fontStyle=1;fontSize=13;` |
+| `status_header` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=16;fontStyle=1;shadow=1;` |
+| `user_header_bg` | `rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;shadow=1;` |
+| `text_link` | `text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;fontColor=#1e88e5;` |
+| `text_link_danger` | `text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;fontSize=12;fontColor=#e53935;` |
+| `stepper` | `rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;align=center;verticalAlign=middle;fontSize=13;` |
+| `progress_step` | `text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=11;fontColor=#1e88e5;` |
 
 ---
 
@@ -93,12 +111,16 @@
 
 - 所有坐标 x、y、width、height 必须是 **8 的倍数**
 - swimlane 内组件坐标相对于 swimlane 内部（swimlane 本身 x/y 已描述位置）
-- swimlane 标题栏高 30px，内部第一个组件 **y ≥ 38**
-- 顶部导航栏 y = 38，height = 56
-- 正文第一个组件 y = 38 + 56 + 16 = 110（导航 + 间距）
+- swimlane 标题栏高 30px，内部第一个组件 **y ≥ 40**（8 的倍数）
+- 顶部导航栏 y = 40，height = 56
+- 正文第一个组件 y = 40 + 56 + 8 = 104（导航 + 间距，8 的倍数）
+- **所有 x / y / width / height 值必须是 8 的倍数**（唯一例外：divider height=1）
+- 常见违规值速查：38→40, 94→96, 110→112, height=20→24, height=44→48, height=28→32
+- 行高增量建议：24 / 32 / 40 / 48 / 56（均为 8 倍数）
+- **生成完毕后必须自检**：逐行检查每个元素的 x/y/width/height % 8 == 0
 - label 与对应 input 在同一行：label x=24 w=80，input x=112 w=240，y 相同
 - 行间距 16px（紧凑 8px）
 - 页面左右边距 24px（Web 左右各 24，移动端左右各 16）
-- 标注区 x 起点：移动端 395，Web 1460
-- 标注元素 width：移动端 ≤ 180，Web ≤ 220
-- 标注元素 x + width：移动端 ≤ 595，Web ≤ 1700
+- 标注区 x 起点：移动端 400，Web 1464
+- 标注元素 width：移动端 ≤ 176，Web ≤ 216
+- 标注元素 x + width：移动端 ≤ 600，Web ≤ 1700

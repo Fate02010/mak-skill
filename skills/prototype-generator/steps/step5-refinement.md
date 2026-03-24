@@ -77,7 +77,22 @@
    - 缺失 → 在该 swimlane 末尾追加：`<mxCell id="N" value="{{Tab1}} · {{Tab2}} · {{Tab3}} · {{Tab4}}" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#e0e0e0;fontSize=11;" vertex="1" parent="SWIMLANE_ID"><mxGeometry x="0" y="804" width="375" height="56" as="geometry" /></mxCell>`
    - 并将该 swimlane 的 bg 元素 height 改为 710（确保不覆盖底栏区域）
 
-### 三轮精修（文件写入后自动执行，不得跳过）
+### 预检：style_key 有效性验证（渲染前执行）
+
+在 Render Agent 启动前，对每个 `page_spec_*.md` 执行：
+1. 提取所有 `style_key` 列的值（去重）
+2. 对照 `step5-component-styles.md` 中的已定义 style_key 列表
+3. 若发现未定义的 style_key：
+   - 检查是否为已知别名（`badge_*` → `tag_*`，`button_*` → `btn_*`）→ 用 Edit 直接替换为正确键名
+   - 若非已知别名 → 在 Spec Agent 输出中标注 `⚠️ 未定义 style_key: [key]`，由规格化 Agent 修正后再启动渲染
+
+### 四轮精修（文件写入后自动执行，不得跳过）
+
+▶ 第零轮 — 视觉层级与配色检查
+- 检查状态标签是否使用了区分化颜色（tag_success 绿/tag_warning 黄/tag_error 红/tag_info 蓝），不得全部用同一种颜色
+- 检查主操作按钮(btn_primary)与次要操作(btn_secondary/btn_sm)是否有视觉区分
+- 检查 Web 后台页面是否有 sidebar（侧边栏）元素
+- 检查移动端页面背景色是否为 #f5f5f5（浅灰）+ 白色卡片组合，避免纯白底+白卡片无层次感
 
 ▶ 第一轮 — 字段完整性精修
 Read 已写入的 drawio_[模块英文名]_tmp.xml，逐 swimlane 对照需求文档对应章节：
