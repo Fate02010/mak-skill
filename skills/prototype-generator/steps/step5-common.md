@@ -1,5 +1,9 @@
 # Step 5：并行生成原型图 — 通用流程
 
+> **⛔ 门禁检查：** 开始前确认以下文件均存在，任一缺失则回退执行对应 Step：
+> - `WORK_DIR/竞品分析报告.md`（Step 3 产物）— 缺失则回退执行 Step 3
+> - `WORK_DIR/requirements/` 目录含 `.md` 文件（Step 4 产物）— 缺失则回退执行 Step 4
+
 本文件包含 HTML 和 draw.io 两种模式的通用阶段（5-1、5-2、5-4、5-5、5-6）。
 阶段 5-3（并行启动 subagent）按 OUTPUT_FORMAT 加载对应文件：
 - HTML 模式：Read `SKILL_DIR/steps/step5-html.md`
