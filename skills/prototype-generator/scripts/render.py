@@ -14,6 +14,9 @@ import sys
 import os
 
 
+HEADING_RE = re.compile(r'^(#{2,6})\s+(.+?)\s*$')
+
+
 # ---------------------------------------------------------------------------
 # 1. XML 特殊字符转义
 # ---------------------------------------------------------------------------
@@ -100,34 +103,56 @@ def parse_md_table(lines: list[str]) -> list[dict[str, str]]:
 
 
 def extract_section_table(content: str, section_heading: str) -> list[dict[str, str]]:
-    """提取指定 ## 标题下的第一个 markdown 表格。"""
+    """提取指定标题下的第一个 markdown 表格，兼容 ## / ###。"""
     lines = content.splitlines()
     in_section = False
+    section_level = None
     table_lines = []
     collecting = False
 
     for line in lines:
-        # 检测目标 section
-        if re.match(r'^##\s+' + re.escape(section_heading), line):
-            in_section = True
+        heading_match = HEADING_RE.match(line)
+        if heading_match:
+            level = len(heading_match.group(1))
+            title = heading_match.group(2).strip()
+            if title == section_heading:
+                in_section = True
+                section_level = level
+                continue
+            if in_section and section_level is not None and level <= section_level:
+                break
+
+        if not in_section:
             continue
-        # 遇到下一个 ## 级别标题，结束
-        if in_section and re.match(r'^##\s+', line) and not re.match(r'^##\s+' + re.escape(section_heading), line):
-            break
-        if in_section:
-            stripped = line.strip()
-            if stripped.startswith('|') and not collecting:
-                collecting = True
-            if collecting:
-                if stripped.startswith('|'):
-                    table_lines.append(stripped)
-                elif stripped == '':
-                    # 空行可能在表格中间，继续
-                    continue
-                else:
-                    break
+
+        stripped = line.strip()
+        if stripped.startswith('|') and not collecting:
+            collecting = True
+        if collecting:
+            if stripped.startswith('|'):
+                table_lines.append(stripped)
+            elif stripped == '':
+                continue
+            else:
+                break
 
     return parse_md_table(table_lines)
+
+
+def _normalized_key(key: str) -> str:
+    return key.strip().lower().replace(" ", "_")
+
+
+def normalize_rows(rows: list[dict[str, str]], aliases: dict[str, str]) -> list[dict[str, str]]:
+    """按别名归一化 markdown 表头。"""
+    normalized_rows = []
+    for row in rows:
+        normalized = {}
+        for key, value in row.items():
+            mapped_key = aliases.get(_normalized_key(key), _normalized_key(key))
+            normalized[mapped_key] = value.strip() if isinstance(value, str) else value
+        normalized_rows.append(normalized)
+    return normalized_rows
 
 
 # ---------------------------------------------------------------------------
@@ -191,8 +216,42 @@ def parse_page_spec(spec_content: str):
             module_name = m.group(1).strip()
             break
 
-    swimlanes = extract_section_table(spec_content, "swimlane 布局")
-    elements = extract_section_table(spec_content, "元素列表")
+    swimlanes = normalize_rows(
+        extract_section_table(spec_content, "swimlane 布局"),
+        {
+            "swimlane_id": "swimlane_id",
+            "id": "swimlane_id",
+            "label": "swimlane_label",
+            "swimlane_label": "swimlane_label",
+            "name": "swimlane_label",
+            "type": "type",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "height": "height",
+            "style_key": "style_key",
+            "style": "style_key",
+        },
+    )
+    elements = normalize_rows(
+        extract_section_table(spec_content, "元素列表"),
+        {
+            "id": "id",
+            "parent_swimlane": "parent_swimlane",
+            "parent": "parent_swimlane",
+            "component_type": "component_type",
+            "value": "value",
+            "x": "x",
+            "y": "y",
+            "width": "width",
+            "w": "width",
+            "height": "height",
+            "h": "height",
+            "style_key": "style_key",
+            "style": "style_key",
+            "tooltip": "tooltip",
+        },
+    )
 
     return module_name, swimlanes, elements
 
@@ -238,6 +297,59 @@ def safe_int(val: str, default: int = 0) -> int:
         return default
 
 
+def infer_swimlane_style(sw: dict[str, str]) -> str:
+    style_key = sw.get("style_key", "").strip()
+    if style_key:
+        return style_key
+
+    swimlane_type = sw.get("type", "").strip().lower()
+    if swimlane_type == "modal":
+        return "swimlane_modal"
+    return "swimlane"
+
+
+def validate_page_spec(module_name: str, swimlanes: list[dict], elements: list[dict]):
+    """对结构化 page_spec 做基础校验，缺失关键字段时直接报错。"""
+    errors = []
+
+    if not swimlanes:
+        errors.append("未解析到 `## swimlane 布局` 表格")
+    if not elements:
+        errors.append("未解析到 `## 元素列表` 表格")
+
+    for index, sw in enumerate(swimlanes, start=1):
+        swimlane_id = sw.get("swimlane_id", "").strip()
+        swimlane_label = sw.get("swimlane_label", "").strip()
+        if not swimlane_id:
+            errors.append(f"swimlane[{index}] 缺少 swimlane_id")
+        if not swimlane_label:
+            errors.append(f"swimlane[{index}] 缺少 swimlane_label/label")
+        for field in ("x", "y", "width", "height"):
+            if not str(sw.get(field, "")).strip():
+                errors.append(f"swimlane[{index}] 缺少 {field}")
+
+    swimlane_ids = {sw.get("swimlane_id", "").strip() for sw in swimlanes if sw.get("swimlane_id", "").strip()}
+    for index, el in enumerate(elements, start=1):
+        element_id = el.get("id", "").strip()
+        parent = el.get("parent_swimlane", "").strip()
+        style_key = el.get("style_key", "").strip()
+        if not element_id:
+            errors.append(f"element[{index}] 缺少 id")
+        if not parent:
+            errors.append(f"element[{index}] 缺少 parent_swimlane")
+        elif parent not in swimlane_ids:
+            errors.append(f"element[{index}] parent_swimlane={parent} 未在 swimlane 布局中定义")
+        if not style_key:
+            errors.append(f"element[{index}] 缺少 style_key")
+        for field in ("x", "y", "width", "height"):
+            if not str(el.get(field, "")).strip():
+                errors.append(f"element[{index}] 缺少 {field}")
+
+    if errors:
+        error_text = "\n".join(f"- {item}" for item in errors)
+        raise ValueError(f"{module_name} 的 page_spec 不合法：\n{error_text}")
+
+
 # ---------------------------------------------------------------------------
 # 9. 生成 XML
 # ---------------------------------------------------------------------------
@@ -278,7 +390,7 @@ def generate_xml(module_id: str, module_name: str, swimlanes: list[dict],
     for sw in swimlanes:
         sw_id = sw.get('swimlane_id', '').strip()
         sw_label = sw.get('swimlane_label', '').strip()
-        sw_style_key = sw.get('style_key', '').strip()
+        sw_style_key = infer_swimlane_style(sw)
         sx = snap8(safe_int(sw.get('x', '0')), 'x', f'swimlane {sw_id}')
         sy = snap8(safe_int(sw.get('y', '0')), 'y', f'swimlane {sw_id}')
         sw_w = snap8(safe_int(sw.get('width', '0')), 'width', f'swimlane {sw_id}')
@@ -366,10 +478,7 @@ def main():
     module_name, swimlanes, elements = parse_page_spec(spec_content)
     module_id = extract_module_id(spec_path)
 
-    if not swimlanes:
-        print("WARNING: 未解析到 swimlane 布局表格", file=sys.stderr)
-    if not elements:
-        print("WARNING: 未解析到元素列表表格", file=sys.stderr)
+    validate_page_spec(module_name, swimlanes, elements)
 
     # 生成 XML
     xml = generate_xml(module_id, module_name, swimlanes, elements, styles)

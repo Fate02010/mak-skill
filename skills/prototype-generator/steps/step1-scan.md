@@ -6,22 +6,22 @@
 
 | 格式 | 扩展名 | 读取方式 |
 |------|--------|---------|
-| Markdown | `.md` | `Read` 工具直接读取 |
-| HTML | `.html` / `.htm` | `Read` 工具直接读取 |
-| PDF | `.pdf` | `Read` 工具读取（超过10页需指定页码范围，每次最多20页） |
-| Word | `.docx` / `.doc` | `Bash: python3 -c "import docx; ..."` 提取文本，或 `pandoc` 转 md 后读取 |
-| Excel | `.xlsx` / `.xls` / `.csv` | `Bash: python3 -c "import openpyxl/pandas; ..."` 提取表格内容 |
-| PPT | `.pptx` / `.ppt` | `Bash: python3 -c "from pptx import Presentation; ..."` 提取每页文本 |
-| 图片 | `.png` / `.jpg` / `.jpeg` / `.gif` / `.webp` | `Read` 工具直接读取（Claude 支持视觉理解） |
-| ZIP | `.zip` | `Bash: unzip -l` 查看内容清单，再按需解压到 `WORK_DIR/unzipped/` 后读取 |
+| Markdown | `.md` | 直接读取文本 |
+| HTML | `.html` / `.htm` | 直接读取文本 |
+| PDF | `.pdf` | 按页读取（超过 10 页时分段） |
+| Word | `.docx` / `.doc` | 用脚本提取文本，或转 md 后读取 |
+| Excel | `.xlsx` / `.xls` / `.csv` | 用脚本提取表格内容 |
+| PPT | `.pptx` / `.ppt` | 用脚本提取每页文本 |
+| 图片 | `.png` / `.jpg` / `.jpeg` / `.gif` / `.webp` | 读取图片并做视觉理解 |
+| ZIP | `.zip` | 先查看压缩包清单，再按需解压到 `WORK_DIR/unzipped/` 后读取 |
 
-> 遇到 Word / Excel / PPT / ZIP 文件时，Read `SKILL_DIR/steps/step1-file-readers.md` 获取读取命令。
+> 遇到 Word / Excel / PPT / ZIP 文件时，读取 `SKILL_DIR/steps/step1-file-readers.md` 获取读取命令。
 
 ## 执行步骤
 
 ### 阶段 1-1：扫描文件列表
 
-1. 使用 `Glob` 工具扫描用户指定的产品资料文件夹，获取所有文件列表（包含子目录），匹配以下扩展名：
+1. 使用当前会话可用的文件扫描方式扫描用户指定的产品资料文件夹，获取所有文件列表（包含子目录），匹配以下扩展名：
    `*.md, *.html, *.htm, *.pdf, *.docx, *.doc, *.xlsx, *.xls, *.csv, *.pptx, *.ppt, *.png, *.jpg, *.jpeg, *.gif, *.webp, *.zip`
 2. 对每个文件，仅读取文件名和少量内容（前 20 行或文件名），做初步类型判断
 3. ZIP 文件用 `unzip -l` 查看内容清单
@@ -66,6 +66,6 @@
 
 读取时根据格式使用对应方式（非文本格式见 `SKILL_DIR/steps/step1-file-readers.md`）。
 
-4. Read `SKILL_DIR/steps/step1-routemap-format.md` 获取格式规范，生成 `RountMap.md` 保存到 `WORK_DIR`，记录每个文件的用户确认优先级。
+4. 读取 `SKILL_DIR/steps/step1-routemap-format.md` 获取格式规范，生成 `RountMap.md` 保存到 `WORK_DIR`，记录每个文件的用户确认优先级。
 
 > 文件超过 20 个时，先扫描目录结构，再按子目录分批读取摘要，避免一次加载过多内容。

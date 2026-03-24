@@ -1,12 +1,12 @@
 # 组件样式字典
 
-规格化 agent 在 page_spec 中写入 `style_key`，渲染 agent 通过此字典将 `style_key` 转换为 draw.io `style` 属性。
+`build_page_spec.py` 在 page_spec 中写入 `style_key`，渲染脚本通过此字典将 `style_key` 转换为 draw.io `style` 属性。
 
 ---
 
 ## 查找规则
 
-渲染 agent 读取 page_spec 的每行 `style_key`，在下表中查找对应的 `style` 字符串，直接写入 `<mxCell style="...">` 属性。
+渲染脚本读取 page_spec 的每行 `style_key`，在下表中查找对应的 `style` 字符串，直接写入 `<mxCell style="...">` 属性。
 若 style_key 不在表中，使用 `text_default` 作为兜底。
 
 ---

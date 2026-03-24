@@ -7,16 +7,79 @@ merge.py - 合并多个模块的 draw.io XML 片段为一个完整的 .drawio �
     python3 merge.py <output_drawio> <product_name> --glob <work_dir>/drawio_*_tmp.xml
 
 选项:
-    --keep-tmp    合并完成后保留临时 XML 文件（默认删除）
-    --glob PATTERN  使用通配符匹配输入文件
+    --keep-tmp            合并完成后保留临时 XML 文件（默认删除）
+    --glob PATTERN        使用通配符匹配输入文件
+    --split-swimlanes     将每个 swimlane 拆成独立 diagram
+    --include-pages LIST  仅保留指定页面，多个页面用英文逗号分隔
+    --no-nav              不生成导航 diagram
 """
 
 import sys
 import os
 import re
 import glob as glob_mod
+from copy import deepcopy
 from datetime import datetime, timezone
+from typing import Optional
 import xml.etree.ElementTree as ET
+
+
+def normalize_diagram_name(value: str) -> str:
+    text = str(value or "").strip()
+    text = re.sub(r"^(page[_-]?spec|spec|tmp)\s*[:：_-]?\s*", "", text, flags=re.IGNORECASE)
+    text = re.sub(r"\s+", "", text)
+    replacements = {
+        "后台-通用与看板": "后台-工作台",
+        "后台-人员与权限": "后台-组织权限",
+        "后台-商品与内容": "后台-商品管理",
+        "后台-会员与营销": "后台-会员运营",
+        "后台-订单与履约": "后台-订单管理",
+        "后台-物联与溯源基础数据": "后台-溯源基础数据",
+        "小程序-账号与首页": "小程序-首页",
+        "小程序-商品与交易": "小程序-商品交易",
+        "小程序-订单与会员": "小程序-订单中心",
+    }
+    return replacements.get(text, text)
+
+
+def normalize_page_name(module_name: str, page_name: str) -> str:
+    text = str(page_name or "").strip()
+    module = normalize_diagram_name(module_name)
+    replacements = {
+        "商品列表页（后台）": "商品管理-商品列表",
+        "新增/编辑商品弹窗": "商品管理-添加编辑商品",
+        "删除商品确认弹窗": "商品管理-删除商品确认",
+        "分类管理页": "商品管理-分类管理",
+        "新增/编辑分类弹窗": "商品管理-添加编辑分类",
+        "轮播图管理页": "商品管理-轮播图管理",
+        "公告管理页": "商品管理-公告管理",
+        "评论管理页": "商品管理-评论管理",
+        "新增/编辑通用弹窗": "商品管理-通用编辑弹窗",
+        "删除确认弹窗": "商品管理-删除确认",
+        "订单管理页（后台）": "订单管理-订单列表",
+        "订单详情页（后台）": "订单管理-订单详情",
+        "发货单列表页": "发货单管理",
+        "发货单详情页": "发货单详情",
+        "确认发货弹窗": "订单管理-确认发货",
+        "退款处理弹窗": "订单管理-退款处理",
+        "工作台Dashboard": "工作台-Dashboard",
+        "工作台（后台）": "工作台-Dashboard",
+        "后台首页": "工作台-Dashboard",
+        "会员管理页": "会员管理",
+        "鱼塘管理页": "鱼塘管理",
+        "运输桶管理页": "运输桶管理",
+        "员工管理页": "员工管理",
+        "角色管理页": "权限管理-角色列表",
+        "登录页（后台）": "登录页",
+    }
+    if text in replacements:
+        return replacements[text]
+    text = re.sub(r"页（后台）$", "", text)
+    text = re.sub(r"（后台）$", "", text)
+    text = re.sub(r"页$", "", text)
+    if text.startswith(module):
+        return text
+    return f"{module}-{text}"
 
 
 # ---------------------------------------------------------------------------
@@ -79,7 +142,7 @@ def _parse_tmp_xml(path: str):
         diagram = root.find(".//diagram")
         if diagram is None:
             raise ValueError(f"在 {path} 中未找到 <diagram> 元素")
-    module_name = diagram.get("name", os.path.splitext(os.path.basename(path))[0])
+    module_name = normalize_diagram_name(diagram.get("name", os.path.splitext(os.path.basename(path))[0]))
     return diagram, module_name
 
 
@@ -98,6 +161,82 @@ def _extract_swimlane_names(diagram: ET.Element) -> list:
     return names
 
 
+def _mxgeometry(elem: ET.Element) -> Optional[ET.Element]:
+    return elem.find("mxGeometry")
+
+
+def _geometry_tuple(elem: ET.Element) -> tuple[float, float, float, float]:
+    geo = _mxgeometry(elem)
+    if geo is None:
+        return (0.0, 0.0, 0.0, 0.0)
+    return tuple(float(geo.get(attr, "0")) for attr in ("x", "y", "width", "height"))
+
+
+def _set_geometry(elem: ET.Element, x: float, y: float, width: float, height: float):
+    geo = _mxgeometry(elem)
+    if geo is None:
+        return
+    geo.set("x", str(int(round(x))))
+    geo.set("y", str(int(round(y))))
+    geo.set("width", str(int(round(width))))
+    geo.set("height", str(int(round(height))))
+
+
+def _page_matches(label: str, normalized_name: str, include_pages: Optional[set[str]]) -> bool:
+    if not include_pages:
+        return True
+    return label in include_pages or normalized_name in include_pages
+
+
+def _split_diagram_by_swimlane(diagram: ET.Element, module_name: str, include_pages: Optional[set[str]]):
+    graph = diagram.find("./mxGraphModel")
+    graph_root = diagram.find("./mxGraphModel/root")
+    if graph is None or graph_root is None:
+        return []
+
+    cells = {cell.get("id"): cell for cell in graph_root.findall("mxCell") if cell.get("id")}
+    split_diagrams = []
+
+    for cell in cells.values():
+        style = cell.get("style", "")
+        if "swimlane" not in style:
+            continue
+
+        raw_label = re.sub(r"<[^>]+>", "", cell.get("value", "") or "").strip()
+        diagram_name = normalize_page_name(module_name, raw_label)
+        if not _page_matches(raw_label, diagram_name, include_pages):
+            continue
+
+        lane_x, lane_y, lane_w, lane_h = _geometry_tuple(cell)
+        shift_x = lane_x - 20
+        shift_y = lane_y - 20
+        lane_id = cell.get("id")
+
+        new_diagram = ET.Element("diagram", id=diagram.get("id", ""), name=diagram_name)
+        new_graph = ET.SubElement(new_diagram, "mxGraphModel", graph.attrib)
+        new_root = ET.SubElement(new_graph, "root")
+        ET.SubElement(new_root, "mxCell", id="0")
+        ET.SubElement(new_root, "mxCell", id="1", parent="0")
+
+        lane_clone = deepcopy(cell)
+        _set_geometry(lane_clone, 20, 20, lane_w, lane_h)
+        new_root.append(lane_clone)
+
+        for child in cells.values():
+            if child.get("parent") != lane_id:
+                continue
+            child_clone = deepcopy(child)
+            child_x, child_y, child_w, child_h = _geometry_tuple(child_clone)
+            _set_geometry(child_clone, child_x - shift_x, child_y - shift_y, child_w, child_h)
+            new_root.append(child_clone)
+
+        new_graph.set("pageWidth", str(int(round(lane_w + 120))))
+        new_graph.set("pageHeight", str(int(round(lane_h + 120))))
+        split_diagrams.append((diagram_name, raw_label, new_diagram))
+
+    return split_diagrams
+
+
 # ---------------------------------------------------------------------------
 # 导航图生成
 # ---------------------------------------------------------------------------
@@ -108,6 +247,10 @@ _NAV_NODE_GAP = 24
 _NAV_GROUP_GAP = 60
 _NAV_NODE_STYLE = "rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1e88e5;fontSize=12;"
 _NAV_GROUP_STYLE = "swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#bdbdbd;fontStyle=1;fontSize=13;"
+
+
+def _snap8_int(value: int) -> int:
+    return int(round(value / 8.0) * 8)
 
 
 def _build_nav_diagram(modules: list) -> ET.Element:
@@ -126,18 +269,18 @@ def _build_nav_diagram(modules: list) -> ET.Element:
     ET.SubElement(root_cell, "mxCell", id="1", parent="0")
 
     cell_id = 100  # 导航图 id 从 100 起
-    x_offset = 40
+    x_offset = 16
 
     for mod_name, swimlane_names in modules:
         pages = swimlane_names if swimlane_names else [mod_name]
-        group_h = 30 + len(pages) * (_NAV_NODE_H + _NAV_NODE_GAP) + _NAV_NODE_GAP
-        group_w = _NAV_NODE_W + 40
+        group_h = _snap8_int(30 + len(pages) * (_NAV_NODE_H + _NAV_NODE_GAP) + _NAV_NODE_GAP)
+        group_w = _snap8_int(_NAV_NODE_W + 40)
 
         # group 容器
         group_id = str(cell_id)
         cell_id += 1
         group_cell = ET.SubElement(root_cell, "mxCell",
-                                   id=group_id, value=mod_name,
+                                   id=group_id, value=normalize_diagram_name(mod_name),
                                    style=_NAV_GROUP_STYLE,
                                    vertex="1", parent="1")
         ET.SubElement(group_cell, "mxGeometry",
@@ -146,7 +289,7 @@ def _build_nav_diagram(modules: list) -> ET.Element:
                       **{"as": "geometry"})
 
         # 页面节点
-        node_y = 30 + _NAV_NODE_GAP
+        node_y = _snap8_int(30 + _NAV_NODE_GAP)
         for page_name in pages:
             node_id = str(cell_id)
             cell_id += 1
@@ -155,12 +298,12 @@ def _build_nav_diagram(modules: list) -> ET.Element:
                                       style=_NAV_NODE_STYLE,
                                       vertex="1", parent=group_id)
             ET.SubElement(node_cell, "mxGeometry",
-                          x="20", y=str(node_y),
+                          x="24", y=str(node_y),
                           width=str(_NAV_NODE_W), height=str(_NAV_NODE_H),
                           **{"as": "geometry"})
-            node_y += _NAV_NODE_H + _NAV_NODE_GAP
+            node_y = _snap8_int(node_y + _NAV_NODE_H + _NAV_NODE_GAP)
 
-        x_offset += group_w + _NAV_GROUP_GAP
+        x_offset = _snap8_int(x_offset + group_w + _NAV_GROUP_GAP)
 
     return diagram
 
@@ -190,7 +333,15 @@ def _indent_xml(elem: ET.Element, level: int = 0):
             elem.tail = indent
 
 
-def merge(output_path: str, product_name: str, tmp_files: list, keep_tmp: bool = False):
+def merge(
+    output_path: str,
+    product_name: str,
+    tmp_files: list,
+    keep_tmp: bool = False,
+    split_swimlanes: bool = False,
+    include_pages: Optional[set[str]] = None,
+    add_nav: bool = True,
+):
     """执行合并。
 
     Args:
@@ -216,7 +367,28 @@ def merge(output_path: str, product_name: str, tmp_files: list, keep_tmp: bool =
             continue
 
         diagram, mod_name = _parse_tmp_xml(fpath)
+        if split_swimlanes:
+            split_items = _split_diagram_by_swimlane(diagram, mod_name, include_pages)
+            kept_names = [name for name, _, _ in split_items]
+            if kept_names:
+                modules_info.append((mod_name, kept_names))
+            for page_index, (diagram_name, _, split_diagram) in enumerate(split_items, start=1):
+                split_diagram.set("id", f"module{idx}_page{page_index}")
+                split_diagram.set("name", diagram_name)
+                total_cells += len([e for e in split_diagram.iter() if e.tag == "mxCell"])
+                diagrams.append(split_diagram)
+            continue
+
         swimlane_names = _extract_swimlane_names(diagram)
+        if include_pages:
+            filtered_names = []
+            for raw_name in swimlane_names:
+                page_name = normalize_page_name(mod_name, raw_name)
+                if _page_matches(raw_name, page_name, include_pages):
+                    filtered_names.append(raw_name)
+            if not filtered_names:
+                continue
+            swimlane_names = filtered_names
         modules_info.append((mod_name, swimlane_names))
 
         # 收集所有带 id 的元素，构建映射
@@ -226,19 +398,15 @@ def merge(output_path: str, product_name: str, tmp_files: list, keep_tmp: bool =
             old = e.get("id")
             if old not in id_map:
                 id_map[old] = _offset_id(old, idx)
-        # 确保 0/1 不变
         id_map["0"] = "0"
         id_map["1"] = "1"
 
-        # 应用偏移
         _apply_id_map(diagram, id_map)
 
-        # 统计 mxCell 数量
         total_cells += len([e for e in diagram.iter() if e.tag == "mxCell"])
 
-        # 设置 diagram id / name
         diagram.set("id", f"module{idx}")
-        diagram.set("name", mod_name)
+        diagram.set("name", normalize_diagram_name(mod_name))
         diagrams.append(diagram)
 
     if not diagrams:
@@ -246,9 +414,11 @@ def merge(output_path: str, product_name: str, tmp_files: list, keep_tmp: bool =
         sys.exit(1)
 
     # 构建导航图
-    nav_diagram = _build_nav_diagram(modules_info)
-    nav_cells = len([e for e in nav_diagram.iter() if e.tag == "mxCell"])
-    total_cells += nav_cells
+    nav_diagram = None
+    if add_nav:
+        nav_diagram = _build_nav_diagram(modules_info)
+        nav_cells = len([e for e in nav_diagram.iter() if e.tag == "mxCell"])
+        total_cells += nav_cells
 
     # 构建 mxfile
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.000Z")
@@ -259,7 +429,8 @@ def merge(output_path: str, product_name: str, tmp_files: list, keep_tmp: bool =
                         version="24.0.0",
                         type="device")
 
-    mxfile.append(nav_diagram)
+    if nav_diagram is not None:
+        mxfile.append(nav_diagram)
     for d in diagrams:
         mxfile.append(d)
 
@@ -304,9 +475,25 @@ def main():
     output_path = args[0]
     product_name = args[1]
     keep_tmp = "--keep-tmp" in args
+    split_swimlanes = "--split-swimlanes" in args
+    add_nav = "--no-nav" not in args
 
     # 移除 flag 参数
-    rest = [a for a in args[2:] if a != "--keep-tmp"]
+    consumed = {"--keep-tmp", "--split-swimlanes", "--no-nav"}
+    rest = [a for a in args[2:] if a not in consumed]
+    include_pages = None
+
+    if "--include-pages" in rest:
+        include_idx = rest.index("--include-pages")
+        if include_idx + 1 >= len(rest):
+            print("错误：--include-pages 后需要提供页面列表", file=sys.stderr)
+            sys.exit(1)
+        include_pages = {
+            item.strip()
+            for item in rest[include_idx + 1].split(",")
+            if item.strip()
+        }
+        del rest[include_idx:include_idx + 2]
 
     # 检查 --glob 模式
     if "--glob" in rest:
@@ -322,7 +509,15 @@ def main():
     else:
         tmp_files = rest
 
-    merge(output_path, product_name, tmp_files, keep_tmp=keep_tmp)
+    merge(
+        output_path,
+        product_name,
+        tmp_files,
+        keep_tmp=keep_tmp,
+        split_swimlanes=split_swimlanes,
+        include_pages=include_pages,
+        add_nav=add_nav,
+    )
 
 
 if __name__ == "__main__":

@@ -46,7 +46,7 @@ WORK_DIR/
 
 ## 步骤二：并行生成各模块文件
 
-将所有模块分配给并行 Agent，每个 Agent 负责 1-2 个模块（Codex 建议每个 Task 1 个模块）。
+将所有模块分配给并行子任务，每个子任务负责 1-2 个模块（Codex 建议每个子任务 1 个模块），并且**任一时刻最多只运行 3 个子 agent**，超出部分分批执行。
 
 每个模块独立输出为 `WORK_DIR/requirements/详细需求文档_[模块中文名].md`，只含该模块的 §3 内容：
 
@@ -61,7 +61,7 @@ WORK_DIR/
 ...（完整字段规格、三态设计、验收标准）
 ```
 
-**Agent / Task 提示词模板：**
+**子任务提示词模板：**
 
 ```
 编写以下模块的需求文档，保存为 [WORK_DIR绝对路径]/requirements/详细需求文档_[模块中文名].md。
@@ -70,8 +70,8 @@ WORK_DIR/
 - [模块名]：[功能点列表]
 
 【参考资料】
-- Read [WORK_DIR绝对路径]/requirements/详细需求文档_overview.md 第2章"用户角色"和第5.5章"枚举值字典"（了解角色定义和状态枚举值）
-- Read [WORK_DIR绝对路径]/竞品分析报告.md 中 [模块名] 相关章节（获取竞品洞察）
+- 读取 [WORK_DIR绝对路径]/requirements/详细需求文档_overview.md 第2章"用户角色"和第5.5章"枚举值字典"（了解角色定义和状态枚举值）
+- 读取 [WORK_DIR绝对路径]/竞品分析报告.md 中 [模块名] 相关章节（获取竞品洞察）
 
 【格式】严格遵循 step4-doc-format.md 中功能模块清单的结构，每个功能点必须包含：
 - 字段规格区块（▌列表/查询页字段规格 / ▌新增/编辑表单字段规格 / ▌详情/状态页字段规格）
@@ -83,17 +83,26 @@ WORK_DIR/
 完成后输出：✅ requirements/详细需求文档_[模块中文名].md 完成，N 个功能点，M 行。
 ```
 
-**Claude Code（Agent 工具）— 所有模块 Agent 必须在同一响应中并行启动：**
+**Claude Code（Agent 工具）— 分批并行启动，每批最多 3 个 Agent：**
 
 ```
-# 禁止逐个启动等待，必须一次性并行发出
+# 每批最多 3 个，先并行发出本批，再等待本批完成
 Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...", run_in_background=True)
 Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...", run_in_background=True)
 Agent(prompt="...模块3 完整 prompt（所有占位符已替换）...", run_in_background=True)
-...  # 所有调用在同一响应中发出，并行执行
+# 若还有剩余模块，下一批重复相同步骤
 ```
 
-> Codex 环境请参考 `SKILL_DIR/steps/codex-rules.md`。
+> Claude Code 请参考 `SKILL_DIR/steps/claude-rules.md`；Codex 请参考 `SKILL_DIR/steps/codex-rules.md`。
+
+**Codex：**
+
+```
+# 用 spawn_agent 按模块分批启动，每批最多 3 个，wait 当前批完成后再启动下一批
+spawn_agent(agent_type="worker", message="...模块1 完整 prompt（所有占位符已替换）...")
+spawn_agent(agent_type="worker", message="...模块2 完整 prompt（所有占位符已替换）...")
+spawn_agent(agent_type="worker", message="...模块3 完整 prompt（所有占位符已替换）...")
+```
 
 ---
 
@@ -101,7 +110,7 @@ Agent(prompt="...模块3 完整 prompt（所有占位符已替换）...", run_in
 
 所有模块文件生成后：
 
-1. **完整性验收：** 用 `Glob WORK_DIR/requirements/详细需求文档_*.md` 列出所有文件，确认每个模块都有对应文件
+1. **完整性验收：** 用当前会话可用的文件列表命令列出 `WORK_DIR/requirements/详细需求文档_*.md`，确认每个模块都有对应文件
 
 2. **生成索引文件 `WORK_DIR/requirements/index.md`**（Step 5 subagent 通过此文件快速定位需求）：
 
