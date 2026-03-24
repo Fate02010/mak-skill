@@ -1,170 +1,262 @@
-# Step 5 阶段 5-3：并行启动 subagent（draw.io 两阶段架构）
+# Step 5 阶段 5-3：并行启动 subagent（draw.io 强约束架构）
 
-本文件仅在 OUTPUT_FORMAT=drawio 时加载。
-draw.io 生成分为两个独立阶段：
-- 阶段 A（规格化）：业务决策层
-- 阶段 B（渲染）：格式转换层
+本文件仅在 `OUTPUT_FORMAT=drawio` 时加载。
 
----
+draw.io 统一改为四段链路：
 
-**架构说明：**
-- 阶段 A（规格化）：业务决策层——读取需求文档，确定每个页面的 UI 元素、字段内容、坐标，输出结构化的 `page_spec_[模块英文名].md`
-- 阶段 B（渲染）：格式转换层——读取 page_spec + 样式字典，纯机械地将每行转换为 `<mxCell>` XML，输出 `drawio_[模块英文名]_tmp.xml`
+`page_model -> build_page_spec.py -> render.py -> validate.py`
 
-**优势：** 规格化和渲染职责分离，渲染 Agent 不做任何业务判断，消除坐标计算错误和占位符内容问题。
+目标是压缩模型自由度，缩小 Claude 与 Codex 的结构差异。
 
 ---
 
-## 阶段 5-3A：并行启动规格化 Agent
+## 启动前完成标准确认（不可跳过）
 
-Read `SKILL_DIR/steps/step5-spec-agent-prompt.md` 获取规格化 Agent 提示词模板。
+在任何 draw.io 子任务启动前，主进程必须先完成以下动作：
 
-**分模块规则：**
-- 一个功能模块 → 一个规格化 Agent
-- **模块粒度必须符合 step5-common.md 的硬限制**：每模块 ≤ 2 个业务实体，≤ 6 个 swimlane，≤ 2 个列表页
-- ⚠️ 若阶段 5-1 分组结果中存在 > 2 个列表页的模块，**必须在启动 Agent 前先拆分模块**
-- 单模块页面数（含 CRUD 弹窗 swimlane）> 4 时拆分为 2 个 Agent（每个负责 ≤ 4 页，Codex 建议 ≤ 2 页）
-- 最多同时启动 **6 个并行 Agent**
+1. 读取 `WORK_DIR/原型DoD.md`
+2. 读取 `WORK_DIR/drawio-完成标准.md`
+3. 用简洁摘要向用户确认本次 draw.io 任务的完成定义：
+   - 最终交付物路径
+   - 模块数 / 预计 swimlane 数
+   - validate.py 通过门槛
+   - merge.py 合并成功门槛
+   - “发现问题即修复并重新验收”这一条是否已纳入完成标准
 
-**占位符替换清单：**
+**如果以上任一项还没定义清楚，禁止启动生成。**
 
-| 占位符 | 替换为 |
-|--------|--------|
-| `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` |
-| `[WORK_DIR]` | 用户确认的工作目录绝对路径 |
-| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 |
-| `[页面名称N]` / `[章节名]` | 具体页面名 / 对应需求文档章节 |
-| `[对象名]` | 该模块管理的业务对象（如「用户」「订单」） |
-| `[CRUD 页面清单]` | 从阶段 5-2 CRUD 完整性检查结果中提取，格式：`- [列表页名] → 需要：新增/编辑[对象名]弹窗 + 删除确认弹窗`；若该模块无 CRUD 操作则填 `无 CRUD 操作` |
-| `[需求文档读取指令]` | **单文件模式**：`Read [WORK_DIR]/requirements/详细需求文档.md 中以下章节`<br>**分拆模式**：`先 Read [WORK_DIR]/requirements/详细需求文档_overview.md（获取用户角色 §2 和枚举值字典 §5.5）；再 Read [WORK_DIR]/requirements/详细需求文档_[模块中文名].md 中以下章节` |
-
-**Claude Code：**
-
-```
-# 所有规格化 Agent 必须在同一响应中并行启动
-Agent(prompt="...模块1 规格化 prompt（所有占位符已替换）...", run_in_background=True)
-Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...", run_in_background=True)
-...  # 所有规格化 Agent 在同一响应中并行启动
-```
-
-> Codex 环境请参考 `SKILL_DIR/steps/codex-rules.md`。
-
-**熔断规则（同后续渲染阶段）：** 失败 Agent 数 > 50% → 停止，告警用户选择重试/忽略/中止。
+> 判断原则：draw.io 任务不是“产出 XML 就算完成”，而是“脚本链路跑通、校验通过、DoD 通过、最终文件可交付”才算完成。
 
 ---
 
-## ⚠️ page_spec 格式验证（Spec 冻结确认前必须通过）
+## 阶段 A：page_model 语义建模
 
-所有规格化 Agent 完成、熔断检查通过后，**在展示规格摘要前，必须先验证所有 page_spec 文件的格式和元素数量**：
+读取：
+- `SKILL_DIR/steps/page-model-spec.md`
+- `SKILL_DIR/steps/step5-spec-agent-prompt.md`
 
-### 格式完整性检查
+### 子任务输出
 
-逐一读取所有 `page_spec_*.md` 文件，验证：
+- `WORK_DIR/page_model_[模块英文名].json`
 
-1. **必需表格标题存在：**
-   ```bash
-   grep -q "## swimlane 布局" page_spec_*.md
-   grep -q "## 元素列表" page_spec_*.md
-   ```
+### 硬约束
 
-2. **元素列表行数统计：**
-   ```bash
-   grep -c "^| [0-9]" page_spec_*.md
-   ```
+1. 一个子任务最多 2 个真实页面
+2. 子任务禁止输出 `page_spec`
+3. 子任务禁止输出 XML
+4. 子任务不负责坐标、骨架、CRUD 弹窗细节
 
-3. **最低元素数量要求：**
-   - 移动端列表页：≥ 35 行
-   - 移动端表单页：≥ 30 行
-   - Web 列表页：≥ 50 行
-   - Web 表单页：≥ 35 行
-   - Dashboard/数据看板：≥ 40 行
-   - 移动端首页/商城首页：≥ 45 行
+### 新增强约束：先判 `page_archetype`
 
-4. **CRUD 弹窗 swimlane 检查：**
-   对每个 page_spec 文件，检查列表类 swimlane 是否有对应的 modal swimlane：
-   - 从元素列表中查找含 btn_sm（编辑按钮）或 btn_sm_danger（删除按钮）的 swimlane
-   - 检查同一 page_spec 中是否存在对应的 type=modal swimlane（新增/编辑弹窗 + 删除确认弹窗）
-   - 若列表 swimlane 有编辑/删除按钮但无对应 modal swimlane → 标记 CRUD_INCOMPLETE
+在输出 `page_model` 之前，子任务必须先为每个页面确定 `page_archetype`，类型集合以 `drawio-spec.md` 为准。
 
-### 格式错误判定
+禁止：
+- 不写 `page_archetype`
+- 一个页面同时使用多个 archetype
+- 将 `dashboard`、`detail_kv`、`drawer_permission`、`dispatch_board` 偷换成 `list_table`
 
-若文件满足以下任一条件，标记为 ❌ SPEC_INVALID：
-- 不包含 "## 元素列表" 标题
-- 元素列表行数不足最低要求
-- 文件内容为描述性文字（如 `- 顶部：标题"xxx"，右侧消息图标`）而非表格
-- 标记为 CRUD_INCOMPLETE（列表页有编辑/删除按钮但缺少弹窗 swimlane）
+若页面类型无法明确，必须回读需求文档补判断，禁止直接生成通用列表页。
 
-### 重试策略
+### 并行规则
 
-标记为 SPEC_INVALID 的模块，**不进入 Spec 冻结确认**，立即重新启动该模块的规格化 Agent，在 prompt 末尾追加：
+- 一个功能模块拆成若干 `page_model` 子任务
+- 子任务按批次并行启动，每批最多 3 个，再统一等待本批结果
+- 若某模块页面 > 2，必须先拆分后再启动
 
-```
-⚠️ 警告：上次输出格式错误（描述性文字而非坐标表格）。
+### 成功标准
 
-本次必须严格按照 page_spec 表格格式输出：
-- 必须包含 "## swimlane 布局" 和 "## 元素列表" 两个表格
-- 每行一个 mxCell 元素，包含 id/parent/value/x/y/w/h/style_key 列
-- 禁止输出描述性文字（如"- 轮播区：3张图"）
-- 移动端列表页最少 25 行，Web 列表页最少 35 行
-
-参考正确格式示例（见 step5-spec-agent-prompt.md 中的"完整业务示例"）。
-```
-
-### 验证通过标准
-
-仅当所有模块 page_spec 均为 ✅ VALID 时，才进入下一步 Spec 冻结确认流程。
+- JSON 可解析
+- 顶层包含 `module_name`、`module_key`、`pages`
+- `pages` 数组非空
+- 页面类型全部合法
 
 ---
 
-## ⚠️ Spec 冻结确认（5-3A 与 5-3B 之间的强制等待）
+## 阶段 B：构建标准 page_spec
 
-所有规格化 Agent 完成、熔断检查通过、**page_spec 格式验证通过**后，**必须向用户展示规格摘要并等待确认，禁止自动进入渲染阶段**：
+先确保目录存在：
 
-```
-=== Spec 冻结确认 ===
-规格化已完成，共 N 个模块，M 个 swimlane：
-
-| 模块     | swimlane 清单                          | 类型   | 预计元素数 | page_spec 文件           |
-|----------|----------------------------------------|--------|-----------|--------------------------|
-| 用户模块 | 登录页、用户列表页、新增/编辑弹窗、删除确认弹窗 | 移动端 | ~45       | page_spec_user.md        |
-| 商品模块 | 商品列表页、商品详情页、新增/编辑弹窗           | 移动端 | ~38       | page_spec_product.md     |
-
-请确认规格后，启动渲染：
-- 回复"确认"：开始并行渲染（启动 N 个渲染 Agent）
-- 回复"查看 [模块名]"：展示对应 page_spec 文件内容
-- 回复"修改 [模块名] [说明]"：先修改 page_spec，再渲染
-- 回复"取消"：停止流程
+```bash
+mkdir -p WORK_DIR/page_specs
 ```
 
-**收到用户明确回复"确认"后，才能进入阶段 5-3B。**
+**固定目录规则：**
 
-同时将此次规格摘要写入 `WORK_DIR/执行状态.md` 的"Spec 版本记录"表格（格式见 SKILL.md 中的执行状态文件格式）。
+- 所有 `page_spec_*.md` 必须写入 `WORK_DIR/page_specs/`
+- `WORK_DIR` 根目录下出现新的 `page_spec_*.md` 视为流程错误，不得继续进入 render
+- 即使脚本调用者误把输出路径写成 `WORK_DIR/page_spec_xxx.md`，也必须自动收敛到 `WORK_DIR/page_specs/page_spec_xxx.md`
+
+对每个模块执行：
+
+```bash
+python3 SKILL_DIR/scripts/build_page_spec.py \
+  WORK_DIR/page_model_[模块英文名].json \
+  WORK_DIR/page_specs/page_spec_[模块英文名].md
+```
+
+### 脚本负责
+
+- 套统一页面骨架
+- 应用统一 8pt 坐标
+- 自动补 CRUD 弹窗
+- 自动补新增/编辑/删除按钮
+- 自动展开 5 行列表数据
+- 自动补 annotation_card
+- 按 `page_archetype` 选择页面模板，而不是按页面名自由发挥
+
+### 页面模板选择规则
+
+- `dashboard`：必须套工作台模板
+- `detail_kv`：必须套详情模板
+- `modal_form`：必须套表单弹窗模板
+- `drawer_permission`：必须套授权抽屉模板
+- `dispatch_board`：必须套发货/调度模板
+- `tree_manage`：必须套树/层级管理模板
+
+禁止：
+- 用通用列表模板兜底所有后台页面
+- 用“新增/编辑通用弹窗”兜底角色授权、复杂商品编辑、订单详情
+
+### 不通过即中断
+
+若 `build_page_spec.py` 报错，该模块不得进入 render 阶段。
 
 ---
 
-## 阶段 5-3B：渲染（脚本自动化）
+## 阶段 C：render 渲染
 
-所有规格化 Agent 完成后，确认每个模块的 `page_spec_[模块英文名].md` 均已写入 `WORK_DIR`，然后用脚本渲染。
+render 阶段只允许读取：
 
-**⚠️ 渲染不再使用 subagent，改为调用 Python 脚本，零 token 消耗。**
+- `WORK_DIR/page_specs/page_spec_[模块英文名].md`
+- `SKILL_DIR/steps/step5-component-styles.md`
+- `WORK_DIR/原型任务清单.md`
+- 导航/跳转映射
 
-**执行方式：** 所有模块的渲染命令**必须在同一响应中并行启动**（`run_in_background=true`），禁止逐个串行等待：
+禁止回读原始资料、PRD、竞品文档、需求文档原文。
 
 ```bash
 python3 SKILL_DIR/scripts/render.py \
   SKILL_DIR/steps/step5-component-styles.md \
-  WORK_DIR/page_spec_[模块英文名].md \
+  WORK_DIR/page_specs/page_spec_[模块英文名].md \
   WORK_DIR/drawio_[模块英文名]_tmp.xml
 ```
 
-**Claude Code 示例（并行启动）：**
-```
-# 所有 Bash 调用在同一响应中发出，并行执行
-Bash("python3 .../render.py ... page_spec_user.md ... drawio_user_tmp.xml", run_in_background=True)
-Bash("python3 .../render.py ... page_spec_order.md ... drawio_order_tmp.xml", run_in_background=True)
-Bash("python3 .../render.py ... page_spec_product.md ... drawio_product_tmp.xml", run_in_background=True)
-# 然后用 TaskOutput 等待所有完成
+规则：
+
+- 所有模块渲染命令必须并行发出
+- render 报错的模块不得进入 merge
+
+---
+
+## 阶段 C.5：规格覆盖率与一致性门禁
+
+在任何模块进入 merge 之前，主进程必须执行：
+
+```bash
+python3 SKILL_DIR/scripts/check_prototype_consistency.py \
+  WORK_DIR/requirements \
+  WORK_DIR/page_specs \
+  --json
 ```
 
-> 脚本自动完成：样式字典查找 → XML 生成 → 坐标 8 倍数校验修正 → 特殊字符转义。
-> 若 page_spec 中有未知 style_key，脚本会输出警告并降级为 `text_default`。
+门禁规则：
+
+- `missing_pages` 非空：必须回退到 `page_model` 或更上游补页
+- `missing_field_pages` 非空：必须回退到 `page_specs` 补字段
+- `low_coverage_pages` 非空：不得进入最终交付
+- 只有脚本返回 0，才允许继续 merge
+
+---
+
+## 阶段 D：自动验收与重建
+
+对每个模块执行：
+
+```bash
+python3 SKILL_DIR/scripts/validate.py WORK_DIR/drawio_[模块英文名]_tmp.xml --json
+```
+
+### 通过门槛
+
+- `FAIL = 0`
+- 不允许触发 `C10 CRUD闭环`
+- 不允许触发 `C11 占位词残留`
+- 通过结果必须回写到 `WORK_DIR/drawio-完成标准.md` 或 `WORK_DIR/原型DoD.md` 的对应勾选项
+
+### 自动重建规则
+
+遇到以下问题，禁止直接 patch XML，必须回到 `page_model` 重建：
+
+- 页面缺失
+- 页面类型错误
+- `C13 页面类型降级`
+- `C10 CRUD闭环`
+- `C11 占位词残留`
+- 明显骨架错误
+
+仅以下问题允许保留 `page_model`，重跑构建或轻微调 `page_spec`：
+
+- `C5 坐标对齐`
+- 少量 annotation 偏移
+- 分页/按钮间距轻微不齐
+
+---
+
+## Claude / Codex 差异量化
+
+若存在 Claude 基线文件，可执行：
+
+```bash
+python3 SKILL_DIR/scripts/compare_drawio.py \
+  WORK_DIR/prototypes/claude_baseline.drawio \
+  WORK_DIR/prototypes/[产品名称].drawio \
+  --json
+```
+
+解释：
+
+- `diff_score <= 5`：达到目标
+- `diff_score > 5`：继续拆小模块，或修订 page_model
+
+## 无 Claude 基线时的完成定义
+
+如果项目中没有 Claude 或其他高质量基线文件，draw.io 阶段必须改用以下门槛：
+
+1. `validate.py` 最终结果 `FAIL = 0`
+2. 不允许触发：
+   - `C10 CRUD闭环`
+   - `C11 占位词残留`
+   - `C13 页面类型降级`
+3. `原型DoD.md` 中页面完整性、闭环、内容真实性全部满足
+4. 至少人工抽查 3 类不同 archetype 页面：
+   - `dashboard`
+   - `list_table`
+   - `detail_kv` 或 `drawer_permission`
+
+> 没有外部基线时，`drawio-spec.md + validate.py + 原型DoD.md` 就是唯一完成标准。
+
+---
+
+## 合并
+
+全部模块通过验收后：
+
+```bash
+python3 SKILL_DIR/scripts/merge.py \
+  WORK_DIR/prototypes/[产品名称].drawio \
+  [产品名称] \
+  --glob WORK_DIR/drawio_*_tmp.xml
+```
+
+合并完成后，必须立刻再对最终文件执行一次：
+
+```bash
+python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio --json
+```
+
+只有当最终 `.drawio` 文件也满足以下条件时，任务才算真正完成：
+- validate 结果 `FAIL = 0`
+- `C13 页面类型降级 = 0`
+- `WORK_DIR/原型DoD.md` 全部条目通过
+- `WORK_DIR/drawio-完成标准.md` 全部条目通过
+- 已向用户报告最终产物路径和复测结果

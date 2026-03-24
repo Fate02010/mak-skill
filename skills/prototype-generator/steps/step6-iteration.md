@@ -6,16 +6,16 @@
 
 ## 阶段 6-0：需求对照审视（强制，不可跳过）
 
-> 目标：逐页对照需求文档与原始资料，执行预处理校验 + 七个维度审视，输出审视报告并等待用户确认后修复。
+> 目标：逐页对照需求文档、原型任务清单、page_specs 与最终原型，执行预处理校验 + 七个维度审视，输出审视报告并等待用户确认后修复。
 
 ### 预处理：跳转与覆盖率校验
 
 > 以下校验项从 Step 5-5 移入，作为深度审视的一部分执行。
 
 **加载验收规则：**
-- 通用：Read `SKILL_DIR/steps/acceptance-rules-A.md`（A3 主操作 / A4 状态 / A5 主流程闭环）
-- 通用：Read `SKILL_DIR/steps/acceptance-rules-C.md`（C1-C4 反模式检测）
-- draw.io 模式追加：Read `SKILL_DIR/steps/acceptance-rules-B.md`（B1-B4 模板验收）
+- 通用：读取 `SKILL_DIR/steps/acceptance-rules-A.md`（A3 主操作 / A4 状态 / A5 主流程闭环）
+- 通用：读取 `SKILL_DIR/steps/acceptance-rules-C.md`（C1-C4 反模式检测）
+- draw.io 模式追加：读取 `SKILL_DIR/steps/acceptance-rules-B.md`（B1-B4 模板验收）
 
 **1. 跳转标注校验**
 - HTML 模式：逐一读取所有 HTML 文件，提取 href/onclick 跳转目标，检查目标文件是否存在，修复断链
@@ -43,25 +43,41 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 
 1. 读取 `WORK_DIR/requirements/详细需求文档.md`，提取"原型图清单"和每个页面的功能描述、字段列表
 2. 读取 `WORK_DIR/原型任务清单.md`，获取已生成的页面列表
-3. 扫描已生成文件：
-   - **HTML 模式**：`Glob WORK_DIR/prototypes/*.html`
+3. 读取 `WORK_DIR/page_specs/`，获取冻结后的页面结构、字段、跳转和状态定义
+4. 扫描已生成文件：
+   - **HTML 模式**：用当前会话可用的文件列表命令列出 `WORK_DIR/prototypes/*.html`
    - **draw.io 模式**：读取 `WORK_DIR/prototypes/[产品名称].drawio`，列出所有 `<diagram name>` 和 swimlane
+
+> 审视阶段默认只对照结构化中间产物，不回读原始资料。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `page_specs/`，再重跑渲染。
 
 ### 七维度审视
 
-> **⚡ 并行执行：** 维度 1-5 互相独立，**必须用 5 个并行 Agent 同时执行**，禁止逐个串行。维度 6（主流程闭环）和维度 7（模板合规）依赖前 5 个维度的修复结果，需等待 1-5 全部完成后再顺序执行。
+> **⚡ 并行执行：** 维度 1-5 互相独立，必须并行执行，但**任一时刻最多只运行 3 个子 agent**。因此维度 1-5 需分两批执行：先启动 3 个，再启动剩余 2 个。Codex 中用多个 `spawn_agent`；Claude Code 中用多个 `Agent`。维度 6（主流程闭环）和维度 7（模板合规）依赖前 5 个维度的修复结果，需等待 1-5 全部完成后再顺序执行。
 >
 > ```
-> # 同一响应中并行启动 5 个 Agent
+> # 第一批并行启动 3 个 Agent
 > Agent(prompt="审视维度一：界面完整性...", run_in_background=True)
 > Agent(prompt="审视维度二：字段/元素完整性...", run_in_background=True)
 > Agent(prompt="审视维度三：排版/视觉合理性...", run_in_background=True)
+> # 等第一批完成后，启动第二批
 > Agent(prompt="审视维度四：内容真实性...", run_in_background=True)
 > Agent(prompt="审视维度五：视觉结构...", run_in_background=True)
 > # 等待全部完成后，顺序执行维度 6、7
 > ```
 >
-> 每个 Agent 的 prompt 需包含：WORK_DIR 路径、OUTPUT_FORMAT、需求文档路径、验收规则文件路径、该维度的完整检查方法。Agent 发现问题后直接用 Edit 修复，输出修复报告。
+> Codex 等价做法：
+>
+> ```
+> spawn_agent(agent_type="worker", message="审视维度一：界面完整性...")
+> spawn_agent(agent_type="worker", message="审视维度二：字段/元素完整性...")
+> spawn_agent(agent_type="worker", message="审视维度三：排版/视觉合理性...")
+> # wait 第一批完成后，再启动第二批
+> spawn_agent(agent_type="worker", message="审视维度四：内容真实性...")
+> spawn_agent(agent_type="worker", message="审视维度五：视觉结构...")
+> # 等第二批完成后，再顺序执行维度 6、7
+> ```
+>
+> 每个子任务的 prompt 需包含：WORK_DIR 路径、OUTPUT_FORMAT、需求文档路径、验收规则文件路径、该维度的完整检查方法。发现问题后直接修复文件并输出修复报告。
 
 **维度一：界面完整性**
 
@@ -82,7 +98,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - **异常态覆盖**：核心页面（列表、详情、表单提交）是否有异常态展示（加载失败/网络错误提示 + 重试按钮）；缺失则标记
 - **处理中态**：表单提交、支付等关键操作是否有处理中态（按钮 disabled + 文字变"处理中..."）；缺失则标记
 
-**主操作 coverage（A3）：** 按 acceptance-rules-A.md 中 A3 检查方法，逐页对照需求文档中的核心操作按钮，输出 coverage 报告，缺失的用 Edit 补充。
+**主操作 coverage（A3）：** 按 acceptance-rules-A.md 中 A3 检查方法，逐页对照需求文档中的核心操作按钮，输出 coverage 报告，缺失的直接补充。
 
 **状态 coverage（A4）：** 按 acceptance-rules-A.md 中 A4 检查方法，检查列表页是否展示 ≥2 种状态、详情页是否有状态标注，输出覆盖率，< 80% 必须修复。
 
@@ -91,7 +107,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - 列表页：筛选条件 + 列表展示列名
 - 表单页：表单字段名（含控件类型、是否必填）
 - 详情页：展示字段名
-输出 coverage 报告，< 80% 的页面必须修复。修复方式：draw.io 两阶段优先 Edit page_spec 再重渲染；HTML 直接 Edit。
+输出 coverage 报告，< 80% 的页面必须修复。修复方式：统一先修改 `page_specs/page_spec_*.md`，再重跑对应模块渲染。
 
 **维度三：排版合理性**
 
@@ -133,7 +149,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - B1 页面类型校验：对照需求文档确认 page_spec 类型标注正确
 - B2 骨架完整性校验：逐页统计骨架必备元素，输出完整度百分比
 - B4 布局顺序校验：按 y 坐标排列所有元素，检查顺序是否符合模板定义
-不通过 → 用 Edit 修改 page_spec 后重新渲染。
+不通过 → 修改 page_spec 后重新渲染。
 
 ### 输出审视报告
 
@@ -203,7 +219,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 > 2. 字段 coverage < 60% 的页面（严重缺失，需交叉验证）
 > 3. 用户主动要求对比的页面
 >
-> **快捷路径（优先使用）：** 如果存在 `page_spec_*.md`（两阶段模式），优先用 page_spec vs 需求文档做结构化字段 diff，只有 diff 无法确认的差异才生成 HTML 对比稿。
+> **快捷路径（优先使用）：** 如果存在 `page_specs/page_spec_*.md`（两阶段模式），优先用 page_spec vs 需求文档做结构化字段 diff，只有 diff 无法确认的差异才生成 HTML 对比稿。
 >
 > 七维度审视完成后，对触发条件命中的页面执行 HTML 对比。
 
@@ -238,7 +254,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 
 **Step C：以 HTML 稿为参照修正 draw.io**
 
-按对比清单，用 `Edit` 工具精确修改 `[产品名称].drawio` 对应 swimlane：
+按对比清单，精确修改 `[产品名称].drawio` 对应 swimlane：
 - 补充缺失的 `<mxCell>` 元素（字段/按钮），坐标参照 HTML 布局折算
 - 调整位置偏差的组件坐标
 - 修复排版结构（水平/垂直排列、对齐方式）
@@ -251,11 +267,11 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 
 ### 执行修复（常规问题）
 
-用户确认后，逐项修复。**draw.io 模式修复优先级：Edit page_spec → 重跑渲染 Agent（禁止直接 patch XML，除非是微小坐标调整）**：
+用户确认后，逐项修复。**draw.io 模式修复优先级：先修改 page_spec → 再重跑渲染模块（禁止直接 patch XML，除非是微小坐标调整）**：
 
 - **缺失页面**：参照 Step 5 agent prompt 模板，单独启动 Agent 生成该页面；draw.io 模式先在 page_spec 中补充对应 swimlane，再重跑渲染 Agent，最后追加到 `.drawio` 文件
-- **缺失字段/按钮**：draw.io 模式：用 `Edit` 修改对应 `page_spec_*.md`（在元素列表中追加行）→ 重跑该模块渲染 Agent；HTML 模式：直接 Edit `.html` 文件
-- **排版/坐标问题**：draw.io 模式：修改 page_spec 中对应元素的 x/y/width/height → 重跑渲染 Agent；若只是 1-2 个元素的微调（< 3 个 mxCell），可直接 Edit `.drawio` XML
+- **缺失字段/按钮**：统一先修改对应 `page_specs/page_spec_*.md`，再重跑该模块渲染；禁止把最终 HTML 当主修复面
+- **排版/坐标问题**：draw.io 模式：修改 page_spec 中对应元素的 x/y/width/height → 重跑渲染；HTML 模式：修改 page_spec 中布局说明后重渲染；draw.io 若只是 1-2 个元素的微调（< 3 个 mxCell），可直接微调 `.drawio` XML
 - 每次修复后更新 `执行状态.md` 的"Spec 版本记录"表格，记录版本号、变更原因和修改摘要
 
 修复完成后，将审视结果追加到 `WORK_DIR/执行状态.md` 的 Step 6 迭代记录：
