@@ -83,11 +83,13 @@ WORK_DIR/
 完成后输出：✅ requirements/详细需求文档_[模块中文名].md 完成，N 个功能点，M 行。
 ```
 
-**Claude Code（Agent 工具）：**
+**Claude Code（Agent 工具）— 所有模块 Agent 必须在同一响应中并行启动：**
 
 ```
-Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...")
-Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...")
+# 禁止逐个启动等待，必须一次性并行发出
+Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...", run_in_background=True)
+Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...", run_in_background=True)
+Agent(prompt="...模块3 完整 prompt（所有占位符已替换）...", run_in_background=True)
 ...  # 所有调用在同一响应中发出，并行执行
 ```
 

@@ -35,13 +35,15 @@ Read `SKILL_DIR/steps/step5-spec-agent-prompt.md` 获取规格化 Agent 提示�
 | `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 |
 | `[页面名称N]` / `[章节名]` | 具体页面名 / 对应需求文档章节 |
 | `[对象名]` | 该模块管理的业务对象（如「用户」「订单」） |
+| `[CRUD 页面清单]` | 从阶段 5-2 CRUD 完整性检查结果中提取，格式：`- [列表页名] → 需要：新增/编辑[对象名]弹窗 + 删除确认弹窗`；若该模块无 CRUD 操作则填 `无 CRUD 操作` |
 | `[需求文档读取指令]` | **单文件模式**：`Read [WORK_DIR]/requirements/详细需求文档.md 中以下章节`<br>**分拆模式**：`先 Read [WORK_DIR]/requirements/详细需求文档_overview.md（获取用户角色 §2 和枚举值字典 §5.5）；再 Read [WORK_DIR]/requirements/详细需求文档_[模块中文名].md 中以下章节` |
 
 **Claude Code：**
 
 ```
-Agent(prompt="...模块1 规格化 prompt（所有占位符已替换）...")
-Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...")
+# 所有规格化 Agent 必须在同一响应中并行启动
+Agent(prompt="...模块1 规格化 prompt（所有占位符已替换）...", run_in_background=True)
+Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...", run_in_background=True)
 ...  # 所有规格化 Agent 在同一响应中并行启动
 ```
 
@@ -146,7 +148,7 @@ Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...")
 
 **⚠️ 渲染不再使用 subagent，改为调用 Python 脚本，零 token 消耗。**
 
-**执行方式：** 对每个模块的 page_spec 文件，运行：
+**执行方式：** 所有模块的渲染命令**必须在同一响应中并行启动**（`run_in_background=true`），禁止逐个串行等待：
 
 ```bash
 python3 SKILL_DIR/scripts/render.py \
@@ -155,12 +157,14 @@ python3 SKILL_DIR/scripts/render.py \
   WORK_DIR/drawio_[模块英文名]_tmp.xml
 ```
 
-**Claude Code 示例：**
+**Claude Code 示例（并行启动）：**
 ```
-Bash("python3 /path/to/skills/prototype-generator/scripts/render.py /path/to/skills/prototype-generator/steps/step5-component-styles.md /path/to/work/page_spec_user.md /path/to/work/drawio_user_tmp.xml")
+# 所有 Bash 调用在同一响应中发出，并行执行
+Bash("python3 .../render.py ... page_spec_user.md ... drawio_user_tmp.xml", run_in_background=True)
+Bash("python3 .../render.py ... page_spec_order.md ... drawio_order_tmp.xml", run_in_background=True)
+Bash("python3 .../render.py ... page_spec_product.md ... drawio_product_tmp.xml", run_in_background=True)
+# 然后用 TaskOutput 等待所有完成
 ```
-
-**多模块并行：** 所有模块的 render 命令可以在同一响应中并行执行（各命令独立无依赖）。
 
 > 脚本自动完成：样式字典查找 → XML 生成 → 坐标 8 倍数校验修正 → 特殊字符转义。
 > 若 page_spec 中有未知 style_key，脚本会输出警告并降级为 `text_default`。

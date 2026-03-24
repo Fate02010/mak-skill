@@ -49,6 +49,20 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 
 ### 七维度审视
 
+> **⚡ 并行执行：** 维度 1-5 互相独立，**必须用 5 个并行 Agent 同时执行**，禁止逐个串行。维度 6（主流程闭环）和维度 7（模板合规）依赖前 5 个维度的修复结果，需等待 1-5 全部完成后再顺序执行。
+>
+> ```
+> # 同一响应中并行启动 5 个 Agent
+> Agent(prompt="审视维度一：界面完整性...", run_in_background=True)
+> Agent(prompt="审视维度二：字段/元素完整性...", run_in_background=True)
+> Agent(prompt="审视维度三：排版/视觉合理性...", run_in_background=True)
+> Agent(prompt="审视维度四：内容真实性...", run_in_background=True)
+> Agent(prompt="审视维度五：视觉结构...", run_in_background=True)
+> # 等待全部完成后，顺序执行维度 6、7
+> ```
+>
+> 每个 Agent 的 prompt 需包含：WORK_DIR 路径、OUTPUT_FORMAT、需求文档路径、验收规则文件路径、该维度的完整检查方法。Agent 发现问题后直接用 Edit 修复，输出修复报告。
+
 **维度一：界面完整性**
 
 对照"原型图清单"中每一行，逐一确认对应界面是否已生成：

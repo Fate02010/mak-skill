@@ -37,15 +37,17 @@ Read `SKILL_DIR/steps/step5-agent-prompt.md` 获取提示词模板，使用 HTML
 | `[页面名称N]` | 该模块负责的具体页面名 |
 | `[章节名]` | 需求文档中对应章节标题 |
 | `[风格]` / `[颜色]` | 实际设计风格和主色调 |
+| `[CRUD 页面清单]` | 从阶段 5-2 CRUD 完整性检查结果中提取，格式：`- [列表页名] → 需要：新增/编辑[对象名]弹窗/页面 + 删除确认弹窗`；若该模块无 CRUD 操作则填 `无 CRUD 操作` |
 | `[需求文档读取指令]` | **单文件模式**：`Read [WORK_DIR]/requirements/详细需求文档.md 中以下章节`<br>**分拆模式**：`先 Read [WORK_DIR]/requirements/详细需求文档_overview.md（获取用户角色 §2 和枚举值字典 §5.5）；再 Read [WORK_DIR]/requirements/详细需求文档_[模块中文名].md 中以下章节` |
 
 > **替换前必须自检**：搜索 prompt 文本中是否还有 `[` 字符——若有则先补全再发送。
 
-**Claude Code（Agent 工具）：**
+**Claude Code（Agent 工具）— 所有 Agent 必须在同一响应中并行启动：**
 
 ```
-Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...")
-Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...")
+# 禁止逐个启动等待，必须一次性并行发出
+Agent(prompt="...模块1 完整 prompt（所有占位符已替换）...", run_in_background=True)
+Agent(prompt="...模块2 完整 prompt（所有占位符已替换）...", run_in_background=True)
 ...  # 所有调用在同一响应中发出，并行执行
 ```
 
