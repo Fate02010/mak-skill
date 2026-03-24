@@ -140,30 +140,27 @@ Agent(prompt="...模块2 规格化 prompt（所有占位符已替换）...")
 
 ---
 
-## 阶段 5-3B：并行启动渲染 Agent
+## 阶段 5-3B：渲染（脚本自动化）
 
-所有规格化 Agent 完成后，确认每个模块的 `page_spec_[模块英文名].md` 均已写入 `WORK_DIR`，然后启动渲染 Agent。
+所有规格化 Agent 完成后，确认每个模块的 `page_spec_[模块英文名].md` 均已写入 `WORK_DIR`，然后用脚本渲染。
 
-Read `SKILL_DIR/steps/step5-render-agent-prompt.md` 获取渲染 Agent 提示词模板。
+**⚠️ 渲染不再使用 subagent，改为调用 Python 脚本，零 token 消耗。**
 
-**分模块规则：**
-- 一个模块的 page_spec → 一个渲染 Agent（与规格化 Agent 一一对应）
-- Codex：每个渲染 Task 对应一个 page_spec 文件（包含 ≤ 2 页的规格）
+**执行方式：** 对每个模块的 page_spec 文件，运行：
 
-**占位符替换清单：**
-
-| 占位符 | 替换为 |
-|--------|--------|
-| `[SKILL_DIR]` | `/Users/xxx/.claude/skills/prototype-generator` |
-| `[WORK_DIR]` | 用户确认的工作目录绝对路径 |
-| `[模块名]` / `[模块英文名]` | 当前模块的中文名 / 英文名 |
-
-**Claude Code：**
-
-```
-Agent(prompt="...模块1 渲染 prompt（所有占位符已替换）...")
-Agent(prompt="...模块2 渲染 prompt（所有占位符已替换）...")
-...  # 所有渲染 Agent 在同一响应中并行启动
+```bash
+python3 SKILL_DIR/scripts/render.py \
+  SKILL_DIR/steps/step5-component-styles.md \
+  WORK_DIR/page_spec_[模块英文名].md \
+  WORK_DIR/drawio_[模块英文名]_tmp.xml
 ```
 
-> Codex 环境请参考 `SKILL_DIR/steps/codex-rules.md`。
+**Claude Code 示例：**
+```
+Bash("python3 /path/to/skills/prototype-generator/scripts/render.py /path/to/skills/prototype-generator/steps/step5-component-styles.md /path/to/work/page_spec_user.md /path/to/work/drawio_user_tmp.xml")
+```
+
+**多模块并行：** 所有模块的 render 命令可以在同一响应中并行执行（各命令独立无依赖）。
+
+> 脚本自动完成：样式字典查找 → XML 生成 → 坐标 8 倍数校验修正 → 特殊字符转义。
+> 若 page_spec 中有未知 style_key，脚本会输出警告并降级为 `text_default`。

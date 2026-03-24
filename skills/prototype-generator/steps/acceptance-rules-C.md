@@ -139,24 +139,9 @@
 
 ### C5 — 坐标是否 8 倍数对齐
 
-**定义：** 所有 mxCell 的 x / y / width / height 值必须是 8 的倍数（唯一例外：divider height=1）。
+**自动化：** 由 `validate.py --fix` 自动检测和修复。
 
-**检查方法（draw.io 模式）：**
-
-1. 对每个 mxCell，提取 mxGeometry 的 x / y / width / height 值
-2. 跳过 height=1 的 divider 元素
-3. 检查每个值 % 8 == 0
-4. 判定：
-   - 0 个违规：✅ 完全对齐
-   - 1–5 个违规：⚠️ 少量未对齐，建议修复
-   - > 5 个违规：❌ 大量未对齐，严重影响视觉效果
-
-**常见违规值及修复：**
-- height=20 → 24，height=28 → 32，height=44 → 48
-- y=38 → 40，y=94 → 96，y=110 → 112
-- width=375 → 376，width=595 → 600
-
-**不通过修复：** 将违规值 round 到最近的 8 倍数。
+**定义：** 所有 mxCell 的 x / y / width / height 值必须是 8 的倍数（divider height=1 豁免）。
 
 ---
 

@@ -228,38 +228,14 @@
 - 显示产品名称和版本信息
 - 可视化展示页面跳转地图（箭头连线）
 
-**draw.io 模式** → 合并为单一文件 `prototypes/[产品名称].drawio`：
+**draw.io 模式** → 用脚本合并为单一文件 `prototypes/[产品名称].drawio`：
 
-1. **生成导航 diagram**：创建一个 `<diagram name="导航-页面跳转地图">`，规则如下：
-   - **按模块分组**：为每个功能模块创建一个 group 容器（style=`swimlane;startSize=30;fillColor=#f5f5f5;strokeColor=#bdbdbd;fontStyle=1;fontSize=13;`），所有页面节点的 `parent` 指向该 group 的 id，不得全部平铺在 `parent="1"`
-   - **模块 group 布局**：各 group 水平排列，间距 60px；group 内页面节点**垂直排列**，节点间距 24px；group 宽度 = 节点宽 + 40，高度 = 节点数 × (节点高+24) + 60
-   - **节点规格（必须够大，禁止文字溢出）**：每个页面矩形 **width=160，height=48**，圆角 style=`rounded=1;whiteSpace=wrap;html=1;fillColor=#e3f2fd;strokeColor=#1e88e5;fontSize=12;`；节点文字只写页面名称，不写"进入""跳转"等前缀
-   - **跳转连线标签（必须简短）**：连线上的 value 只写触发动作（如"点击下单"、"返回"、"提交"），**禁止**写"进入 目标页面名"——目标已由箭头指向表达，无需重复
-   - **边距与间距**：group 之间水平间距 ≥ 60px，避免箭头穿越 group 框；优先使用正交折线（orthogonalEdgeStyle）减少交叉
-   - **禁止**：页面节点全部 `parent="1"` 平铺（无分组）；箭头标签写"进入 XXX页"导致与节点文字重叠
-2. **合并前 ID 重新编号（必须执行，防止冲突）**：
-
-   每个 subagent 生成的 diagram 内部 mxCell id 都从 0 开始，直接合并会大量重复。合并前逐个 diagram 做 id 偏移：
-   - 导航 diagram：id 从 `0` 开始（保持 id=0、id=1 基础层）
-   - 第 1 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `10000`
-   - 第 2 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `20000`
-   - 第 N 个模块 diagram：所有 mxCell id（除 0、1）加偏移量 `N×10000`
-   > 偏移量使用 10000 而非 1000，确保单个模块 diagram 内有最多 9999 个元素时也不会产生 id 冲突。
-   - 同时更新该 diagram 内所有 `source`、`target`、`parent`（非 0、1）引用为偏移后的值
-
-3. **合并所有 diagram**：按模块顺序读取所有 `drawio_*_tmp.xml`，提取其中的 `<diagram>` 元素，连同导航 diagram 一起写入最终文件：
-
-```xml
-<mxfile host="app.diagrams.net" modified="[时间]" agent="Claude Code" version="24.0.0" type="device">
-  <!-- 第一个 sheet：导航跳转地图 -->
-  <diagram id="..." name="导航-页面跳转地图">...</diagram>
-  <!-- 后续按模块顺序，每个模块一个 sheet，模块内各页面用 swimlane 并排 -->
-  <diagram id="..." name="用户模块">...</diagram>
-  <diagram id="..." name="订单模块">...</diagram>
-  <diagram id="..." name="商品模块">...</diagram>
-  ...
-</mxfile>
+```bash
+python3 SKILL_DIR/scripts/merge.py \
+  WORK_DIR/prototypes/[产品名称].drawio \
+  "[产品名称]" \
+  WORK_DIR/drawio_*_tmp.xml
 ```
 
-4. **清理临时文件**：合并完成后删除所有 `drawio_*_tmp.xml` 文件
-5. 在文件第一个 diagram（导航图）的标题区域注明产品名称、生成时间、页面总数
+> 脚本自动完成：ID 偏移（每模块 +N×10000）→ parent/source/target 引用更新 → 导航图生成 → mxfile 包裹 → 临时文件清理。
+> 如需保留临时文件用于调试，加 `--keep-tmp` 参数。
