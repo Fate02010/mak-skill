@@ -94,16 +94,21 @@
 - page_id
 - page_name
 - page_type
+- page_archetype
 - object_name
 - role
 - purpose
 - is_nav_page
 - needs_crud
+- nav_context
 - fields
 - table_columns
 - status_values
 - actions
 - jump_targets
+- business_rules
+- table_behaviors
+- states
 - sections
 
 硬规则：
@@ -111,8 +116,13 @@
 - 表单/详情页字段必须是真实业务字段，不得写“字段1”“示例数据”
 - status_values 至少 3 个真实值
 - 若页面有新增/编辑/删除操作，则 `needs_crud=true`
+- 若需求文档已写明页面原型类型，必须原样输出到 `page_archetype`；未写明时也要按 `drawio-spec.md` 先判型
 - 若需求文档明确了左侧菜单或 TabBar 归属，必须据此判断 `is_nav_page` 和页面模块归属，不能自行改挂到其他导航下
+- 若需求文档明确了导航路径，必须写入 `nav_context`
 - 若需求文档明确了权限、数据范围、按钮前置条件或关键业务事件，必须反映到 `actions`、`status_values`、`jump_targets` 的选择上
+- 若需求文档明确了分页、排序、导出、数据范围，必须写入 `table_behaviors`
+- 若需求文档明确了空态/加载态/错误态/状态流转，必须写入 `states`
+- 若需求文档明确了字段校验、前置条件、业务限制，必须写入 `business_rules`；不得只留在自然语言理解里
 - 不要手写弹窗页面，脚本会自动补
 
 ## 第五步：写入 JSON
@@ -147,6 +157,8 @@ JSON 要求：
       "purpose": "查询并维护用户",
       "is_nav_page": false,
       "needs_crud": true,
+      "page_archetype": "list_table",
+      "nav_context": "后台-用户与权限 / 用户管理",
       "fields": [
         {"name": "用户名", "control": "input", "required": true, "validation": "2-20位"},
         {"name": "手机号", "control": "input", "required": false, "validation": "手机号格式"},
@@ -154,6 +166,9 @@ JSON 要求：
       ],
       "table_columns": ["用户名", "手机号", "状态", "创建时间"],
       "status_values": ["启用", "停用", "待审核"],
+      "business_rules": ["仅系统管理员可停用用户", "默认按创建时间倒序"],
+      "table_behaviors": {"page_size": "20条/页", "default_sort": "创建时间倒序"},
+      "states": {"empty": "暂无用户时显示空态引导新增", "loading": "查询中显示骨架屏", "error": "查询失败时可重试"},
       "actions": [
         {"name": "查看详情", "target": "用户详情", "kind": "secondary"}
       ],

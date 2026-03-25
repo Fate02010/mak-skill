@@ -96,6 +96,21 @@ def _is_nav_group_swimlane(children: list[ET.Element]) -> bool:
     return node_like == len(children)
 
 
+def _is_auth_like_page(name: str) -> bool:
+    text = str(name or "")
+    return any(token in text for token in ("登录", "注册", "找回密码", "重置密码", "验证码"))
+
+
+def _is_overlay_like_page(name: str) -> bool:
+    text = str(name or "")
+    return any(token in text for token in ("弹窗", "抽屉", "确认", "提示"))
+
+
+def _is_detail_like_page(name: str) -> bool:
+    text = str(name or "")
+    return "详情" in text and "列表" not in text
+
+
 def _is_in_ui_area(cell: ET.Element, threshold: float) -> bool:
     """判断 mxCell 是否位于 UI 区（x < 标注区起点）。"""
     geo = _get_geometry(cell)
@@ -463,16 +478,37 @@ def check_c8(doc: DrawioFile) -> RuleResult:
         name = doc.swimlane_name(sl)
         children = doc.swimlane_children.get(sid, [])
 
-        # 检查是否为含数据行的页面
-        row_count = 0
-        has_data_pattern = False
+        if _is_auth_like_page(name) or _is_overlay_like_page(name) or _is_detail_like_page(name):
+            continue
+
+        table_row_count = 0
+        list_row_count = 0
+        card_count = 0
+        has_table_header = False
+        has_pagination = False
         for c in children:
             style = c.get("style", "")
-            if "table_row" in style or "card" in style:
-                has_data_pattern = True
-                row_count += 1
+            if "table_row" in style:
+                table_row_count += 1
+            if "list_row" in style:
+                list_row_count += 1
+            if "card" in style:
+                card_count += 1
+            if "table_header" in style:
+                has_table_header = True
+            if "pagination" in style:
+                has_pagination = True
 
-        if has_data_pattern and row_count < 3:
+        row_count = 0
+        if has_table_header or has_pagination or table_row_count > 0:
+            row_count = table_row_count
+        elif list_row_count > 0:
+            row_count = list_row_count
+        elif card_count >= 2:
+            # 卡片流页面至少应有多张卡片，单卡页不视为“数据行不足”。
+            row_count = card_count
+
+        if row_count and row_count < 3:
             if worst != "FAIL":
                 worst = "WARN"
             warn_count += 1
@@ -789,6 +825,52 @@ def check_c13(doc: DrawioFile) -> RuleResult:
     return RuleResult("C13", "页面类型降级", worst, count, details)
 
 
+# ---- C14 标注信息密度 ---------------------------------------------------
+
+def check_c14(doc: DrawioFile) -> RuleResult:
+    worst = "PASS"
+    details: list = []
+    count = 0
+
+    rule_tokens = (
+        "规则", "校验", "排序", "分页", "导出", "状态", "空态", "加载态", "错误态",
+        "数据范围", "前置", "仅", "必须", "范围", "可选值",
+    )
+
+    for sl in doc.swimlanes:
+        sid = sl.get("id", "?")
+        name = doc.swimlane_name(sl)
+        children = doc.swimlane_children.get(sid, [])
+        if _is_nav_group_swimlane(children):
+            continue
+        if "删除确认" in name:
+            continue
+
+        threshold = _annotation_x_threshold(doc.swimlane_width(sl))
+        annotation_texts = []
+        for cell in children:
+            if _is_in_ui_area(cell, threshold):
+                continue
+            value = re.sub(r"<[^>]+>", "", cell.get("value", "")).strip()
+            if value:
+                annotation_texts.append(value)
+
+        if not annotation_texts:
+            continue
+
+        combined = "\n".join(annotation_texts)
+        has_summary = "页面：" in combined and "用途：" in combined
+        has_jump = "跳转" in combined or "→" in combined
+        rule_hit_count = sum(1 for token in rule_tokens if token in combined)
+
+        if has_summary and has_jump and rule_hit_count < 2:
+            worst = "WARN"
+            count += 1
+            details.append(f"{name}: 标注区缺少业务规则/状态边界，当前更像页面摘要")
+
+    return RuleResult("C14", "标注信息密度", worst, count, details)
+
+
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
@@ -823,6 +905,7 @@ def run_checks(path: str, fix: bool = False) -> dict:
         check_c11(doc),
         check_c12(doc),
         check_c13(doc),
+        check_c14(doc),
     ]
 
     summary = {"fail": 0, "warn": 0, "pass": 0}

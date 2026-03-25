@@ -61,6 +61,22 @@ WEB_ANN_W = 216
 WEB_SWIMLANE_W = 1680
 WEB_SWIMLANE_H = 960
 
+ALLOWED_ARCHETYPES = {
+    "dashboard",
+    "list_table",
+    "detail_kv",
+    "form_page",
+    "modal_form",
+    "drawer_permission",
+    "dispatch_board",
+    "tree_manage",
+    "content_manage",
+    "audit_log",
+    "mobile_home",
+    "profile",
+    "login",
+}
+
 
 def snap8(value: int) -> int:
     if value == 1:
@@ -83,6 +99,14 @@ def normalize_list(values) -> list[str]:
     if isinstance(values, list):
         return [str(v).strip() for v in values if str(v).strip()]
     return [str(values).strip()] if str(values).strip() else []
+
+
+def first_non_empty(*values) -> str:
+    for value in values:
+        text = str(value or "").strip()
+        if text:
+            return text
+    return ""
 
 
 def tag_style_for_status(text: str) -> str:
@@ -285,7 +309,13 @@ class PageSpecBuilder:
         )
         ctx.page = page
 
-        if page_type == "web_list":
+        archetype = self._page_archetype(page)
+
+        if archetype == "drawer_permission":
+            self._build_drawer_permission(ctx)
+        elif archetype == "tree_manage":
+            self._build_tree_manage(ctx)
+        elif page_type == "web_list":
             self._build_web_list(ctx)
         elif page_type == "mobile_list":
             self._build_mobile_list(ctx)
@@ -309,25 +339,188 @@ class PageSpecBuilder:
         if page_type in {"web_list", "mobile_list"} and as_bool(page.get("needs_crud")):
             self._build_modal_pair(page, lane_type)
 
-    def _annotation_value(self, page: dict) -> str:
-        targets = normalize_list(page.get("jump_targets"))
-        jump_text = " / ".join(targets[:4]) if targets else "本模块内流转"
+    def _page_archetype(self, page: dict) -> str:
+        explicit = str(page.get("page_archetype", "")).strip()
+        if explicit in ALLOWED_ARCHETYPES:
+            return explicit
+
+        name = str(page.get("page_name", "")).strip()
+        page_type = str(page.get("page_type", "")).strip()
+        if "登录" in name or page_type == "login":
+            return "login"
+        if "工作台" in name or ("首页" in name and page_type == "dashboard"):
+            return "dashboard"
+        if "授权" in name or ("权限" in name and "抽屉" in name):
+            return "drawer_permission"
+        if any(token in name for token in ("发货", "调度", "路线", "司机")):
+            return "dispatch_board"
+        if any(token in name for token in ("分类", "组织", "部门", "岗位", "树")):
+            return "tree_manage"
+        if any(token in name for token in ("日志", "审计", "反馈记录")):
+            return "audit_log"
+        if page_type == "dashboard":
+            return "dashboard"
+        if page_type == "web_detail":
+            return "detail_kv"
+        if page_type == "web_form":
+            return "form_page"
+        if page_type == "mobile_home":
+            return "mobile_home"
+        if page_type == "profile":
+            return "profile"
+        if page_type == "login":
+            return "login"
+        return "list_table"
+
+    def _nav_context(self, page: dict) -> str:
+        explicit = str(page.get("nav_context", "")).strip()
+        if explicit:
+            return explicit
+        page_type = str(page.get("page_type", "")).strip()
+        if page_type.startswith("web") or page_type == "dashboard":
+            return f"后台 / {self.module_name}"
+        if page_type in {"mobile_list", "mobile_form", "mobile_detail", "mobile_home", "profile"}:
+            return "小程序主导航"
+        return "独立页"
+
+    def _table_behavior_lines(self, page: dict) -> list[str]:
+        value = page.get("table_behaviors")
+        lines: list[str] = []
+        if isinstance(value, dict):
+            pairs = [
+                ("default_sort", "排序"),
+                ("page_size", "分页"),
+                ("export_scope", "导出"),
+                ("data_scope", "数据范围"),
+                ("batch_actions", "批量操作"),
+            ]
+            for key, label in pairs:
+                text = first_non_empty(value.get(key))
+                if text:
+                    lines.append(f"{label}：{text}")
+        else:
+            for item in normalize_list(value):
+                lines.append(item)
+        return lines[:4]
+
+    def _business_rules(self, page: dict) -> list[str]:
+        rules: list[str] = []
+
+        def add_rule(text: str):
+            cleaned = str(text or "").strip()
+            if cleaned and cleaned not in rules:
+                rules.append(cleaned)
+
+        for item in normalize_list(page.get("business_rules")):
+            add_rule(item)
+
+        for item in self._table_behavior_lines(page):
+            add_rule(item)
+
+        for field in self._field_rows(page):
+            name = str(field.get("name", "")).strip()
+            validation = str(field.get("validation", "")).strip()
+            if name and validation and validation not in {"必填", "选填", "-", "无"}:
+                add_rule(f"{name}：{validation}")
+            options = normalize_list(field.get("options"))
+            if name and len(options) >= 2:
+                add_rule(f"{name}：{' / '.join(options[:4])}")
+
+        return rules[:5]
+
+    def _state_lines(self, page: dict) -> list[str]:
+        lines: list[str] = []
+        states = page.get("states")
+        if isinstance(states, dict):
+            for key, label in (
+                ("empty", "空态"),
+                ("loading", "加载态"),
+                ("error", "错误态"),
+                ("transition", "状态流转"),
+                ("flow", "状态流转"),
+            ):
+                text = first_non_empty(states.get(key))
+                if text:
+                    lines.append(f"{label}：{text}")
+        elif isinstance(states, list):
+            for item in normalize_list(states)[:3]:
+                lines.append(item)
+
+        status_values = self._status_values(page)
+        if status_values:
+            lines.insert(0, "状态：" + " / ".join(status_values[:5]))
+        return lines[:4]
+
+    def _jump_lines(self, page: dict) -> list[str]:
+        lines: list[str] = []
+        actions = page.get("actions")
+        if isinstance(actions, list):
+            for action in actions[:3]:
+                name = str(action.get("name", "")).strip()
+                target = str(action.get("target", "")).strip()
+                if name and target:
+                    lines.append(f"{name} → {target}")
+                elif name:
+                    lines.append(name)
+
+        for target in normalize_list(page.get("jump_targets"))[:4]:
+            if target not in lines:
+                lines.append(target)
+        return lines[:4]
+
+    def _annotation_blocks(self, page: dict) -> list[str]:
+        page_name = str(page.get("page_name", "页面")).strip()
         purpose = str(page.get("purpose", "承载核心业务操作")).strip()
         role = str(page.get("role", "业务角色")).strip()
-        main_action = ""
         actions = page.get("actions")
+        main_action = ""
         if isinstance(actions, list) and actions:
             main_action = str(actions[0].get("name", "")).strip()
         if not main_action:
             main_action = "查看与操作"
-        page_name = str(page.get("page_name", "页面")).strip()
-        return (
-            f"页面：{page_name}&#xa;"
-            f"用途：{purpose}&#xa;"
-            f"角色：{role}&#xa;"
-            f"主操作：{main_action}&#xa;"
-            f"跳转去向：{jump_text}"
-        )
+
+        blocks = [
+            (
+                f"页面摘要&#xa;"
+                f"页面：{page_name}&#xa;"
+                f"导航：{self._nav_context(page)}&#xa;"
+                f"用途：{purpose}&#xa;"
+                f"角色：{role}&#xa;"
+                f"主操作：{main_action}"
+            )
+        ]
+
+        jump_lines = self._jump_lines(page)
+        if jump_lines:
+            blocks.append("跳转说明&#xa;" + "&#xa;".join(jump_lines))
+
+        business_rules = self._business_rules(page)
+        if business_rules:
+            blocks.append("业务规则&#xa;" + "&#xa;".join(business_rules))
+
+        state_lines = self._state_lines(page)
+        if state_lines:
+            blocks.append("状态与边界&#xa;" + "&#xa;".join(state_lines))
+
+        return blocks
+
+    def _annotation_height(self, value: str) -> int:
+        line_count = max(1, value.count("&#xa;") + 1)
+        return snap8(max(88, min(176, 24 + line_count * 18)))
+
+    def _add_annotations(self, ctx: PageContext):
+        y = 40
+        for value in self._annotation_blocks(ctx.page):
+            height = self._annotation_height(value)
+            self.add_element(ctx.swimlane_id, "annotation_card", value, ctx.ann_x, y, ctx.ann_w, height, "annotation_card")
+            y += height + 16
+
+    def _inline_hints(self, page: dict, limit: int = 2) -> list[str]:
+        hints = []
+        for item in self._table_behavior_lines(page) + self._business_rules(page):
+            if item not in hints:
+                hints.append(item)
+        return hints[:limit]
 
     def _field_rows(self, page: dict) -> list[dict]:
         rows = page.get("fields")
@@ -382,8 +575,12 @@ class PageSpecBuilder:
             x_positions.append(x)
             x += width
 
-        header_y = 224
-        row_start_y = 272
+        inline_hints = self._inline_hints(page)
+        for idx, hint in enumerate(inline_hints):
+            self.add_element(swimlane, "text_hint", hint, 24 + idx * 440, 224, 408, 20, "text_hint")
+
+        header_y = 256
+        row_start_y = 304
         for idx, name in enumerate(columns):
             self.add_element(swimlane, "table_header", name, x_positions[idx], header_y, widths[idx], 40, "table_header")
         self.add_element(swimlane, "table_header", "操作", 1296, header_y, 120, 40, "table_header")
@@ -406,7 +603,7 @@ class PageSpecBuilder:
 
         pagination_y = row_start_y + 5 * 48 + 24
         self.add_element(swimlane, "pagination", "共 128 条 第 1/6 页 上一页 下一页", 24, pagination_y, 344, 40, "pagination")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), WEB_ANN_X, 40, WEB_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _column_widths(self, columns: list[str]) -> list[int]:
         available = 1272
@@ -497,7 +694,7 @@ class PageSpecBuilder:
 
         if as_bool(page.get("is_nav_page")):
             self.add_element(swimlane, "bottom_bar", "首页 · 列表 · 消息 · 我的", 0, 800, 376, 56, "bottom_bar")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), MOBILE_ANN_X, 40, MOBILE_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_web_form(self, ctx: PageContext):
         page = ctx.page
@@ -532,7 +729,7 @@ class PageSpecBuilder:
 
         self.add_element(swimlane, "btn_primary", "提交", 152, y + 16, 120, 48, "btn_primary", "→ 提交后返回列表")
         self.add_element(swimlane, "btn_secondary", "取消", 288, y + 16, 88, 48, "btn_secondary", "→ 返回来源页")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), WEB_ANN_X, 40, WEB_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_mobile_form(self, ctx: PageContext):
         page = ctx.page
@@ -562,7 +759,7 @@ class PageSpecBuilder:
             y += 104 if control == "textarea" else 64
 
         self.add_element(swimlane, "btn_primary", "提交", 16, min(y + 16, 736), 344, 48, "btn_primary", "→ 提交成功后返回")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), MOBILE_ANN_X, 40, MOBILE_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_mobile_detail(self, ctx: PageContext):
         page = ctx.page
@@ -624,40 +821,79 @@ class PageSpecBuilder:
             self.add_element(swimlane, "btn_secondary", "返回", 16, 736, 104, 48, "btn_secondary", "→ 返回来源页")
             self.add_element(swimlane, "btn_primary", primary_label, 248, 736, 112, 48, "btn_primary", f"→ {primary_label}")
 
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), MOBILE_ANN_X, 40, MOBILE_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_web_detail(self, ctx: PageContext):
         page = ctx.page
         swimlane = ctx.swimlane_id
         page_name = str(page.get("page_name", "详情页")).strip()
         fields = self._field_rows(page)
+        actions = page.get("actions") if isinstance(page.get("actions"), list) else []
 
         self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
         self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
         self.add_element(swimlane, "breadcrumb", f"首页 / {self.module_name} / {page_name}", 24, 112, 440, 24, "breadcrumb")
         self.add_element(swimlane, "btn_secondary", "返回列表", 1296, 104, 120, 40, "btn_secondary", "→ 返回来源页")
-        self.add_element(swimlane, "card", "", 24, 160, 1392, 448, "card")
-        self.add_element(swimlane, "text_subtitle", "基础信息", 48, 184, 200, 24, "text_subtitle")
+        status_values = self._status_values(page)
+        current_status = status_values[0]
 
-        row_y = 232
-        for idx, field in enumerate(fields[:8]):
-            name = str(field.get("name", "字段")).strip() or "字段"
-            base_x = 48 if idx % 2 == 0 else 480
-            value_x = 176 if idx % 2 == 0 else 608
-            if idx and idx % 2 == 0:
-                row_y += 40
-            self.add_element(swimlane, "label", name, base_x, row_y, 120, 32, "label")
-            sample = placeholder_value(name, idx + 1)
-            self.add_element(swimlane, "text_value", sample, value_x, row_y, 280, 32, "text_value")
+        self.add_element(swimlane, "card", "", 24, 160, 1392, 104, "card")
+        self.add_element(swimlane, "text_subtitle", "状态与处理", 48, 184, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 48, 216, 1008, 1, "divider")
+        self.add_element(swimlane, "label", "当前状态", 48, 224, 88, 24, "label")
+        self.add_element(swimlane, "tag", current_status, 152, 224, 88, 24, tag_style_for_status(current_status))
+        if len(status_values) > 1:
+            self.add_element(swimlane, "text_hint", "状态流转：" + " → ".join(status_values[:4]), 280, 224, 520, 24, "text_hint")
 
-        status_y = row_y + 56
-        status = self._status_values(page)[0]
-        self.add_element(swimlane, "label", "当前状态", 48, status_y, 120, 32, "label")
-        self.add_element(swimlane, "tag", status, 176, status_y, 80, 24, tag_style_for_status(status))
-        self.add_element(swimlane, "btn_primary", "编辑", 48, status_y + 56, 120, 48, "btn_primary", f"→ 编辑{page_name}")
+        primary_action = str(actions[0].get("name", "")).strip() if actions else "编辑"
+        secondary_action = str(actions[1].get("name", "")).strip() if len(actions) > 1 else "备注"
+        self.add_element(swimlane, "btn_primary", primary_action or "编辑", 1088, 208, 136, 40, "btn_primary", f"→ {primary_action or '编辑'}")
+        self.add_element(swimlane, "btn_secondary", secondary_action or "备注", 1240, 208, 88, 40, "btn_secondary", f"→ {secondary_action or '备注'}")
         object_name = str(page.get("object_name", page_name)).strip() or page_name
-        self.add_element(swimlane, "btn_danger_filled", "删除", 184, status_y + 56, 120, 48, "btn_danger_filled", f"→ {delete_modal_name(object_name)}")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), WEB_ANN_X, 40, WEB_ANN_W, 120, "annotation_card")
+        self.add_element(swimlane, "btn_danger_filled", "删除", 1344, 208, 72, 40, "btn_danger_filled", f"→ {delete_modal_name(object_name)}")
+
+        self.add_element(swimlane, "card", "", 24, 288, 672, 272, "card")
+        self.add_element(swimlane, "text_subtitle", "基础信息", 48, 312, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 48, 344, 624, 1, "divider")
+        row_y = 360
+        for idx, field in enumerate(fields[:6]):
+            name = str(field.get("name", "字段")).strip() or "字段"
+            base_x = 48 if idx % 2 == 0 else 360
+            value_x = 152 if idx % 2 == 0 else 464
+            if idx and idx % 2 == 0:
+                row_y += 48
+            self.add_element(swimlane, "label", name, base_x, row_y, 88, 24, "label")
+            self.add_element(swimlane, "text_value", placeholder_value(name, idx + 1), value_x, row_y, 176, 24, "text_value")
+
+        self.add_element(swimlane, "card", "", 720, 288, 696, 272, "card")
+        self.add_element(swimlane, "text_subtitle", "业务信息", 744, 312, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 744, 344, 648, 1, "divider")
+        business_fields = fields[6:12] or fields[:6]
+        row_y = 360
+        for idx, field in enumerate(business_fields[:6]):
+            name = str(field.get("name", "字段")).strip() or "字段"
+            base_x = 744 if idx % 2 == 0 else 1064
+            value_x = 848 if idx % 2 == 0 else 1168
+            if idx and idx % 2 == 0:
+                row_y += 48
+            self.add_element(swimlane, "label", name, base_x, row_y, 88, 24, "label")
+            self.add_element(swimlane, "text_value", placeholder_value(name, idx + 7), value_x, row_y, 176, 24, "text_value")
+
+        self.add_element(swimlane, "card", "", 24, 592, 1392, 248, "card")
+        self.add_element(swimlane, "text_subtitle", "处理记录", 48, 616, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 48, 648, 1344, 1, "divider")
+        record_labels = ["提交申请", "系统审核", "人工处理"]
+        for idx, label in enumerate(record_labels):
+            y = 664 + idx * 48
+            self.add_element(swimlane, "icon", str(idx + 1), 48, y, 24, 24, "icon")
+            self.add_element(swimlane, "text_body", label, 88, y, 120, 24, "text_body")
+            self.add_element(swimlane, "text_hint", f"2026-03-{12 + idx:02d} 10:3{idx}", 224, y, 176, 24, "text_hint")
+            self.add_element(swimlane, "text_hint", "处理人：" + placeholder_value("处理人", idx + 1), 448, y, 176, 24, "text_hint")
+            self.add_element(swimlane, "text_hint", "结果：" + status_values[idx % len(status_values)], 720, y, 176, 24, "text_hint")
+            if idx < len(record_labels) - 1:
+                self.add_element(swimlane, "divider", "", 88, y + 32, 1240, 1, "divider")
+
+        self._add_annotations(ctx)
 
     def _build_login(self, ctx: PageContext):
         page = ctx.page
@@ -676,7 +912,7 @@ class PageSpecBuilder:
         self.add_element(swimlane, "btn_primary", "登录", 48, 528, 280, 48, "btn_primary", "→ 登录成功后进入首页")
         self.add_element(swimlane, "text_link", "忘记密码？", 96, 592, 96, 24, "text_link", "→ 忘记密码")
         self.add_element(swimlane, "text_link", "注册账号", 208, 592, 96, 24, "text_link", "→ 注册")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), MOBILE_ANN_X, 40, MOBILE_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_dashboard(self, ctx: PageContext):
         page = ctx.page
@@ -700,7 +936,7 @@ class PageSpecBuilder:
         self.add_element(swimlane, "text_subtitle", "快捷入口", 752, 344, 120, 24, "text_subtitle")
         for idx, label in enumerate(["用户管理", "订单处理", "营销活动", "报表导出"]):
             self.add_element(swimlane, "btn_secondary", label, 752 + (idx % 2) * 184, 392 + (idx // 2) * 72, 160, 48, "btn_secondary", f"→ {label}")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), WEB_ANN_X, 40, WEB_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_mobile_home(self, ctx: PageContext):
         page = ctx.page
@@ -725,7 +961,7 @@ class PageSpecBuilder:
             self.add_element(swimlane, "text_body", f"商品{idx + 1}", x + 16, y + 88, 80, 24, "text_body")
             self.add_element(swimlane, "text_price", f"¥{39 + idx * 10}", x + 16, y + 112, 72, 24, "text_price")
         self.add_element(swimlane, "bottom_bar", "首页 · 分类 · 购物车 · 我的", 0, 800, 376, 56, "bottom_bar")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), MOBILE_ANN_X, 40, MOBILE_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
 
     def _build_profile(self, ctx: PageContext):
         page = ctx.page
@@ -742,7 +978,118 @@ class PageSpecBuilder:
             y = 208 + idx * 64
             self.add_element(swimlane, "list_row", label, 16, y, 344, 48, "list_row")
         self.add_element(swimlane, "bottom_bar", "首页 · 分类 · 购物车 · 我的", 0, 800, 376, 56, "bottom_bar")
-        self.add_element(swimlane, "annotation_card", self._annotation_value(page), MOBILE_ANN_X, 40, MOBILE_ANN_W, 120, "annotation_card")
+        self._add_annotations(ctx)
+
+    def _build_drawer_permission(self, ctx: PageContext):
+        page = ctx.page
+        swimlane = ctx.swimlane_id
+        page_name = str(page.get("page_name", "授权抽屉")).strip()
+        role = str(page.get("role", "系统管理员")).strip() or "系统管理员"
+        status_values = self._status_values(page)
+        business_rules = self._business_rules(page)
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
+        self.add_element(swimlane, "breadcrumb", f"首页 / {self.module_name} / {page_name}", 24, 112, 440, 24, "breadcrumb")
+
+        self.add_element(swimlane, "card", "", 24, 160, 496, 680, "card")
+        self.add_element(swimlane, "text_subtitle", "角色列表", 48, 184, 120, 24, "text_subtitle")
+        role_names = ["运营管理员", "门店经理", "财务人员", "客服主管"]
+        for idx, label in enumerate(role_names):
+            y = 232 + idx * 72
+            self.add_element(swimlane, "list_row", label, 48, y, 432, 48, "list_row")
+            tag_text = "当前编辑" if idx == 0 else "可授权"
+            self.add_element(swimlane, "tag", tag_text, 376, y + 12, 80, 24, "tag_info" if idx == 0 else "tag_pending")
+
+        self.add_element(swimlane, "card", "", 544, 160, 872, 680, "card")
+        self.add_element(swimlane, "text_subtitle", page_name, 568, 184, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "text_hint", f"授权角色：{role}", 568, 216, 240, 24, "text_hint")
+        self.add_element(swimlane, "tag", status_values[0], 1296, 184, 88, 24, tag_style_for_status(status_values[0]))
+
+        self.add_element(swimlane, "card", "", 568, 256, 360, 456, "card")
+        self.add_element(swimlane, "text_subtitle", "菜单权限树", 592, 280, 120, 24, "text_subtitle")
+        menu_rows = [
+            "☑ 工作台",
+            "☑ 会员营销",
+            "☑ 订单履约",
+            "☐ 财务结算",
+            "☑ 权限审计",
+            "  └ ☑ 角色管理",
+            "  └ ☑ 管理员管理",
+        ]
+        for idx, label in enumerate(menu_rows):
+            self.add_element(swimlane, "list_row", label, 592, 328 + idx * 48, 304, 40, "list_row")
+
+        self.add_element(swimlane, "card", "", 952, 256, 432, 192, "card")
+        self.add_element(swimlane, "text_subtitle", "权限分组摘要", 976, 280, 120, 24, "text_subtitle")
+        summary_lines = [
+            "可见模块：5 个",
+            "高风险操作：删除 / 导出",
+            "数据范围：所属门店",
+        ]
+        for idx, text in enumerate(summary_lines):
+            self.add_element(swimlane, "text_body", text, 976, 328 + idx * 32, 248, 24, "text_body")
+
+        self.add_element(swimlane, "card", "", 952, 472, 432, 240, "card")
+        self.add_element(swimlane, "text_subtitle", "数据权限", 976, 496, 120, 24, "text_subtitle")
+        data_scope_rows = [
+            "● 仅本人创建数据",
+            "○ 所属门店数据",
+            "○ 所属组织全部数据",
+            "○ 全部数据",
+        ]
+        for idx, text in enumerate(data_scope_rows):
+            self.add_element(swimlane, "list_row", text, 976, 544 + idx * 40, 344, 32, "list_row")
+
+        if business_rules:
+            self.add_element(swimlane, "text_hint", business_rules[0], 568, 736, 520, 24, "text_hint")
+        self.add_element(swimlane, "btn_secondary", "取消", 1168, 776, 88, 48, "btn_secondary", "→ 返回角色列表")
+        self.add_element(swimlane, "btn_primary", "保存授权", 1272, 776, 112, 48, "btn_primary", "→ 保存角色权限")
+        self._add_annotations(ctx)
+
+    def _build_tree_manage(self, ctx: PageContext):
+        page = ctx.page
+        swimlane = ctx.swimlane_id
+        page_name = str(page.get("page_name", "树管理页")).strip()
+        object_name = str(page.get("object_name", "对象")).strip() or "对象"
+        statuses = self._status_values(page)
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
+        self.add_element(swimlane, "breadcrumb", f"首页 / {self.module_name} / {page_name}", 24, 112, 440, 24, "breadcrumb")
+        self.add_element(swimlane, "card", "", 24, 160, 328, 680, "card")
+        self.add_element(swimlane, "text_subtitle", f"{object_name}层级", 48, 184, 120, 24, "text_subtitle")
+        tree_rows = ["▾ 总部", "  ▸ 华东大区", "  ▾ 华南大区", "    • 广州门店", "    • 深圳门店"]
+        for idx, label in enumerate(tree_rows):
+            self.add_element(swimlane, "list_row", label, 48, 232 + idx * 56, 272, 40, "list_row")
+
+        self.add_element(swimlane, "card", "", 376, 160, 1040, 680, "card")
+        self.add_element(swimlane, "input", f"搜索{object_name}", 400, 184, 224, 48, "input")
+        self.add_element(swimlane, "select", "状态 ▼", 640, 184, 136, 48, "select")
+        self.add_element(swimlane, "btn_primary", f"新增{object_name}", 1264, 184, 128, 48, "btn_primary", f"→ 新增/编辑{object_name}弹窗")
+
+        columns = ["名称", "上级", "负责人", "状态", "更新时间"]
+        widths = [224, 200, 176, 144, 216]
+        x_positions = [400, 624, 824, 1000, 1144]
+        for idx, name in enumerate(columns):
+            self.add_element(swimlane, "table_header", name, x_positions[idx], 256, widths[idx], 40, "table_header")
+        self.add_element(swimlane, "table_header", "操作", 1360, 256, 56, 40, "table_header")
+
+        for row_idx in range(4):
+            y = 304 + row_idx * 48
+            row_style = "table_row_odd" if row_idx % 2 == 0 else "table_row_even"
+            values = [
+                f"{object_name}{row_idx + 1}",
+                "华南大区" if row_idx % 2 == 0 else "总部",
+                placeholder_value("负责人", row_idx + 1),
+                statuses[row_idx % len(statuses)],
+                placeholder_value("更新时间", row_idx + 1),
+            ]
+            for col_idx, value in enumerate(values):
+                self.add_element(swimlane, "table_cell", value, x_positions[col_idx], y, widths[col_idx], 48, row_style)
+            self.add_element(swimlane, "btn_sm", "编辑", 1360, y + 8, 48, 32, "btn_sm", f"→ 新增/编辑{object_name}弹窗")
+
+        self._add_annotations(ctx)
 
     def _build_modal_pair(self, page: dict, platform: str):
         object_name = str(page.get("object_name", "对象")).strip() or "对象"
@@ -833,6 +1180,9 @@ def validate_model(model: dict):
             raise ValueError(f"pages[{idx}] 缺少 page_name")
         if not page_type:
             raise ValueError(f"pages[{idx}] 缺少 page_type")
+        page_archetype = str(page.get("page_archetype", "")).strip()
+        if page_archetype and page_archetype not in ALLOWED_ARCHETYPES:
+            raise ValueError(f"pages[{idx}] page_archetype 非法: {page_archetype}")
 
 
 def to_markdown(module_name: str, swimlanes: list[dict[str, str]], elements: list[dict[str, str]]) -> str:
