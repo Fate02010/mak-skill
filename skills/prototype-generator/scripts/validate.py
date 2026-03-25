@@ -739,7 +739,11 @@ def _classify_page_name(name: str) -> str:
         return "confirm_dialog"
     if _is_auth_like_page(name):
         return "login"
-    if "工作台" in name or "dashboard" in name.lower() or "后台首页" in name:
+    dashboard_tokens = ("工作台", "dashboard", "后台首页", "分析", "统计", "报表", "总览", "概览")
+    if not _is_overlay_like_page(name) and any(
+        token in name.lower() if token == "dashboard" else token in name
+        for token in dashboard_tokens
+    ):
         return "dashboard"
     if "详情" in name or (("设置" in name or "处理" in name) and "列表" not in name and "弹窗" not in name):
         return "detail_kv"

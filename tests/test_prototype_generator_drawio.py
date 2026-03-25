@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -26,6 +27,7 @@ BUILD_PAGE_SPEC = _load_module("build_page_spec_test", SCRIPTS_DIR / "build_page
 RENDER = _load_module("render_test", SCRIPTS_DIR / "render.py")
 VALIDATE = _load_module("validate_test", SCRIPTS_DIR / "validate.py")
 MERGE = _load_module("merge_test", SCRIPTS_DIR / "merge.py")
+RUN_PIPELINE = SCRIPTS_DIR / "run_drawio_pipeline.py"
 
 
 def _build_page_spec_markdown(model: dict) -> str:
@@ -283,6 +285,133 @@ def _employee_list_model() -> dict:
     }
 
 
+def _employee_crud_model() -> dict:
+    model = _employee_list_model()
+    model["pages"][0]["needs_crud"] = True
+    return model
+
+
+def _employee_detail_page() -> dict:
+    return {
+        "page_id": "employee_detail",
+        "page_name": "员工详情页",
+        "page_type": "web_detail",
+        "page_archetype": "detail_kv",
+        "object_name": "员工",
+        "role": "系统管理员",
+        "purpose": "查看员工账号与岗位状态",
+        "fields": [
+            {"name": "姓名", "control": "input", "required": True, "validation": ""},
+            {"name": "账号", "control": "input", "required": True, "validation": ""},
+            {"name": "手机号", "control": "input", "required": True, "validation": "手机号格式"},
+            {"name": "角色", "control": "select", "required": True, "options": ["运营", "客服"], "validation": ""},
+            {"name": "状态", "control": "select", "required": True, "options": ["启用", "停用"], "validation": ""},
+            {"name": "更新时间", "control": "input", "required": True, "validation": ""},
+        ],
+        "status_values": ["启用", "停用", "待生效"],
+        "actions": [
+            {"name": "编辑", "target": "新增/编辑员工弹窗", "kind": "primary"},
+            {"name": "备注", "target": "备注弹窗", "kind": "secondary"},
+        ],
+        "jump_targets": ["新增/编辑员工弹窗"],
+        "business_rules": ["仅系统管理员可停用员工"],
+        "states": {
+            "loading": "详情加载中显示骨架屏",
+            "error": "详情加载失败时可重试",
+            "transition": "启用 → 停用",
+        },
+    }
+
+
+def _analysis_dashboard_model() -> dict:
+    return {
+        "module_name": "后台-订单分析",
+        "module_key": "admin_order_analytics",
+        "pages": [
+            {
+                "page_id": "order_analysis",
+                "page_name": "订单分析页",
+                "page_type": "dashboard",
+                "page_archetype": "dashboard",
+                "object_name": "订单",
+                "role": "订单客服/履约人员、系统管理员",
+                "purpose": "查看订单趋势、转化情况以及支付日志",
+                "nav_context": "后台-订单管理 / 订单分析",
+                "sections": ["订单总览", "支付成功率", "退款率", "趋势图"],
+                "actions": [
+                    {"name": "切换时间范围", "target": "订单分析页", "kind": "secondary"},
+                    {"name": "导出", "target": "订单分析页", "kind": "secondary"},
+                ],
+                "jump_targets": ["支付日志详情页"],
+                "business_rules": ["选择时间范围后刷新统计结果", "支持导出订单分析报表"],
+                "states": {"loading": "图表骨架屏", "error": "分析加载失败"},
+            }
+        ],
+    }
+
+
+def _payment_log_page() -> dict:
+    return {
+        "page_id": "payment_log",
+        "page_name": "支付日志页",
+        "page_type": "web_list",
+        "page_archetype": "list_table",
+        "object_name": "支付日志",
+        "role": "财务/系统管理员",
+        "purpose": "查询支付结果与回调记录",
+        "fields": [
+            {"name": "订单编号", "control": "input", "required": True, "validation": ""},
+            {"name": "支付状态", "control": "select", "required": True, "options": ["成功", "失败"], "validation": ""},
+            {"name": "回调时间", "control": "input", "required": False, "validation": ""},
+        ],
+        "table_columns": ["订单编号", "支付流水号", "支付状态", "支付金额", "回调时间"],
+        "status_values": ["成功", "失败", "处理中"],
+        "actions": [{"name": "详情", "target": "支付日志详情页", "kind": "secondary"}],
+        "jump_targets": ["支付日志详情页"],
+        "business_rules": ["默认按回调时间倒序", "失败记录支持重试检索"],
+        "table_behaviors": {"default_sort": "回调时间倒序"},
+        "states": {"empty": "暂无支付日志", "error": "日志加载失败时支持重试"},
+    }
+
+
+def _order_analytics_bundle_model(include_payment_log: bool = False) -> dict:
+    model = _analysis_dashboard_model()
+    if include_payment_log:
+        model["pages"].append(_payment_log_page())
+    return model
+
+
+def _write_json(path: Path, payload: dict):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _write_requirements_split(workdir: Path, module_docs: dict[str, str]):
+    requirements_dir = workdir / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    (requirements_dir / "详细需求文档_overview.md").write_text(
+        "# 渔易购详细需求文档 — Overview\n\n## 7. 原型图清单\n- 测试用 overview\n",
+        encoding="utf-8",
+    )
+    (requirements_dir / "index.md").write_text(
+        "# 需求文档索引\n\n## 共用文件\n- requirements/详细需求文档_overview.md\n",
+        encoding="utf-8",
+    )
+    for filename, content in module_docs.items():
+        (requirements_dir / filename).write_text(content, encoding="utf-8")
+
+
+def _run_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
+    completed = subprocess.run(
+        [sys.executable, str(RUN_PIPELINE), str(workdir), product_name, "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
+    return completed.returncode, payload
+
+
 class PrototypeGeneratorDrawioTests(unittest.TestCase):
     def test_normalize_output_path_coerces_legacy_root_paths_into_hidden_artifact_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -315,22 +444,130 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             SKILL_DIR / "SKILL.md": [
                 "WORK_DIR/.prototype-generator/page_models/page_model_*.json",
                 "WORK_DIR/.prototype-generator/page_specs/page_spec_*.md",
+                "draw.io 主流程默认最多自迭代 5 轮",
+            ],
+            SKILL_DIR / "AGENTS.md": [
+                "最多只允许 3 个并行 agent",
+                "每轮修复都必须重新生成真实 `.drawio`",
             ],
             STEPS_DIR / "step5-common.md": [
                 ".prototype-generator/原型任务清单.md",
                 ".prototype-generator/原型DoD.md",
                 ".prototype-generator/tmp/drawio_*_tmp.xml",
+                "当前模式：interactive / autonomous",
             ],
             STEPS_DIR / "step5-drawio.md": [
                 "WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json",
                 "WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md",
                 "WORK_DIR/.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml",
+                "真实产物自迭代闭环",
+            ],
+            STEPS_DIR / "step6-iteration.md": [
+                "先判断需求文档模式",
+                "默认最多 5 轮",
             ],
         }
         for path, required_snippets in expectations.items():
             text = path.read_text(encoding="utf-8")
             for snippet in required_snippets:
                 self.assertIn(snippet, text, path.as_posix())
+
+    def test_validate_c13_treats_analysis_pages_as_dashboard(self):
+        markdown = _build_page_spec_markdown(_analysis_dashboard_model())
+        with tempfile.TemporaryDirectory() as tmp:
+            drawio_path = _render_drawio(markdown, Path(tmp), "order_analysis")
+            report = VALIDATE.run_checks(str(drawio_path))
+        self.assertEqual(_rule_result(report, "C13")["status"], "PASS", _report_message(report))
+
+    def test_run_drawio_pipeline_generates_real_bundle_from_workdir(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "## 3. 功能模块清单 — 后台-登录页\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                    ),
+                    "详细需求文档_后台-会员运营.md": (
+                        "# 渔易购 — 后台-会员运营需求\n\n"
+                        "## 3. 功能模块清单 — 后台-会员运营\n\n"
+                        "#### 功能点 1.1：营销活动管理\n"
+                        "- **页面/界面：** 营销活动管理页\n"
+                        "筛选条件：\n"
+                        "- 活动名称\n"
+                        "- 活动类型\n"
+                        "- 生效时间\n"
+                        "列表展示列：\n"
+                        "| 字段 | 说明 |\n"
+                        "| --- | --- |\n"
+                        "| 活动名称 | 活动名称 |\n"
+                        "| 活动类型 | 活动类型 |\n"
+                        "| 门槛金额 | 满足门槛 |\n"
+                        "| 优惠值 | 优惠内容 |\n"
+                        "| 发布状态 | 当前状态 |\n"
+                        "| 更新时间 | 更新时间 |\n"
+                    ),
+                    "详细需求文档_后台-订单分析.md": (
+                        "# 渔易购 — 后台-订单分析需求\n\n"
+                        "## 3. 功能模块清单 — 后台-订单分析\n\n"
+                        "#### 功能点 1.1：订单分析\n"
+                        "- **页面/界面：** 订单分析页\n"
+                    ),
+                },
+            )
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json", _login_model())
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_marketing.json", _marketing_list_model())
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_order_analytics.json", _analysis_dashboard_model())
+
+            returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["summary"]["fail"], 0, json.dumps(payload, ensure_ascii=False))
+            self.assertTrue((workdir / "prototypes" / "渔易购-后台管理.drawio").exists())
+            self.assertFalse(any(workdir.glob("page_spec_*.md")))
+            self.assertFalse(any(workdir.glob("drawio_*_tmp.xml")))
+            self.assertEqual(payload["final_validation"]["summary"]["fail"], 0, json.dumps(payload, ensure_ascii=False))
+
+    def test_run_drawio_pipeline_passes_after_upstream_page_model_fix(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-订单分析.md": (
+                        "# 渔易购 — 后台-订单分析需求\n\n"
+                        "## 3. 功能模块清单 — 后台-订单分析\n\n"
+                        "#### 功能点 1.1：订单分析与日志\n"
+                        "- **页面/界面：** 订单分析页、支付日志页\n"
+                        "筛选条件：\n"
+                        "- 订单编号\n"
+                        "- 支付状态\n"
+                        "- 回调时间\n"
+                        "列表展示列：\n"
+                        "| 字段 | 说明 |\n"
+                        "| --- | --- |\n"
+                        "| 订单编号 | 订单编号 |\n"
+                        "| 支付流水号 | 流水号 |\n"
+                        "| 支付状态 | 成功失败 |\n"
+                        "| 支付金额 | 支付金额 |\n"
+                        "| 回调时间 | 回调时间 |\n"
+                    ),
+                },
+            )
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_order_analytics.json", _order_analytics_bundle_model(include_payment_log=False))
+
+            first_code, first_payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+            self.assertNotEqual(first_code, 0, json.dumps(first_payload, ensure_ascii=False))
+            self.assertIn("支付日志页", first_payload["consistency"]["missing_pages"])
+
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_order_analytics.json", _order_analytics_bundle_model(include_payment_log=True))
+
+            second_code, second_payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+            self.assertEqual(second_code, 0, json.dumps(second_payload, ensure_ascii=False))
+            self.assertEqual(second_payload["summary"]["fail"], 0, json.dumps(second_payload, ensure_ascii=False))
 
     def test_drawer_permission_page_spec_contains_rich_annotations(self):
         markdown = _build_page_spec_markdown(_drawer_permission_model())

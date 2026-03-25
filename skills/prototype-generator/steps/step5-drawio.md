@@ -25,6 +25,11 @@ draw.io 统一改为四段链路：
 
 **如果以上任一项还没定义清楚，禁止启动生成。**
 
+若用户已授权自治模式：
+- 无需在本阶段再次等待确认
+- 主进程必须将完成标准写入 `WORK_DIR/.prototype-generator/drawio-完成标准.md`
+- 后续默认进入“真实产物自迭代闭环”，直到通过或达到 5 轮熔断
+
 > 判断原则：draw.io 任务不是“产出 XML 就算完成”，而是“脚本链路跑通、校验通过、DoD 通过、最终文件可交付”才算完成。
 
 ---
@@ -62,6 +67,7 @@ draw.io 统一改为四段链路：
 - 一个功能模块拆成若干 `page_model` 子任务
 - 子任务按批次并行启动，每批最多 3 个，再统一等待本批结果
 - 若某模块页面 > 2，必须先拆分后再启动
+- 该并发上限 3 是 draw.io 全链路统一上限；后续 render / validate / merge 前检查也不得突破
 
 ### 成功标准
 
@@ -143,7 +149,7 @@ python3 SKILL_DIR/scripts/render.py \
 
 规则：
 
-- 所有模块渲染命令必须并行发出
+- 所有模块渲染命令按批次发出，每批最多 3 个
 - render 报错的模块不得进入 merge
 
 ---
@@ -199,6 +205,46 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/.prototype-generator/tmp/drawio_[
 - `C5 坐标对齐`
 - 少量 annotation 偏移
 - 分页/按钮间距轻微不齐
+
+---
+
+## 自治模式：真实产物自迭代闭环
+
+当用户已授权自治模式时，draw.io 主流程必须按以下顺序执行，且每轮都基于真实 `WORK_DIR/prototypes/[产品名称].drawio` 复测：
+
+`page_model -> build_page_spec.py -> render.py -> check_prototype_consistency.py -> validate(tmp) -> merge.py -> validate(final) -> visual review -> failure routing -> next round`
+
+### 每轮固定动作
+
+1. 用 `scripts/run_drawio_pipeline.py` 或等价主进程脚本生成真实 `.drawio`
+2. 读取一致性报告与模块级 / 最终级 `validate.py` 结果
+3. 对最终 `.drawio` 做视觉分析，至少检查：
+   - 登录页是否有越界或骨架混入
+   - 列表页是否缺少操作列按钮、分页是否只在底部
+   - 详情页 / 授权页是否有状态区、记录区、规则区
+4. 将失败页映射回上游责任层级：
+   - `page_model`：缺页、错误 archetype、按钮语义缺失、字段遗漏、状态遗漏
+   - `page_spec`：骨架错位、分组顺序、分页位置、局部间距
+   - `render/merge`：重复 ID、XML 结构、合并后 diagram 丢失
+5. 仅重建受影响模块；禁止整包无差别重跑，除非 merge 或全局规则损坏
+
+### 熔断与收敛
+
+- 最大自迭代轮次：5
+- 任一轮只要最终 `.drawio` 仍有 FAIL，即视为本轮未完成，必须继续回到上游修复
+- 连续 2 轮命中同一失败页且同一规则不下降时，必须上提一个回退层级
+  - 例如：先改 `page_spec` 无效，则回退到 `page_model`
+- 达到第 5 轮仍未通过时，输出剩余阻塞项与当前最小复现路径，再结束
+
+### 临时文件
+
+- 中间文件统一放在 `WORK_DIR/.prototype-generator/`
+- 每轮结束后清理本轮无用的 `tmp` / `review_tmp` / 临时 HTML 对比稿
+- 最终只保留：
+  - 最新 `page_models/`
+  - 最新 `page_specs/`
+  - 必要的 `执行状态.md`、`drawio-完成标准.md`
+  - 最终 `prototypes/[产品名称].drawio`
 
 ---
 

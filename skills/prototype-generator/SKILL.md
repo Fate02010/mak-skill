@@ -71,6 +71,22 @@ description: |
 - `WORK_DIR/.prototype-generator/tmp/drawio_*_tmp.xml`
 - `WORK_DIR/prototypes/`
 
+## 自治模式
+
+当用户明确表达以下意图之一时，视为授权进入自治模式：
+- “不要来回交互”
+- “自己检查”
+- “自己迭代到可以”
+- “一次生成尽量到位”
+
+自治模式下：
+- draw.io 主流程默认最多自迭代 5 轮；每轮都必须生成真实 `WORK_DIR/prototypes/[产品名称].drawio`
+- 任一时刻最多只允许 3 个并行 agent 或并行模块任务
+- 每轮都必须执行：`check_prototype_consistency.py` → 模块级 `validate.py` → `merge.py` → 最终 `validate.py`
+- 最终 `.drawio` 未通过前，禁止宣告完成
+- 仅在输出格式、工作目录、资料范围本身不明确时才向用户追问；已获授权后，禁止在每一轮修复前再次等待确认
+- 测试、review、对比产生的临时文件统一放到 `WORK_DIR/.prototype-generator/`，通过后清理无用中间物
+
 ## 门禁规则
 
 ### 全局门禁
@@ -90,6 +106,8 @@ description: |
 - `validate.py` 或一致性检查失败时，必须回退到 `.prototype-generator/page_specs` 或更上游重建，禁止直接把最终 `.drawio` 当主修复面
 - 所有中间产物必须收敛到 `WORK_DIR/.prototype-generator/`；`WORK_DIR` 根目录只允许保留 `requirements/`、`prototypes/` 和用户原始资料
 - 登录页、弹窗、抽屉等容易出现错位的骨架页，若用户反馈布局异常，优先修改 `build_page_spec.py` 或对应模板，并补充几何回归测试覆盖该版式
+- 推荐使用 `scripts/run_drawio_pipeline.py` 执行真实产物级门禁；该脚本负责编排 `build_page_spec.py -> render.py -> check_prototype_consistency.py -> validate.py -> merge.py -> validate.py`
+- draw.io 最终交付前必须对真实 `.drawio` 做视觉分析；至少覆盖登录页、列表页、详情页/授权页三类 archetype
 
 ### 用户交互门禁
 
@@ -98,8 +116,8 @@ description: |
 - 工作目录
 - 文件优先级分类
 - 系统与功能列表确认
-- 原型完成标准确认
-- Step 6 改进建议确认
+- 原型完成标准确认（仅未进入自治模式时）
+- Step 6 改进建议确认（仅未进入自治模式时）
 
 ## 详细规则位置
 

@@ -2,11 +2,13 @@
 
 所有原型图生成完毕后，**先强制执行需求对照审视（阶段 6-0），再进入改进建议环节**。
 
+若用户已授权自治模式，本步骤默认不等待用户逐轮确认，而是直接进入“审视 -> 修复 -> 真实 `.drawio` 复测”的自迭代闭环；仅在达到熔断轮次后再向用户汇报剩余阻塞项。
+
 ---
 
 ## 阶段 6-0：需求对照审视（强制，不可跳过）
 
-> 目标：逐页对照需求文档、`.prototype-generator/原型任务清单.md`、`.prototype-generator/page_specs/` 与最终原型，执行预处理校验 + 七个维度审视，输出审视报告并等待用户确认后修复。
+> 目标：逐页对照需求文档、`.prototype-generator/原型任务清单.md`、`.prototype-generator/page_specs/` 与最终原型，执行预处理校验 + 七个维度审视，输出审视报告，并在自治模式下直接修复后重生成真实 `.drawio`。
 
 ### 预处理：跳转与覆盖率校验
 
@@ -41,14 +43,24 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 
 ### 准备工作
 
-1. 读取 `WORK_DIR/requirements/详细需求文档.md`，提取"原型图清单"和每个页面的功能描述、字段列表
-2. 读取 `WORK_DIR/.prototype-generator/原型任务清单.md`，获取已生成的页面列表
-3. 读取 `WORK_DIR/.prototype-generator/page_specs/`，获取冻结后的页面结构、字段、跳转和状态定义
-4. 扫描已生成文件：
+1. 先判断需求文档模式：
+   - 若存在 `WORK_DIR/requirements/index.md`，按 split 模式读取 `index.md`、`详细需求文档_overview.md` 和对应模块文件
+   - 否则按单文件模式读取 `WORK_DIR/requirements/详细需求文档.md`
+2. 提取"原型图清单"和每个页面的功能描述、字段列表
+3. 读取 `WORK_DIR/.prototype-generator/原型任务清单.md`，获取已生成的页面列表
+4. 读取 `WORK_DIR/.prototype-generator/page_specs/`，获取冻结后的页面结构、字段、跳转和状态定义
+5. 扫描已生成文件：
    - **HTML 模式**：用当前会话可用的文件列表命令列出 `WORK_DIR/prototypes/*.html`
    - **draw.io 模式**：读取 `WORK_DIR/prototypes/[产品名称].drawio`，列出所有 `<diagram name>` 和 swimlane
 
-> 审视阶段默认只对照结构化中间产物，不回读原始资料。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `.prototype-generator/page_specs/`，再重跑渲染。
+> 审视阶段默认只对照结构化中间产物，不回读原始资料。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `.prototype-generator/page_specs/`，再重跑渲染。禁止把最终 `.drawio` 当作主修复面。
+
+### 自治模式轮次规则
+
+- 默认最多 5 轮
+- 每轮都必须重新生成真实 `WORK_DIR/prototypes/[产品名称].drawio`
+- 每轮都必须重跑：`check_prototype_consistency.py`、模块级 `validate.py`、最终 `validate.py`
+- 同一问题连续两轮未收敛时，必须提升回退层级，不得继续原地微调
 
 ### 七维度审视
 
@@ -207,7 +219,8 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 ⚠️ [页面名]：[B 类违规描述]
 
 === 发现问题共 X 处，建议修复 ===
-是否立即修复？（"全部修复" / "修复1,3" / "跳过进入改进建议"）
+自治模式：立即按 failure routing 回退并进入下一轮真实产物复测
+交互模式：是否立即修复？（"全部修复" / "修复1,3" / "跳过进入改进建议"）
 ```
 
 ### draw.io 模式：HTML 对比（按需触发）
@@ -252,12 +265,12 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 结论：draw.io 需修正 X 处
 ```
 
-**Step C：以 HTML 稿为参照修正 draw.io**
+**Step C：以 HTML 稿为参照修正上游产物**
 
-按对比清单，精确修改 `[产品名称].drawio` 对应 swimlane：
-- 补充缺失的 `<mxCell>` 元素（字段/按钮），坐标参照 HTML 布局折算
-- 调整位置偏差的组件坐标
-- 修复排版结构（水平/垂直排列、对齐方式）
+按对比清单，优先修改 `page_specs/page_spec_*.md` 或更上游的 `page_model`：
+- 补充缺失字段、按钮、跳转和状态
+- 调整布局结构（水平/垂直排列、分组顺序、按钮区位置）
+- 只有坐标级轻微偏差才允许在 `page_spec` 层修正；禁止直接把最终 `.drawio` XML 当主修复面
 
 **Step D：清理临时文件**
 
