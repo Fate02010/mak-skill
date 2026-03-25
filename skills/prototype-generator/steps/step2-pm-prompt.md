@@ -1,6 +1,6 @@
 # Step 2：生成产品经理 Prompt，设定角色
 
-> **⛔ 门禁检查：** 开始前确认 `WORK_DIR/RountMap.md` 存在。不存在则回退执行 Step 1。
+> **⛔ 门禁检查：** 开始前确认 `WORK_DIR/.prototype-generator/RountMap.md` 存在。不存在则回退执行 Step 1。
 
 **目标：** 基于产品资料，总结出这个产品的核心特性、用户群体、业务场景，生成一段产品经理角色 prompt，让后续工作更有针对性。
 

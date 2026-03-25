@@ -1,6 +1,6 @@
 # 执行状态文件格式
 
-写入 `WORK_DIR/执行状态.md` 时使用以下格式：
+写入 `WORK_DIR/.prototype-generator/执行状态.md` 时使用以下格式：
 
 ```markdown
 # 执行状态

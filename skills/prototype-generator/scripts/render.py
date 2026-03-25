@@ -359,6 +359,14 @@ def generate_xml(module_id: str, module_name: str, swimlanes: list[dict],
     """生成 <diagram> XML 片段。"""
     indent = "  "
     lines = []
+    used_ids: dict[str, int] = {}
+
+    def unique_id(raw_id: str) -> str:
+        count = used_ids.get(raw_id, 0)
+        used_ids[raw_id] = count + 1
+        if count == 0:
+            return raw_id
+        return f"{raw_id}_{count + 1}"
 
     # 计算 pageWidth / pageHeight
     max_x = 0
@@ -396,9 +404,10 @@ def generate_xml(module_id: str, module_name: str, swimlanes: list[dict],
         sw_w = snap8(safe_int(sw.get('width', '0')), 'width', f'swimlane {sw_id}')
         sw_h = snap8(safe_int(sw.get('height', '0')), 'height', f'swimlane {sw_id}')
         style = resolve_style(sw_style_key, styles)
+        cell_id = unique_id(sw_id)
 
         lines.append(
-            f'{indent}{indent}{indent}<mxCell id="{xml_escape(sw_id)}" '
+            f'{indent}{indent}{indent}<mxCell id="{xml_escape(cell_id)}" '
             f'value="{xml_escape(sw_label)}" '
             f'style="{xml_escape(style)}" '
             f'vertex="1" parent="1">'
@@ -423,6 +432,7 @@ def generate_xml(module_id: str, module_name: str, swimlanes: list[dict],
         style = resolve_style(style_key, styles)
 
         cell_id = f"{parent}_{el_id}" if parent else el_id
+        cell_id = unique_id(cell_id)
         parent_ref = parent if parent else "1"
 
         # 构建属性

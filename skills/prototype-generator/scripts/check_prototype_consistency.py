@@ -7,7 +7,7 @@ check_prototype_consistency.py - 检查 requirements 与 page_specs 的页面覆
 
 约定:
     - requirements_path: requirements 目录，或单个需求文档文件
-    - page_specs_dir: 固定为 WORK_DIR/page_specs
+    - page_specs_dir: 固定为 WORK_DIR/.prototype-generator/page_specs
 """
 
 from __future__ import annotations

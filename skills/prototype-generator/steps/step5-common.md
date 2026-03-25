@@ -1,7 +1,7 @@
 # Step 5：并行生成原型图 — 通用流程
 
 > **⛔ 门禁检查：** 开始前确认以下文件均存在，任一缺失则回退执行对应 Step：
-> - `WORK_DIR/竞品分析报告.md`（Step 3 产物）— 缺失则回退执行 Step 3
+> - `WORK_DIR/.prototype-generator/竞品分析报告.md`（Step 3 产物）— 缺失则回退执行 Step 3
 > - `WORK_DIR/requirements/` 目录含 `.md` 文件（Step 4 产物）— 缺失则回退执行 Step 4
 
 本文件包含 HTML 和 draw.io 两种模式的通用阶段（5-1、5-2、5-4、5-5、5-6）。
@@ -11,9 +11,11 @@
 
 **统一原则：**
 
-- Step 5 的“页面规格冻结”产物统一写入 `WORK_DIR/page_specs/`
-- 没有 `page_specs/page_spec_*.md`，禁止进入任何 render 阶段
-- render 阶段禁止回读原始资料，只允许读取冻结后的 `page_specs/`、任务清单、样式规范、跳转映射
+- Step 5 的中间产物统一写入 `WORK_DIR/.prototype-generator/`
+- Step 5 的“页面规格冻结”产物统一写入 `WORK_DIR/.prototype-generator/page_specs/`
+- 没有 `.prototype-generator/page_specs/page_spec_*.md`，禁止进入任何 render 阶段
+- render 阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、任务清单、样式规范、跳转映射
+- 若本轮为修复 skill 本身而改动了 `SKILL_DIR/scripts/`、`SKILL_DIR/steps/` 或 `SKILL_DIR/templates/`，必须同步新增/更新仓库回归测试，并执行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；测试失败时必须继续回修
 
 ---
 
@@ -100,11 +102,11 @@
 
    > 若需求文档明确说明使用弹窗（Modal）方式，则新增/编辑弹窗在列表页 swimlane 内绘制；若为独立页面，则单独列为任务项。
 
-7. 读取 `SKILL_DIR/steps/step5-tasklist-format.md` 获取格式规范，输出 `原型任务清单.md` 到 `WORK_DIR`
+7. 读取 `SKILL_DIR/steps/step5-tasklist-format.md` 获取格式规范，输出 `原型任务清单.md` 到 `WORK_DIR/.prototype-generator/`
 
 ## 阶段 5-2：拆分生成任务
 
-将原型页面拆分为独立任务，每个任务记录：页面名/文件名、需求文档对应章节标题、完整进出跳转关系、视觉风格。写入 `原型任务清单.md`。
+将原型页面拆分为独立任务，每个任务记录：页面名/文件名、需求文档对应章节标题、完整进出跳转关系、视觉风格。写入 `.prototype-generator/原型任务清单.md`。
 
 8. **⚠️ CRUD 页面清单注入（必须执行，不得跳过）**：在构建每个 spec agent / subagent prompt 时，从原型任务清单中提取该模块所有含增删改操作的列表页，替换 prompt 模板中的 `[CRUD 页面清单]` 占位符。确保 agent 收到显式清单后才启动：
 
@@ -116,7 +118,7 @@
 
    > 若该模块无 CRUD 操作，填入 `无 CRUD 操作`。**禁止留空 `[CRUD 页面清单]` 占位符**。
 
-9. **生成完成标准（DoD）**：根据原型任务清单，列出本次生成的完成检查清单，写入 `WORK_DIR/原型DoD.md`。这份文件是**交付前检查清单**，必须在启动任何 draw.io / HTML 生成任务之前先写好。阶段 5-5 冒烟检查后将逐条验收，不通过则修复后重新验收。
+9. **生成完成标准（DoD）**：根据原型任务清单，列出本次生成的完成检查清单，写入 `WORK_DIR/.prototype-generator/原型DoD.md`。这份文件是**交付前检查清单**，必须在启动任何 draw.io / HTML 生成任务之前先写好。阶段 5-5 冒烟检查后将逐条验收，不通过则修复后重新验收。
 
    格式：
    ```markdown
@@ -148,7 +150,7 @@
 
    > 以上为模板，根据实际任务清单填入具体模块名和页面名。
 
-10. **draw.io 模式交付门槛前置确认（必须执行）**：若 `OUTPUT_FORMAT=drawio`，在阶段 5-3 启动前，主进程必须基于 `原型任务清单.md` 和 `原型DoD.md`，额外生成一份 `WORK_DIR/drawio-完成标准.md`，明确“做到什么程度才算完成”。这份文件不是过程说明，而是**交付前验收清单**；后续 Step 5-5 和 Step 6 都必须以它为准。
+10. **draw.io 模式交付门槛前置确认（必须执行）**：若 `OUTPUT_FORMAT=drawio`，在阶段 5-3 启动前，主进程必须基于 `原型任务清单.md` 和 `原型DoD.md`，额外生成一份 `WORK_DIR/.prototype-generator/drawio-完成标准.md`，明确“做到什么程度才算完成”。这份文件不是过程说明，而是**交付前验收清单**；后续 Step 5-5 和 Step 6 都必须以它为准。
 
    格式：
    ```markdown
@@ -158,7 +160,7 @@
    本任务只有在以下条件全部满足时才算“完成”：
    - [ ] 原型任务清单中的所有模块、页面、弹窗 swimlane 均已生成
    - [ ] 最终交付物为 `WORK_DIR/prototypes/[产品名称].drawio`，且可直接在 draw.io / diagrams.net 打开
-   - [ ] 每个模块临时文件 `drawio_[模块英文名]_tmp.xml` 均通过 validate.py，结果无 FAIL
+   - [ ] 每个模块临时文件 `.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml` 均通过 validate.py，结果无 FAIL
    - [ ] 最终合并后的 `.drawio` 文件再次通过 validate.py，结果无 FAIL
    - [ ] `原型DoD.md` 中所有条目均已勾选完成
    - [ ] 发现问题后已修复并重新验收，不存在“已知问题暂不处理”
@@ -200,7 +202,7 @@
 
 ### 启动前：向用户展示执行计划
 
-列出每个 Agent 负责的模块、页面列表、页面数量，告知输出目录和预计文件数；若为 draw.io 模式，还必须同时展示 `原型DoD.md` 与 `drawio-完成标准.md` 的摘要，明确“什么状态才算完成”，**等待用户确认后**再启动。
+列出每个 Agent 负责的模块、页面列表、页面数量，告知输出目录和预计文件数；若为 draw.io 模式，还必须同时展示 `.prototype-generator/原型DoD.md` 与 `.prototype-generator/drawio-完成标准.md` 的摘要，明确“什么状态才算完成”，**等待用户确认后**再启动。
 
 **按 OUTPUT_FORMAT 加载对应的 5-3 详细流程：**
 - HTML 模式：读取 `SKILL_DIR/steps/step5-html.md`
@@ -210,7 +212,7 @@
 
 ### 启动后进度
 
-每个 Agent 完成时，同步更新 `WORK_DIR/执行状态.md` 的"Step 5 Agent 状态"表格。
+每个 Agent 完成时，同步更新 `WORK_DIR/.prototype-generator/执行状态.md` 的"Step 5 Agent 状态"表格。
 
 **HTML 模式** — 展示每个生成 Agent 状态：
 ```
@@ -260,7 +262,7 @@
 3. **按文档模式回写：**
    - **单文件模式**：编辑 `requirements/详细需求文档.md`，末尾追加"变更记录"章节
    - **分拆模式**：功能点变更 → 编辑对应 `requirements/详细需求文档_[模块中文名].md`；原型图清单变更（新增页面）→ 编辑 `requirements/详细需求文档_overview.md` §7
-4. 将变更汇总记录到 `原型任务清单.md` 末尾的"需求变更汇总"区块
+4. 将变更汇总记录到 `.prototype-generator/原型任务清单.md` 末尾的"需求变更汇总"区块
 
 ## 阶段 5-5：冒烟检查（快速质量校验）
 
@@ -275,7 +277,7 @@
 ### 1. 文件完整性校验
 
 - **HTML 模式**：用当前会话可用的文件列表命令扫描 `WORK_DIR/prototypes/` 目录，对比原型任务清单，列出缺失的 `.html` 文件，重新生成
-- **draw.io 模式**：用当前会话可用的文件列表命令扫描 `WORK_DIR/` 下的 `drawio_*_tmp.xml` 临时文件，对比模块任务列表，列出缺失的模块临时文件，重新生成对应模块任务
+- **draw.io 模式**：用当前会话可用的文件列表命令扫描 `WORK_DIR/.prototype-generator/tmp/` 下的 `drawio_*_tmp.xml` 临时文件，对比模块任务列表，列出缺失的模块临时文件，重新生成对应模块任务
 
 ### 2. 内容有效性校验（结构完整性）
 
@@ -285,7 +287,7 @@
 - `<html>`、`<head>`、`<body>` 标签
 - 无明显截断（文件末尾含 `</html>`）
 
-**draw.io 模式** — 每个 `drawio_*_tmp.xml` 临时文件必须包含：
+**draw.io 模式** — 每个 `.prototype-generator/tmp/drawio_*_tmp.xml` 临时文件必须包含：
 - `<diagram>` 标签（含 `id` 和 `name` 属性）
 - `<mxGraphModel>` 和 `<root>` 标签
 - 至少 3 个 `<mxCell>` 元素（id=0、id=1 基础层 + 至少一个 UI 元素）
@@ -322,30 +324,30 @@
 
 ### DoD 验收（冒烟检查通过后立即执行）
 
-读取 `WORK_DIR/原型DoD.md`，逐条验收：
+读取 `WORK_DIR/.prototype-generator/原型DoD.md`，逐条验收：
 
 0. **先跑脚本门禁**：执行
 
 ```bash
 python3 SKILL_DIR/scripts/check_prototype_consistency.py \
   WORK_DIR/requirements \
-  WORK_DIR/page_specs \
+  WORK_DIR/.prototype-generator/page_specs \
   --json
 ```
 
    - 出现 `missing_pages` / `missing_field_pages` / `low_coverage_pages` 任一非空，直接判定验收失败
-   - draw.io 模式回退到 `page_specs` 或 `page_model`
-   - HTML 模式回退到 `page_specs`，修正后再重新渲染
+   - draw.io 模式回退到 `.prototype-generator/page_specs` 或 `.prototype-generator/page_models`
+   - HTML 模式回退到 `.prototype-generator/page_specs`，修正后再重新渲染
 
 1. **逐条检查**：对每个检查项，用当前会话可用的文件检查方式验证是否通过
 2. **标记结果**：通过的标 `[x]`，不通过的标 `[ ]` 并附原因
 3. **修复不通过项**：
    - 缺失页面/swimlane → 重新生成对应模块任务
-   - 缺失字段/覆盖率不足 → 修改 `page_specs/page_spec_*.md` 后重跑渲染
-   - CRUD 弹窗缺失 → 修改 `page_specs/page_spec_*.md` 后重跑渲染
-   - 断链/空容器/占位字段 → 优先修改 `page_specs/page_spec_*.md`，再重跑渲染
+   - 缺失字段/覆盖率不足 → 修改 `.prototype-generator/page_specs/page_spec_*.md` 后重跑渲染
+   - CRUD 弹窗缺失 → 修改 `.prototype-generator/page_specs/page_spec_*.md` 后重跑渲染
+   - 断链/空容器/占位字段 → 优先修改 `.prototype-generator/page_specs/page_spec_*.md`，再重跑渲染
 4. **修复后重新验收**：再次逐条检查，直到全部通过
-5. **更新 DoD 文件**：将验收结果写回 `WORK_DIR/原型DoD.md`
+5. **更新 DoD 文件**：将验收结果写回 `WORK_DIR/.prototype-generator/原型DoD.md`
 
 ```
 === DoD 验收报告 ===
@@ -375,7 +377,7 @@ DoD 验收通过，进入 Step 6 深度审视。
 python3 SKILL_DIR/scripts/merge.py \
   WORK_DIR/prototypes/[产品名称].drawio \
   "[产品名称]" \
-  WORK_DIR/drawio_*_tmp.xml
+  WORK_DIR/.prototype-generator/tmp/drawio_*_tmp.xml
 ```
 
 > 脚本自动完成：ID 偏移（每模块 +N×10000）→ parent/source/target 引用更新 → 导航图生成 → mxfile 包裹 → 临时文件清理。

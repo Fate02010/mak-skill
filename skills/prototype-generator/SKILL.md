@@ -30,15 +30,15 @@ description: |
 
 ### 全量模式
 
-1. **资料提炼**：扫描资料并生成 `RountMap.md`
+1. **资料提炼**：扫描资料并生成 `.prototype-generator/RountMap.md`
 2. **产品语境**：生成产品经理视角角色与系统边界
-3. **竞品分析**：生成 `竞品分析报告.md`
+3. **竞品分析**：生成 `.prototype-generator/竞品分析报告.md`
 4. **需求文档**：生成 `requirements/` 下的详细需求文档
-5. **页面清单**：生成 `原型任务清单.md` 和 `原型DoD.md`
-6. **页面规格冻结**：统一写入 `page_specs/page_spec_*.md`
+5. **页面清单**：生成 `.prototype-generator/原型任务清单.md` 和 `.prototype-generator/原型DoD.md`
+6. **页面规格冻结**：统一写入 `.prototype-generator/page_specs/page_spec_*.md`
 7. **原型渲染**：
    - draw.io：`page_model -> build_page_spec.py -> render.py -> validate.py -> merge.py`
-   - HTML：从 `page_specs/` 渲染页面文件
+   - HTML：从 `.prototype-generator/page_specs/` 渲染页面文件
 8. **一致性校验**：覆盖率、一致性、缺页、缺字段检查
 9. **最终交付**：输出 `prototypes/` 下最终原型
 
@@ -47,7 +47,7 @@ description: |
 1. 理解新增需求
 2. 更新需求文档
 3. 更新页面清单
-4. 冻结新增页面规格到 `page_specs/`
+4. 冻结新增页面规格到 `.prototype-generator/page_specs/`
 5. 渲染与校验
 6. 更新最终原型
 
@@ -61,31 +61,35 @@ description: |
 
 ### 输出
 
-- `WORK_DIR/RountMap.md`
-- `WORK_DIR/竞品分析报告.md`
+- `WORK_DIR/.prototype-generator/RountMap.md`
+- `WORK_DIR/.prototype-generator/竞品分析报告.md`
 - `WORK_DIR/requirements/`
-- `WORK_DIR/原型任务清单.md`
-- `WORK_DIR/原型DoD.md`
-- `WORK_DIR/page_model_*.json`
-- `WORK_DIR/page_specs/page_spec_*.md`
+- `WORK_DIR/.prototype-generator/原型任务清单.md`
+- `WORK_DIR/.prototype-generator/原型DoD.md`
+- `WORK_DIR/.prototype-generator/page_models/page_model_*.json`
+- `WORK_DIR/.prototype-generator/page_specs/page_spec_*.md`
+- `WORK_DIR/.prototype-generator/tmp/drawio_*_tmp.xml`
 - `WORK_DIR/prototypes/`
 
 ## 门禁规则
 
 ### 全局门禁
 
-- 没有 `RountMap.md`，禁止进入需求文档阶段
+- 没有 `.prototype-generator/RountMap.md`，禁止进入需求文档阶段
 - 没有 `requirements/`，禁止进入原型阶段
-- 没有 `原型任务清单.md`，禁止进入渲染阶段
-- 没有 `page_specs/`，禁止进入任何渲染阶段
-- 渲染阶段禁止回读原始资料，只允许读取冻结后的 `page_specs/`、样式规范、任务清单、导航映射
+- 没有 `.prototype-generator/原型任务清单.md`，禁止进入渲染阶段
+- 没有 `.prototype-generator/page_specs/`，禁止进入任何渲染阶段
+- 渲染阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、样式规范、任务清单、导航映射
 - 最终输出前，必须通过 `validate.py` 与 `check_prototype_consistency.py`
+- 若本轮为修复原型质量而修改了 skill 自身脚本、模板或提示词，必须同步补充回归测试并执行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；测试不通过时必须继续修复，禁止直接宣布完成
 
 ### draw.io 专属门禁
 
-- 必须先生成 `page_model_*.json`
-- 必须再生成 `page_specs/page_spec_*.md`
-- `validate.py` 或一致性检查失败时，必须回退到 `page_specs` 或更上游重建，禁止直接把最终 `.drawio` 当主修复面
+- 必须先生成 `.prototype-generator/page_models/page_model_*.json`
+- 必须再生成 `.prototype-generator/page_specs/page_spec_*.md`
+- `validate.py` 或一致性检查失败时，必须回退到 `.prototype-generator/page_specs` 或更上游重建，禁止直接把最终 `.drawio` 当主修复面
+- 所有中间产物必须收敛到 `WORK_DIR/.prototype-generator/`；`WORK_DIR` 根目录只允许保留 `requirements/`、`prototypes/` 和用户原始资料
+- 登录页、弹窗、抽屉等容易出现错位的骨架页，若用户反馈布局异常，优先修改 `build_page_spec.py` 或对应模板，并补充几何回归测试覆盖该版式
 
 ### 用户交互门禁
 

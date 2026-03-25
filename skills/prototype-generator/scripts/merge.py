@@ -308,6 +308,32 @@ def _build_nav_diagram(modules: list) -> ET.Element:
     return diagram
 
 
+def _cleanup_empty_blue_placeholders(diagram: ET.Element) -> int:
+    graph_root = diagram.find("./mxGraphModel/root")
+    if graph_root is None:
+        return 0
+
+    to_remove = []
+    for cell in graph_root.findall("mxCell"):
+        value = (cell.get("value") or "").strip()
+        style = cell.get("style", "")
+        if value:
+            continue
+        if "fillColor=#e3f2fd" not in style or "strokeColor=#90caf9" not in style:
+            continue
+        geo = _mxgeometry(cell)
+        if geo is None:
+            continue
+        width = float(geo.get("width", "0"))
+        height = float(geo.get("height", "0"))
+        if width == 56 and height == 24:
+            to_remove.append(cell)
+
+    for cell in to_remove:
+        graph_root.remove(cell)
+    return len(to_remove)
+
+
 # ---------------------------------------------------------------------------
 # 主合并流程
 # ---------------------------------------------------------------------------
@@ -402,6 +428,7 @@ def merge(
         id_map["1"] = "1"
 
         _apply_id_map(diagram, id_map)
+        _cleanup_empty_blue_placeholders(diagram)
 
         total_cells += len([e for e in diagram.iter() if e.tag == "mxCell"])
 

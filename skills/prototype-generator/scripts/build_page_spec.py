@@ -146,6 +146,13 @@ def delete_modal_name(object_name: str) -> str:
     return f"删除{value}确认弹窗"
 
 
+def enable_disable_label(page_name: str) -> str:
+    text = str(page_name or "")
+    if any(token in text for token in ("评论", "公告", "轮播")):
+        return "下线"
+    return "停用"
+
+
 def normalize_module_name(value: str) -> str:
     text = str(value or "").strip()
     text = re.sub(r"^(page[_-]?spec|spec|tmp)\s*[:：_-]?\s*", "", text, flags=re.IGNORECASE)
@@ -548,6 +555,97 @@ class PageSpecBuilder:
             return values
         return ["待处理", "处理中", "已完成", "已取消", "已归档"]
 
+    def _match_field(self, fields: list[dict], tokens: tuple[str, ...]) -> dict | None:
+        for field in fields:
+            name = str(field.get("name", "")).strip()
+            if name and any(token in name for token in tokens):
+                return field
+        return None
+
+    def _login_note(self, page: dict, show_captcha: bool) -> str:
+        for rule in self._business_rules(page):
+            if any(token in rule for token in ("验证码", "失败", "锁定", "限制")):
+                return rule
+        if show_captcha:
+            return "连续失败超过 5 次将触发验证码限制"
+        return "登录后进入业务工作台"
+
+    def _list_action_specs(self, page: dict) -> tuple[str, list[tuple[str, str, str]]]:
+        page_name = str(page.get("page_name", "")).strip()
+        object_name = str(page.get("object_name", "")).strip() or "对象"
+        actions = page.get("actions") if isinstance(page.get("actions"), list) else []
+
+        add_label = ""
+        row_actions: list[tuple[str, str, str]] = []
+        for action in actions:
+            name = str(action.get("name", "")).strip()
+            target = str(action.get("target", "")).strip()
+            kind = str(action.get("kind", "")).strip()
+            tooltip = f"→ {target}" if target else ""
+            if name.startswith("新增"):
+                add_label = name
+                continue
+            if any(token in name for token in ("编辑", "删除", "查看", "详情", "发货", "关闭", "备注", "处理", "授权", "审核", "导出", "下架", "停用", "解除", "改等级", "重置密码")):
+                style = "btn_sm_danger" if kind == "danger" or "删除" in name or "关闭" in name else "btn_sm"
+                row_actions.append((name, style, tooltip))
+
+        if as_bool(page.get("needs_crud")):
+            if not add_label:
+                add_label = f"新增{object_name}"
+            if not row_actions:
+                row_actions = [
+                    ("编辑", "btn_sm", f"→ 新增/编辑{object_name}弹窗"),
+                    ("删除", "btn_sm_danger", f"→ {delete_modal_name(object_name)}"),
+                ]
+
+        if row_actions:
+            deduped = []
+            seen = set()
+            for item in row_actions:
+                if item[0] in seen:
+                    continue
+                seen.add(item[0])
+                deduped.append(item)
+            return add_label, deduped[:3]
+
+        inferred = []
+        if any(token in page_name for token in ("员工", "司机", "管理员")):
+            add_label = add_label or f"新增{object_name if object_name != '对象' else page_name.replace('管理页', '')}"
+            inferred = [("编辑", "btn_sm", f"→ 新增/编辑{object_name}弹窗"), (enable_disable_label(page_name), "btn_sm", "")]
+        elif "分销会员" in page_name:
+            inferred = [("审核", "btn_sm", ""), ("改等级", "btn_sm", "")]
+        elif any(token in page_name for token in ("分销等级", "会员等级")):
+            add_label = add_label or f"新增{object_name if object_name != '对象' else '等级'}"
+            inferred = [("编辑", "btn_sm", ""), (enable_disable_label(page_name), "btn_sm", "")]
+        elif any(token in page_name for token in ("满额优惠", "满减")):
+            add_label = add_label or "新增满减"
+            inferred = [("编辑", "btn_sm", "→ 营销活动表单页"), ("删除", "btn_sm_danger", "→ 删除活动确认弹窗")]
+        elif "优惠券" in page_name and "领取记录" not in page_name:
+            add_label = add_label or "新增优惠券"
+            inferred = [("编辑", "btn_sm", "→ 营销活动表单页"), ("删除", "btn_sm_danger", "→ 删除优惠券确认弹窗")]
+        elif "轮播图" in page_name:
+            add_label = add_label or "新增轮播"
+            inferred = [("编辑", "btn_sm", "→ 轮播编辑页"), ("下线", "btn_sm", "")]
+        elif "公告" in page_name:
+            inferred = [("查看", "btn_sm", "→ 公告编辑页"), ("编辑", "btn_sm", "→ 公告编辑页")]
+        elif "评论" in page_name:
+            inferred = [("详情", "btn_sm", "→ 评论详情页"), ("审核", "btn_sm", "")]
+        elif "会员管理" in page_name:
+            inferred = [("查看", "btn_sm", "→ 会员详情页"), ("编辑", "btn_sm", ""), (enable_disable_label(page_name), "btn_sm", "")]
+        elif "黑名单" in page_name:
+            inferred = [("查看", "btn_sm", ""), ("解除", "btn_sm", "")]
+        elif any(token in page_name for token in ("运输桶", "显示屏", "设备")):
+            add_label = add_label or f"新增{object_name if object_name != '对象' else page_name.replace('管理页', '')}"
+            inferred = [("编辑", "btn_sm", ""), (enable_disable_label(page_name), "btn_sm", "")]
+        elif "订单管理" in page_name:
+            inferred = [("详情", "btn_sm", "→ 订单详情页（后台）"), ("发货", "btn_sm", "→ 确认发货弹窗"), ("关闭", "btn_sm_danger", "→ 关闭订单确认弹窗")]
+        elif "发货单" in page_name:
+            inferred = [("详情", "btn_sm", "→ 发货单详情页"), ("发货", "btn_sm", "")]
+        else:
+            inferred = [("查看", "btn_sm", f"→ {page_name}详情")]
+
+        return add_label, inferred[:3]
+
     def _build_web_list(self, ctx: PageContext):
         page = ctx.page
         swimlane = ctx.swimlane_id
@@ -562,10 +660,9 @@ class PageSpecBuilder:
         self.add_element(swimlane, "select", "时间范围 ▼", 440, 160, 176, 48, "select")
         self.add_element(swimlane, "btn_primary", "查询", 632, 160, 88, 48, "btn_primary")
         self.add_element(swimlane, "btn_secondary", "重置", 736, 160, 88, 48, "btn_secondary")
-        if as_bool(page.get("needs_crud")):
-            self.add_element(swimlane, "btn_primary", f"新增{object_name}", 1296, 160, 120, 48, "btn_primary", f"→ 新增/编辑{object_name}弹窗")
-        else:
-            self.add_element(swimlane, "text_hint", "共 128 条记录", 1248, 172, 168, 24, "text_hint")
+        add_label, row_actions = self._list_action_specs(page)
+        if add_label:
+            self.add_element(swimlane, "btn_primary", add_label, 1296, 160, 120, 48, "btn_primary", f"→ 新增/编辑{object_name}弹窗")
 
         columns = self._table_columns(page)
         widths = self._column_widths(columns)
@@ -595,11 +692,11 @@ class PageSpecBuilder:
                 else:
                     value = placeholder_value(name, row_idx + 1)
                 self.add_element(swimlane, "table_cell", value, x_positions[col_idx], y, widths[col_idx], 48, row_style)
-            if as_bool(page.get("needs_crud")):
-                self.add_element(swimlane, "btn_sm", "编辑", 1296, y + 8, 48, 32, "btn_sm", f"→ 新增/编辑{object_name}弹窗")
-                self.add_element(swimlane, "btn_sm_danger", "删除", 1352, y + 8, 48, 32, "btn_sm_danger", f"→ {delete_modal_name(object_name)}")
-            else:
-                self.add_element(swimlane, "btn_sm", "查看", 1320, y + 8, 56, 32, "btn_sm", f"→ {page_name}详情")
+            action_width = 40 if len(row_actions) >= 3 else 48 if len(row_actions) == 2 else 56
+            action_x = 1296
+            for action_name, action_style, tooltip in row_actions:
+                self.add_element(swimlane, action_style, action_name, action_x, y + 8, action_width, 32, action_style, tooltip)
+                action_x += action_width + 8
 
         pagination_y = row_start_y + 5 * 48 + 24
         self.add_element(swimlane, "pagination", "共 128 条 第 1/6 页 上一页 下一页", 24, pagination_y, 344, 40, "pagination")
@@ -901,17 +998,66 @@ class PageSpecBuilder:
         page_name = str(page.get("page_name", "登录页")).strip()
         product_name = str(self.model.get("product_name", self.module_name)).strip() or self.module_name
 
+        fields = self._field_rows(page)
+        account_field = self._match_field(fields, ("账号", "用户名", "手机号", "邮箱", "手机"))
+        password_field = self._match_field(fields, ("密码",))
+        captcha_field = self._match_field(fields, ("验证码", "校验码"))
+        is_admin_login = any(token in f"{page_name} {product_name} {self.module_name}" for token in ("后台", "管理", "审计"))
+        show_captcha = captcha_field is not None or is_admin_login
+        show_self_service_links = not is_admin_login
+
+        account_name = str((account_field or {}).get("name", "账号")).strip() or "账号"
+        password_name = str((password_field or {}).get("name", "密码")).strip() or "密码"
+        captcha_name = str((captcha_field or {}).get("name", "图形验证码")).strip() or "图形验证码"
+        note_text = self._login_note(page, show_captcha)
+
+        card_x = 24
+        card_y = 104 if show_captcha else 136
+        card_w = 328
+        inner_x = 48
+        content_w = 280
+        title_y = card_y + 32
+        subtitle_y = title_y + 48
+        y = subtitle_y + 56
+
+        account_input_y = y + 32
+        y = account_input_y + 72
+        password_input_y = y + 32
+        y = password_input_y + 72
+
+        captcha_input_y = None
+        if show_captcha:
+            captcha_input_y = y + 32
+            y = captcha_input_y + 72
+
+        login_btn_y = y + 16
+        note_y = login_btn_y + 72
+        links_y = note_y + 32
+        card_bottom = links_y + (32 if show_self_service_links else 0) + 40
+        card_h = snap8(card_bottom - card_y)
+
         self.add_element(swimlane, "bg", "", 0, 40, 376, 816, "bg")
-        self.add_element(swimlane, "card", "", 24, 208, 328, 376, "card")
-        self.add_element(swimlane, "text_title", product_name, 48, 232, 240, 40, "text_title")
-        self.add_element(swimlane, "text_hint", f"欢迎使用{page_name}", 48, 280, 240, 24, "text_hint")
-        self.add_element(swimlane, "label", "账号", 48, 320, 280, 24, "label")
-        self.add_element(swimlane, "input", "请输入手机号/邮箱", 48, 352, 280, 48, "input")
-        self.add_element(swimlane, "label", "密码", 48, 424, 280, 24, "label")
-        self.add_element(swimlane, "input", "请输入密码", 48, 456, 280, 48, "input")
-        self.add_element(swimlane, "btn_primary", "登录", 48, 528, 280, 48, "btn_primary", "→ 登录成功后进入首页")
-        self.add_element(swimlane, "text_link", "忘记密码？", 96, 592, 96, 24, "text_link", "→ 忘记密码")
-        self.add_element(swimlane, "text_link", "注册账号", 208, 592, 96, 24, "text_link", "→ 注册")
+        self.add_element(swimlane, "card", "", card_x, card_y, card_w, card_h, "card")
+        self.add_element(swimlane, "text_title", product_name, inner_x, title_y, 240, 40, "text_title")
+        self.add_element(swimlane, "text_hint", f"欢迎使用{page_name}", inner_x, subtitle_y, 240, 24, "text_hint")
+
+        self.add_element(swimlane, "label", account_name, inner_x, account_input_y - 32, content_w, 24, "label")
+        account_placeholder = "请输入" + ("后台账号" if is_admin_login else account_name)
+        self.add_element(swimlane, "input", account_placeholder, inner_x, account_input_y, content_w, 48, "input")
+
+        self.add_element(swimlane, "label", password_name, inner_x, password_input_y - 32, content_w, 24, "label")
+        self.add_element(swimlane, "input", "请输入登录密码", inner_x, password_input_y, content_w, 48, "input")
+
+        if show_captcha and captcha_input_y is not None:
+            self.add_element(swimlane, "label", captcha_name, inner_x, captcha_input_y - 32, content_w, 24, "label")
+            self.add_element(swimlane, "input", "请输入验证码", inner_x, captcha_input_y, 144, 48, "input")
+            self.add_element(swimlane, "btn_secondary", "刷新验证码", inner_x + 160, captcha_input_y, 120, 48, "btn_secondary")
+
+        self.add_element(swimlane, "btn_primary", "登录", inner_x, login_btn_y, content_w, 48, "btn_primary", "→ 登录成功后进入首页")
+        self.add_element(swimlane, "text_hint", note_text, inner_x, note_y, content_w, 24, "text_hint")
+        if show_self_service_links:
+            self.add_element(swimlane, "text_link", "忘记密码？", 96, links_y, 96, 24, "text_link", "→ 忘记密码")
+            self.add_element(swimlane, "text_link", "注册账号", 208, links_y, 96, 24, "text_link", "→ 注册")
         self._add_annotations(ctx)
 
     def _build_dashboard(self, ctx: PageContext):
@@ -1110,19 +1256,24 @@ class PageSpecBuilder:
         for field in fields[:6]:
             control = str(field.get("control", "input")).strip() or "input"
             rows_h += 104 if control == "textarea" else 64
-        # 头部 + 表单区 + footer 操作区，确保按钮不会压住最后一个字段
-        content_h = 224 + rows_h
-        return snap8(max(416, min(content_h, 720)))
+        # 头部 + 表单区 + footer 操作区，确保按钮和最后一个字段之间留出明显间距
+        content_h = 256 + rows_h
+        return snap8(max(448, min(content_h, 760)))
 
     def _build_edit_modal(self, ctx: PageContext, object_name: str, fields: list[dict]):
         swimlane = ctx.swimlane_id
-        modal_w = 720 if ctx.swimlane_w >= 800 else 520
-        modal_h = ctx.swimlane_h - 64
-        self.add_element(swimlane, "modal_bg", "", 24, 40, modal_w, modal_h, "modal_bg")
-        self.add_element(swimlane, "modal_title", f"新增/编辑{object_name}", 48, 56, 240, 24, "modal_title")
-        self.add_element(swimlane, "divider", "", 48, 96, modal_w - 48, 1, "divider")
-        y = 120
-        input_w = 320 if ctx.swimlane_w >= 800 else 248
+        modal_x = 40 if ctx.swimlane_w >= 800 else 24
+        modal_y = 48
+        modal_w = ctx.swimlane_w - modal_x * 2
+        modal_h = ctx.swimlane_h - 88
+        label_x = modal_x + 24
+        input_x = modal_x + 128
+        input_w = min(320 if ctx.swimlane_w >= 800 else 248, modal_w - 168)
+
+        self.add_element(swimlane, "modal_bg", "", modal_x, modal_y, modal_w, modal_h, "modal_bg")
+        self.add_element(swimlane, "modal_title", f"新增/编辑{object_name}", label_x, modal_y + 16, 240, 24, "modal_title")
+        self.add_element(swimlane, "divider", "", label_x, modal_y + 56, modal_w - 48, 1, "divider")
+        y = modal_y + 80
         for field in fields[:6]:
             name = str(field.get("name", "字段")).strip() or "字段"
             required = as_bool(field.get("required"))
@@ -1132,16 +1283,17 @@ class PageSpecBuilder:
             options = normalize_list(field.get("options"))
             if options:
                 tooltip = "可选值：" + " / ".join(options)
-            self.add_element(swimlane, "label", f"{name} *" if required else name, 48, y, 88, 40, label_style)
+            self.add_element(swimlane, "label", f"{name} *" if required else name, label_x, y, 88, 40, label_style)
             style_key = "textarea" if control == "textarea" else "select" if control == "select" else "input"
             height = 88 if control == "textarea" else 48
             placeholder = ("请选择" if control == "select" else "请输入") + name
-            self.add_element(swimlane, control, placeholder, 152, y, input_w, height, style_key, tooltip)
+            self.add_element(swimlane, control, placeholder, input_x, y, input_w, height, style_key, tooltip)
             y += 104 if control == "textarea" else 64
-        footer_y = max(y + 24, ctx.swimlane_h - 96)
-        self.add_element(swimlane, "divider", "", 48, footer_y - 24, modal_w - 48, 1, "divider")
-        self.add_element(swimlane, "btn_secondary", "取消", modal_w - 216, footer_y, 88, 48, "btn_secondary", "→ 关闭弹窗")
-        self.add_element(swimlane, "btn_primary", "确认", modal_w - 112, footer_y, 104, 48, "btn_primary", "→ 保存后关闭弹窗")
+        footer_top = max(y + 32, modal_y + modal_h - 88)
+        btn_y = min(footer_top + 24, modal_y + modal_h - 56)
+        self.add_element(swimlane, "divider", "", label_x, footer_top, modal_w - 48, 1, "divider")
+        self.add_element(swimlane, "btn_secondary", "取消", modal_x + modal_w - 216, btn_y, 88, 48, "btn_secondary", "→ 关闭弹窗")
+        self.add_element(swimlane, "btn_primary", "确认", modal_x + modal_w - 112, btn_y, 104, 48, "btn_primary", "→ 保存后关闭弹窗")
 
     def _build_delete_modal(self, ctx: PageContext, object_name: str):
         swimlane = ctx.swimlane_id
@@ -1216,18 +1368,36 @@ def normalize_output_path(model_path: str, output_path: str) -> str:
 
     model_abs = os.path.abspath(model_path)
     model_dir = os.path.dirname(model_abs)
-    work_dir = model_dir
+    model_dir_name = os.path.basename(model_dir)
+    if model_dir_name == "page_models":
+        artifact_root = os.path.dirname(model_dir)
+    elif model_dir_name == ".prototype-generator":
+        artifact_root = model_dir
+    else:
+        artifact_root = os.path.join(model_dir, ".prototype-generator")
+    work_dir = os.path.dirname(artifact_root)
+    canonical_page_specs_dir = os.path.join(artifact_root, "page_specs")
 
     if os.path.isdir(raw):
-        return os.path.join(raw, os.path.basename(model_path).replace("page_model_", "page_spec_").replace(".json", ".md"))
+        raw_abs = os.path.abspath(raw)
+        output_name = os.path.basename(model_path).replace("page_model_", "page_spec_").replace(".json", ".md")
+        if raw_abs in {work_dir, artifact_root, os.path.join(work_dir, "page_specs")}:
+            return os.path.join(canonical_page_specs_dir, output_name)
+        return os.path.join(raw_abs, output_name)
 
     abs_output = os.path.abspath(raw)
     output_dir = os.path.dirname(abs_output)
     output_name = os.path.basename(abs_output)
 
-    # 兼容历史调用：如果把 page_spec 文件直接指向 WORK_DIR 根目录，自动收敛到 page_specs/ 子目录
-    if output_dir == work_dir and output_name.startswith("page_spec_") and output_name.endswith(".md"):
-        return os.path.join(work_dir, "page_specs", output_name)
+    # 兼容历史调用：若 page_spec 仍指向 WORK_DIR 根目录、WORK_DIR/page_specs/ 或中间目录根，统一收敛到 .prototype-generator/page_specs/
+    if output_name.startswith("page_spec_") and output_name.endswith(".md"):
+        legacy_dirs = {
+            work_dir,
+            artifact_root,
+            os.path.join(work_dir, "page_specs"),
+        }
+        if output_dir in legacy_dirs:
+            return os.path.join(canonical_page_specs_dir, output_name)
 
     return abs_output
 

@@ -1,6 +1,6 @@
 # 页面规格冻结契约
 
-本文件定义 `page_specs/page_spec_*.md` 的统一职责与最小格式。
+本文件定义 `.prototype-generator/page_specs/page_spec_*.md` 的统一职责与最小格式。
 
 ## 目的
 
@@ -9,7 +9,7 @@
 
 ## 输出位置
 
-- 统一目录：`WORK_DIR/page_specs/`
+- 统一目录：`WORK_DIR/.prototype-generator/page_specs/`
 - 文件命名：`page_spec_[模块英文名].md`
 - `WORK_DIR` 根目录出现新的 `page_spec_*.md` 视为流程错误
 

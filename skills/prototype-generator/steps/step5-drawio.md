@@ -14,8 +14,8 @@ draw.io 统一改为四段链路：
 
 在任何 draw.io 子任务启动前，主进程必须先完成以下动作：
 
-1. 读取 `WORK_DIR/原型DoD.md`
-2. 读取 `WORK_DIR/drawio-完成标准.md`
+1. 读取 `WORK_DIR/.prototype-generator/原型DoD.md`
+2. 读取 `WORK_DIR/.prototype-generator/drawio-完成标准.md`
 3. 用简洁摘要向用户确认本次 draw.io 任务的完成定义：
    - 最终交付物路径
    - 模块数 / 预计 swimlane 数
@@ -37,7 +37,7 @@ draw.io 统一改为四段链路：
 
 ### 子任务输出
 
-- `WORK_DIR/page_model_[模块英文名].json`
+- `WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json`
 
 ### 硬约束
 
@@ -77,21 +77,21 @@ draw.io 统一改为四段链路：
 先确保目录存在：
 
 ```bash
-mkdir -p WORK_DIR/page_specs
+mkdir -p WORK_DIR/.prototype-generator/page_models WORK_DIR/.prototype-generator/page_specs WORK_DIR/.prototype-generator/tmp
 ```
 
 **固定目录规则：**
 
-- 所有 `page_spec_*.md` 必须写入 `WORK_DIR/page_specs/`
-- `WORK_DIR` 根目录下出现新的 `page_spec_*.md` 视为流程错误，不得继续进入 render
-- 即使脚本调用者误把输出路径写成 `WORK_DIR/page_spec_xxx.md`，也必须自动收敛到 `WORK_DIR/page_specs/page_spec_xxx.md`
+- 所有 `page_spec_*.md` 必须写入 `WORK_DIR/.prototype-generator/page_specs/`
+- `WORK_DIR` 根目录或 `WORK_DIR/page_specs/` 下出现新的 `page_spec_*.md` 视为流程错误，不得继续进入 render
+- 即使脚本调用者误把输出路径写成 `WORK_DIR/page_spec_xxx.md` 或 `WORK_DIR/page_specs/page_spec_xxx.md`，也必须自动收敛到 `WORK_DIR/.prototype-generator/page_specs/page_spec_xxx.md`
 
 对每个模块执行：
 
 ```bash
 python3 SKILL_DIR/scripts/build_page_spec.py \
-  WORK_DIR/page_model_[模块英文名].json \
-  WORK_DIR/page_specs/page_spec_[模块英文名].md
+  WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json \
+  WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md
 ```
 
 ### 脚本负责
@@ -127,9 +127,9 @@ python3 SKILL_DIR/scripts/build_page_spec.py \
 
 render 阶段只允许读取：
 
-- `WORK_DIR/page_specs/page_spec_[模块英文名].md`
+- `WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md`
 - `SKILL_DIR/steps/step5-component-styles.md`
-- `WORK_DIR/原型任务清单.md`
+- `WORK_DIR/.prototype-generator/原型任务清单.md`
 - 导航/跳转映射
 
 禁止回读原始资料、PRD、竞品文档、需求文档原文。
@@ -137,8 +137,8 @@ render 阶段只允许读取：
 ```bash
 python3 SKILL_DIR/scripts/render.py \
   SKILL_DIR/steps/step5-component-styles.md \
-  WORK_DIR/page_specs/page_spec_[模块英文名].md \
-  WORK_DIR/drawio_[模块英文名]_tmp.xml
+  WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md \
+  WORK_DIR/.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml
 ```
 
 规则：
@@ -155,7 +155,7 @@ python3 SKILL_DIR/scripts/render.py \
 ```bash
 python3 SKILL_DIR/scripts/check_prototype_consistency.py \
   WORK_DIR/requirements \
-  WORK_DIR/page_specs \
+  WORK_DIR/.prototype-generator/page_specs \
   --json
 ```
 
@@ -173,7 +173,7 @@ python3 SKILL_DIR/scripts/check_prototype_consistency.py \
 对每个模块执行：
 
 ```bash
-python3 SKILL_DIR/scripts/validate.py WORK_DIR/drawio_[模块英文名]_tmp.xml --json
+python3 SKILL_DIR/scripts/validate.py WORK_DIR/.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml --json
 ```
 
 ### 通过门槛
@@ -181,7 +181,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/drawio_[模块英文名]_tmp.xml 
 - `FAIL = 0`
 - 不允许触发 `C10 CRUD闭环`
 - 不允许触发 `C11 占位词残留`
-- 通过结果必须回写到 `WORK_DIR/drawio-完成标准.md` 或 `WORK_DIR/原型DoD.md` 的对应勾选项
+- 通过结果必须回写到 `WORK_DIR/.prototype-generator/drawio-完成标准.md` 或 `WORK_DIR/.prototype-generator/原型DoD.md` 的对应勾选项
 
 ### 自动重建规则
 
@@ -245,7 +245,7 @@ python3 SKILL_DIR/scripts/compare_drawio.py \
 python3 SKILL_DIR/scripts/merge.py \
   WORK_DIR/prototypes/[产品名称].drawio \
   [产品名称] \
-  --glob WORK_DIR/drawio_*_tmp.xml
+  --glob WORK_DIR/.prototype-generator/tmp/drawio_*_tmp.xml
 ```
 
 合并完成后，必须立刻再对最终文件执行一次：
@@ -257,6 +257,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 只有当最终 `.drawio` 文件也满足以下条件时，任务才算真正完成：
 - validate 结果 `FAIL = 0`
 - `C13 页面类型降级 = 0`
-- `WORK_DIR/原型DoD.md` 全部条目通过
-- `WORK_DIR/drawio-完成标准.md` 全部条目通过
+- `WORK_DIR/.prototype-generator/原型DoD.md` 全部条目通过
+- `WORK_DIR/.prototype-generator/drawio-完成标准.md` 全部条目通过
 - 已向用户报告最终产物路径和复测结果
+- 若本轮同时修改了 skill 脚本或模板，还必须补充并运行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；任一测试失败都必须返回脚本层继续修复

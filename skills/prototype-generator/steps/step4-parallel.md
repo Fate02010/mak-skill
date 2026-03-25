@@ -80,7 +80,7 @@ WORK_DIR/
 - 读取 [WORK_DIR绝对路径]/requirements/详细需求文档_overview.md 第2章"用户角色"、第2.5章"系统边界与外部依赖"、第2.8章"模块职责与协作关系"
 - 有移动端时读取第3.5章"移动端导航结构"；有后台时读取第3.6章"后台导航结构"
 - 读取第4.5章"关键业务事件"、第5.5章"枚举值字典"、第5.8章"权限与数据口径总则"
-- 读取 [WORK_DIR绝对路径]/竞品分析报告.md 中 [模块名] 相关章节（获取竞品洞察）
+- 读取 [WORK_DIR绝对路径]/.prototype-generator/竞品分析报告.md 中 [模块名] 相关章节（获取竞品洞察）
 
 【格式】严格遵循 step4-doc-format.md 中功能模块清单的结构，每个功能点必须包含：
 - 开发关注点
@@ -155,7 +155,7 @@ spawn_agent(agent_type="worker", message="...模块3 完整 prompt（所有占�
 - **读取原型图清单**：读 requirements/详细需求文档_overview.md §7
 ```
 
-3. **更新执行状态：** 在 `WORK_DIR/执行状态.md` 中记录：
+3. **更新执行状态：** 在 `WORK_DIR/.prototype-generator/执行状态.md` 中记录：
 
 ```markdown
 ## 需求文档模式

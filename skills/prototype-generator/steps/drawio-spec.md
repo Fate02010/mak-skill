@@ -425,7 +425,7 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 - 推荐带终端维度时使用：`后台-订单管理`、`后台-员工管理`、`小程序-首页`
 - 禁止：`后台-人员与权限`、`后台-商品与内容`、`小程序-账号与首页` 这类并列聚合命名；应先拆分再生成
 
-**subagent 输出约定：** 每个 subagent 负责一个模块，将该模块的**整个 `<diagram>`**（含所有页面 swimlane）写入临时文件 `WORK_DIR/drawio_[模块英文名]_tmp.xml`（仅含 `<diagram>` 元素，无 `<mxfile>` 包裹）。主流程等所有 subagent 完成后，将全部 `<diagram>` 合并写入 `WORK_DIR/prototypes/[产品名称].drawio`。
+**subagent 输出约定：** 每个 subagent 负责一个模块，将该模块的**整个 `<diagram>`**（含所有页面 swimlane）写入临时文件 `WORK_DIR/.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml`（仅含 `<diagram>` 元素，无 `<mxfile>` 包裹）。主流程等所有 subagent 完成后，将全部 `<diagram>` 合并写入 `WORK_DIR/prototypes/[产品名称].drawio`。
 
 ### 模块内页面布局（swimlane 并排）
 

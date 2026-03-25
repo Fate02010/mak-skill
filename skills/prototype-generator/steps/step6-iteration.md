@@ -6,7 +6,7 @@
 
 ## 阶段 6-0：需求对照审视（强制，不可跳过）
 
-> 目标：逐页对照需求文档、原型任务清单、page_specs 与最终原型，执行预处理校验 + 七个维度审视，输出审视报告并等待用户确认后修复。
+> 目标：逐页对照需求文档、`.prototype-generator/原型任务清单.md`、`.prototype-generator/page_specs/` 与最终原型，执行预处理校验 + 七个维度审视，输出审视报告并等待用户确认后修复。
 
 ### 预处理：跳转与覆盖率校验
 
@@ -42,13 +42,13 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 ### 准备工作
 
 1. 读取 `WORK_DIR/requirements/详细需求文档.md`，提取"原型图清单"和每个页面的功能描述、字段列表
-2. 读取 `WORK_DIR/原型任务清单.md`，获取已生成的页面列表
-3. 读取 `WORK_DIR/page_specs/`，获取冻结后的页面结构、字段、跳转和状态定义
+2. 读取 `WORK_DIR/.prototype-generator/原型任务清单.md`，获取已生成的页面列表
+3. 读取 `WORK_DIR/.prototype-generator/page_specs/`，获取冻结后的页面结构、字段、跳转和状态定义
 4. 扫描已生成文件：
    - **HTML 模式**：用当前会话可用的文件列表命令列出 `WORK_DIR/prototypes/*.html`
    - **draw.io 模式**：读取 `WORK_DIR/prototypes/[产品名称].drawio`，列出所有 `<diagram name>` 和 swimlane
 
-> 审视阶段默认只对照结构化中间产物，不回读原始资料。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `page_specs/`，再重跑渲染。
+> 审视阶段默认只对照结构化中间产物，不回读原始资料。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `.prototype-generator/page_specs/`，再重跑渲染。
 
 ### 七维度审视
 
@@ -107,7 +107,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - 列表页：筛选条件 + 列表展示列名
 - 表单页：表单字段名（含控件类型、是否必填）
 - 详情页：展示字段名
-输出 coverage 报告，< 80% 的页面必须修复。修复方式：统一先修改 `page_specs/page_spec_*.md`，再重跑对应模块渲染。
+输出 coverage 报告，< 80% 的页面必须修复。修复方式：统一先修改 `.prototype-generator/page_specs/page_spec_*.md`，再重跑对应模块渲染。
 
 **维度三：排版合理性**
 
@@ -274,7 +274,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - **排版/坐标问题**：draw.io 模式：修改 page_spec 中对应元素的 x/y/width/height → 重跑渲染；HTML 模式：修改 page_spec 中布局说明后重渲染；draw.io 若只是 1-2 个元素的微调（< 3 个 mxCell），可直接微调 `.drawio` XML
 - 每次修复后更新 `执行状态.md` 的"Spec 版本记录"表格，记录版本号、变更原因和修改摘要
 
-修复完成后，将审视结果追加到 `WORK_DIR/执行状态.md` 的 Step 6 迭代记录：
+修复完成后，将审视结果追加到 `WORK_DIR/.prototype-generator/执行状态.md` 的 Step 6 迭代记录：
 
 ```
 | 审视轮 | 发现 X 处问题，HTML对比 Y 页，已修复 Z 处 |
@@ -337,7 +337,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 
 1. 对每个改进项，直接编辑对应的文件
 2. 如果改进引入了新的需求决策，同步更新 `requirements/详细需求文档.md`
-3. 在 `WORK_DIR/执行状态.md` 的"Step 6 迭代记录"中追加本轮摘要（轮次 + 改进内容摘要）
+3. 在 `WORK_DIR/.prototype-generator/执行状态.md` 的"Step 6 迭代记录"中追加本轮摘要（轮次 + 改进内容摘要）
 4. 当前迭代轮次 < 上限时，**再次进入阶段 6-1**，生成新一轮改进建议
 
 **迭代上限：最多 4 轮**

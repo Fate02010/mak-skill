@@ -18,7 +18,7 @@
 > - 单文件模式：读取 [WORK_DIR]/requirements/详细需求文档.md 中以下章节
 > - 分拆模式：① 读取 [WORK_DIR]/requirements/index.md 确认本模块文件路径；② 读取 [WORK_DIR]/requirements/详细需求文档_overview.md §2（用户角色）、§2.5（系统边界与外部依赖）、§2.8（模块职责与协作关系）、§3.5/§3.6（导航结构）、§4.5（关键业务事件）、§5.5（枚举值字典）、§5.8（权限与数据口径总则）；③ 读取本模块文件中以下章节
 > - 若模块文档中存在 `开发关注点`、`权限与可见范围`、`数据影响`，必须一并提取，用于决定按钮可见性、异常态、规则提示和交互闭环
-第二步补充：读取 [WORK_DIR的绝对路径]/竞品亮点摘要.md，了解竞品亮点和行业共识功能（如文件不存在则跳过此步）。
+第二步补充：读取 [WORK_DIR的绝对路径]/.prototype-generator/竞品亮点摘要.md，了解竞品亮点和行业共识功能（如文件不存在则跳过此步）。
 第三步：先冻结页面规格，写入：
 [PAGE_SPEC_PATH]
 
@@ -31,7 +31,7 @@
 从现在开始，禁止再回读原始资料、PRD、竞品文档和需求文档章节。
 render 阶段只允许读取：
 - [PAGE_SPEC_PATH]
-- [WORK_DIR的绝对路径]/原型任务清单.md
+- [WORK_DIR的绝对路径]/.prototype-generator/原型任务清单.md
 - [SKILL_DIR的实际绝对路径]/steps/html-spec.md
 - [WORK_DIR的绝对路径]/prototypes/common.css
 
@@ -262,7 +262,7 @@ swimlane 内第一个组件 y ≥ 40，禁止 y=0。
 
 【输出文件】
 将整个 diagram 元素（不含 mxfile 包裹）写入：
-[WORK_DIR的实际绝对路径]/drawio_[模块英文名]_tmp.xml
+[WORK_DIR的实际绝对路径]/.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml
 文件内容：一个完整的 diagram 元素，内含所有 swimlane 和 UI 组件。
 
 【标注区内容限制（严格执行）】
@@ -294,6 +294,6 @@ swimlane 内第一个组件 y ≥ 40，禁止 y=0。
 【需求变更记录】发现假设/遗漏/新增时，在文件末尾追加：
 REQUIREMENT_CHANGES: [变更类型] | 页面:[页面名] | [描述] | 建议章节:[章节]
 
-三轮精修完成后输出一行：✅ [模块名] 完成（含三轮精修），共 N 个 swimlane，已写入 drawio_[模块英文名]_tmp.xml
+三轮精修完成后输出一行：✅ [模块名] 完成（含三轮精修），共 N 个 swimlane，已写入 .prototype-generator/tmp/drawio_[模块英文名]_tmp.xml
 禁止在控制台输出 XML 正文内容。
 ```

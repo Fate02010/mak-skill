@@ -20,7 +20,7 @@
 ```
 
 2. 读取 `WORK_DIR/requirements/详细需求文档.md` 了解现有功能边界，避免重复或冲突
-3. 读取 `WORK_DIR/原型任务清单.md` 了解已有页面和跳转地图
+3. 读取 `WORK_DIR/.prototype-generator/原型任务清单.md` 了解已有页面和跳转地图
 
 ## 阶段 7-2：补全新功能需求，用户确认
 

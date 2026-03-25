@@ -77,17 +77,17 @@ draw.io 统一走强约束链路：
 
 ### 启动前门禁
 
-- 主进程必须先生成并检查 `WORK_DIR/原型DoD.md`
-- 主进程必须先生成并检查 `WORK_DIR/drawio-完成标准.md`
+- 主进程必须先生成并检查 `WORK_DIR/.prototype-generator/原型DoD.md`
+- 主进程必须先生成并检查 `WORK_DIR/.prototype-generator/drawio-完成标准.md`
 - 主进程必须先检查每个 `page_model.module_name` 是否为**最终 sheet 名**，不得带 `page_spec:` 前缀，不得是“后台-商品与内容”这类聚合命名
 - 若“完成定义 / 交付前检查清单 / 最终 validate 门槛”任一未明确，Codex 不得启动 draw.io 子 agent
 
 ### 阶段 A：语义建模
 
-- 用 `spawn_agent` 按模块分批并行生成 `page_model_[模块英文名].json`，每批最多 3 个子 agent
+- 用 `spawn_agent` 按模块分批并行生成 `.prototype-generator/page_models/page_model_[模块英文名].json`，每批最多 3 个子 agent
 - 每个子任务负责 ≤ 2 个真实页面；超过则强制拆分
 - 子任务只负责页面类型、字段、列表列、状态枚举、跳转、CRUD 标记
-- 子任务输出必须直接写入 `WORK_DIR/page_model_[模块英文名].json`
+- 子任务输出必须直接写入 `WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json`
 
 ### 阶段 B：构建与渲染
 
@@ -98,16 +98,16 @@ draw.io 统一走强约束链路：
 **Codex shell 示例：**
 
 ```text
-exec_command(cmd="mkdir -p .../page_specs")
-exec_command(cmd="python3 .../build_page_spec.py .../page_model_user.json .../page_specs/page_spec_user.md")
-exec_command(cmd="python3 .../render.py .../step5-component-styles.md .../page_specs/page_spec_user.md .../drawio_user_tmp.xml")
+exec_command(cmd="mkdir -p .../.prototype-generator/page_models .../.prototype-generator/page_specs .../.prototype-generator/tmp")
+exec_command(cmd="python3 .../build_page_spec.py .../.prototype-generator/page_models/page_model_user.json .../.prototype-generator/page_specs/page_spec_user.md")
+exec_command(cmd="python3 .../render.py .../step5-component-styles.md .../.prototype-generator/page_specs/page_spec_user.md .../.prototype-generator/tmp/drawio_user_tmp.xml")
 ```
 
 补充强约束：
 
-- `build_page_spec.py` 的输出路径必须显式指向 `WORK_DIR/page_specs/page_spec_[模块英文名].md`
-- 若发现新生成的 `WORK_DIR/page_spec_[模块英文名].md` 落在根目录，视为流程错误，必须修正路径后重跑
-- render 阶段只允许读取 `WORK_DIR/page_specs/` 下的 page_spec，不得读取根目录历史文件
+- `build_page_spec.py` 的输出路径必须显式指向 `WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md`
+- 若发现新生成的 `WORK_DIR/page_spec_[模块英文名].md` 或 `WORK_DIR/page_specs/page_spec_[模块英文名].md` 落在根目录侧，视为流程错误，必须修正路径后重跑
+- render 阶段只允许读取 `WORK_DIR/.prototype-generator/page_specs/` 下的 page_spec，不得读取根目录历史文件
 
 ---
 
@@ -125,7 +125,7 @@ Codex 中凡是历史文档写着 “Read 某文件 / 某章节”，都按下�
 
 ## page_model 契约
 
-Codex draw.io 模式统一先输出 `page_model_[模块英文名].json`：
+Codex draw.io 模式统一先输出 `.prototype-generator/page_models/page_model_[模块英文名].json`：
 
 - 契约文件：`SKILL_DIR/steps/page-model-spec.md`
 - 新内容统一写 JSON，不再让子任务直接输出 `page_spec`
@@ -137,12 +137,12 @@ Codex draw.io 模式统一先输出 `page_model_[模块英文名].json`：
 
 所有子任务完成后，主进程必须完成以下快速验收：
 
-1. **产出完整性**：检查任务清单中的每个模块是否都有对应 `page_model_*.json`
+1. **产出完整性**：检查任务清单中的每个模块是否都有对应 `.prototype-generator/page_models/page_model_*.json`
 2. **page_model 校验**：确认 JSON 合法且页面数 ≤ 2
 3. **构建前校验**：对每个模型执行 `build_page_spec.py`；脚本报错则不进入 render
-4. **渲染后校验**：对每个 `drawio_*_tmp.xml` 执行 `validate.py`
-5. **一致性门禁**：执行 `check_prototype_consistency.py WORK_DIR/requirements WORK_DIR/page_specs --json`
-6. **自动重建**：若触发 `C10/C11`、`FAIL`、缺页、缺字段或低覆盖率，必须回到 `page_specs` 或 `page_model` 重建
+4. **渲染后校验**：对每个 `.prototype-generator/tmp/drawio_*_tmp.xml` 执行 `validate.py`
+5. **一致性门禁**：执行 `check_prototype_consistency.py WORK_DIR/requirements WORK_DIR/.prototype-generator/page_specs --json`
+6. **自动重建**：若触发 `C10/C11`、`FAIL`、缺页、缺字段或低覆盖率，必须回到 `.prototype-generator/page_specs` 或 `.prototype-generator/page_models` 重建
 7. **失败熔断**：失败数超过 50% 时暂停流程
 
 ---

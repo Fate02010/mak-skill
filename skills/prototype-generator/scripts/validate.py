@@ -19,6 +19,7 @@ import os
 import re
 import sys
 import xml.etree.ElementTree as ET
+from typing import Optional
 
 
 # ---------------------------------------------------------------------------
@@ -32,6 +33,14 @@ def _text_len(value: str) -> int:
     plain = re.sub(r"<[^>]+>", "", value)
     plain = re.sub(r"&[a-zA-Z]+;|&#[0-9]+;|&#x[0-9a-fA-F]+;", " ", plain)
     return len(plain.strip())
+
+
+def _plain_value(value: str) -> str:
+    if not value:
+        return ""
+    plain = re.sub(r"<[^>]+>", "", value)
+    plain = re.sub(r"&[a-zA-Z]+;|&#[0-9]+;|&#x[0-9a-fA-F]+;", " ", plain)
+    return plain.strip()
 
 
 _LABEL_KEYWORDS = {"价格", "状态", "时间", "编号", "姓名", "金额", "数量", "名称",
@@ -75,6 +84,44 @@ def _is_text_cell(cell: ET.Element) -> bool:
 def _get_geometry(cell: ET.Element):
     """获取 mxCell 下的 mxGeometry 子元素。"""
     return cell.find("mxGeometry")
+
+
+def _float_attr(geo: Optional[ET.Element], key: str, default: float = 0.0) -> float:
+    if geo is None:
+        return default
+    try:
+        return float(geo.get(key, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def _button_like_cell(cell: ET.Element) -> bool:
+    style = cell.get("style", "")
+    return (
+        "btn" in style.lower()
+        or "strokeColor=#1e88e5" in style
+        or "strokeColor=#f44336" in style
+        or "fillColor=#1e88e5" in style
+        or "fillColor=#f44336" in style
+    )
+
+
+def _input_like_cell(cell: ET.Element) -> bool:
+    style = cell.get("style", "")
+    return (
+        "rounded=1" in style
+        and "fillColor=#ffffff" in style
+        and "strokeColor=#bdbdbd" in style
+    )
+
+
+def _card_like_cell(cell: ET.Element) -> bool:
+    style = cell.get("style", "")
+    return (
+        "rounded=1" in style
+        and "fillColor=#ffffff" in style
+        and ("shadow=1" in style or "strokeColor=#e0e0e0" in style)
+    )
 
 
 def _annotation_x_threshold(swimlane_width: float) -> float:
@@ -286,7 +333,14 @@ def check_c3(doc: DrawioFile) -> RuleResult:
         if not ui_cells:
             continue
 
-        text_count = sum(1 for c in ui_cells if _is_text_cell(c))
+        text_count = 0
+        for c in ui_cells:
+            if not _is_text_cell(c):
+                continue
+            style = c.get("style", "")
+            if "fontSize=12" in style and "spacingLeft=8" in style and any(token in style for token in ("fillColor=#ffffff", "fillColor=#fafafa", "fillColor=#f5f5f5")):
+                continue
+            text_count += 1
         ratio = text_count / len(ui_cells)
 
         if ratio > 0.70:
@@ -930,6 +984,193 @@ def check_c14(doc: DrawioFile) -> RuleResult:
     return RuleResult("C14", "标注信息密度", worst, count, details)
 
 
+# ---- C15 登录布局完整性 ---------------------------------------------------
+
+def check_c15(doc: DrawioFile) -> RuleResult:
+    worst = "PASS"
+    details: list = []
+    count = 0
+
+    for sl in doc.swimlanes:
+        sid = sl.get("id", "?")
+        name = doc.swimlane_name(sl)
+        if not _is_auth_like_page(name):
+            continue
+
+        threshold = _annotation_x_threshold(doc.swimlane_width(sl))
+        children = [c for c in doc.swimlane_children.get(sid, []) if _is_in_ui_area(c, threshold)]
+        card_candidates = []
+        for cell in children:
+            if not _card_like_cell(cell):
+                continue
+            geo = _get_geometry(cell)
+            width = _float_attr(geo, "width")
+            height = _float_attr(geo, "height")
+            area = width * height
+            card_candidates.append((area, cell))
+
+        if not card_candidates:
+            continue
+
+        _, card = max(card_candidates, key=lambda item: item[0])
+        card_geo = _get_geometry(card)
+        card_x = _float_attr(card_geo, "x")
+        card_y = _float_attr(card_geo, "y")
+        card_right = card_x + _float_attr(card_geo, "width")
+        card_bottom = card_y + _float_attr(card_geo, "height")
+
+        overflow = []
+        for cell in children:
+            if cell is card or "annotation" in cell.get("style", ""):
+                continue
+            if not (_input_like_cell(cell) or _button_like_cell(cell)):
+                continue
+            geo = _get_geometry(cell)
+            x = _float_attr(geo, "x")
+            y = _float_attr(geo, "y")
+            right = x + _float_attr(geo, "width")
+            bottom = y + _float_attr(geo, "height")
+            if x < card_x + 8 or right > card_right - 8 or y < card_y + 8 or bottom > card_bottom - 8:
+                overflow.append(_plain_value(cell.get("value", "")) or cell.get("id", "?"))
+
+        if overflow:
+            worst = "FAIL"
+            count += 1
+            details.append(f"{name}: 登录卡片内元素越界 ({' / '.join(overflow[:4])})")
+
+    return RuleResult("C15", "登录布局完整性", worst, count, details)
+
+
+# ---- C16 操作列按钮完整性 -------------------------------------------------
+
+def check_c16(doc: DrawioFile) -> RuleResult:
+    worst = "PASS"
+    details: list = []
+    count = 0
+
+    for sl in doc.swimlanes:
+        sid = sl.get("id", "?")
+        name = doc.swimlane_name(sl)
+        threshold = _annotation_x_threshold(doc.swimlane_width(sl))
+        children = [c for c in doc.swimlane_children.get(sid, []) if _is_in_ui_area(c, threshold)]
+        if _is_nav_group_swimlane(children):
+            continue
+
+        operation_header = None
+        for cell in children:
+            if _plain_value(cell.get("value", "")) != "操作":
+                continue
+            if "table_header" in cell.get("style", "") or "fillColor=#f5f5f5" in cell.get("style", ""):
+                operation_header = cell
+                break
+        if operation_header is None:
+            continue
+
+        header_geo = _get_geometry(operation_header)
+        header_x = _float_attr(header_geo, "x")
+        header_y = _float_attr(header_geo, "y")
+        header_w = max(_float_attr(header_geo, "width"), 56.0)
+        action_button_count = 0
+        for cell in children:
+            if not _button_like_cell(cell):
+                continue
+            geo = _get_geometry(cell)
+            x = _float_attr(geo, "x")
+            y = _float_attr(geo, "y")
+            if y <= header_y + 24:
+                continue
+            if x + 8 < header_x:
+                continue
+            if x > header_x + header_w + 160:
+                continue
+            action_button_count += 1
+
+        row_count = _count_features(children, threshold).get("rows", 0)
+        if row_count >= 3 and action_button_count == 0:
+            worst = "FAIL"
+            count += 1
+            details.append(f"{name}: 存在操作列但无行内操作按钮")
+
+    return RuleResult("C16", "操作列按钮完整性", worst, count, details)
+
+
+# ---- C17 空白装饰块残留 ---------------------------------------------------
+
+def check_c17(doc: DrawioFile) -> RuleResult:
+    worst = "PASS"
+    details: list = []
+    count = 0
+
+    for sl in doc.swimlanes:
+        sid = sl.get("id", "?")
+        name = doc.swimlane_name(sl)
+        threshold = _annotation_x_threshold(doc.swimlane_width(sl))
+        for cell in doc.swimlane_children.get(sid, []):
+            if not _is_in_ui_area(cell, threshold):
+                continue
+            if _plain_value(cell.get("value", "")):
+                continue
+            style = cell.get("style", "")
+            if "fillColor=#e3f2fd" not in style or "strokeColor=#90caf9" not in style:
+                continue
+            geo = _get_geometry(cell)
+            width = _float_attr(geo, "width")
+            height = _float_attr(geo, "height")
+            if width == 56 and height == 24:
+                worst = "FAIL"
+                count += 1
+                details.append(f"{name}: 存在无语义浅蓝占位块 ({cell.get('id', '?')})")
+
+    return RuleResult("C17", "空白装饰块残留", worst, count, details[:20])
+
+
+# ---- C18 管理页动作完整性 -------------------------------------------------
+
+def check_c18(doc: DrawioFile) -> RuleResult:
+    expectations = [
+        ("员工管理页", {"新增", "编辑", "停用"}),
+        ("司机管理页", {"新增", "编辑", "停用"}),
+        ("管理员管理页", {"新增", "编辑", "停用"}),
+        ("分销会员管理页", {"审核", "改等级"}),
+        ("分销等级管理页", {"新增", "编辑"}),
+        ("轮播图管理页", {"新增", "编辑", "下线"}),
+        ("公告管理页", {"查看", "编辑"}),
+        ("评论管理页", {"详情", "审核"}),
+        ("会员管理页", {"查看", "编辑"}),
+        ("会员等级管理页", {"新增", "编辑"}),
+        ("满额优惠管理页", {"新增", "编辑", "删除"}),
+        ("优惠券管理页", {"新增", "编辑", "删除"}),
+        ("订单管理页（后台）", {"详情", "发货", "关闭"}),
+    ]
+    worst = "PASS"
+    details: list = []
+    count = 0
+
+    for sl in doc.swimlanes:
+        sid = sl.get("id", "?")
+        name = doc.swimlane_name(sl)
+        threshold = _annotation_x_threshold(doc.swimlane_width(sl))
+        children = [c for c in doc.swimlane_children.get(sid, []) if _is_in_ui_area(c, threshold)]
+        values = [_plain_value(c.get("value", "")) for c in children]
+        values = [v for v in values if v]
+        for page_name, expected_tokens in expectations:
+            if page_name != name:
+                continue
+            hit = set()
+            for value in values:
+                for token in expected_tokens:
+                    if token in value:
+                        hit.add(token)
+            if hit != expected_tokens:
+                worst = "FAIL"
+                count += 1
+                missing = " / ".join(sorted(expected_tokens - hit))
+                details.append(f"{name}: 缺少关键动作 {missing}")
+            break
+
+    return RuleResult("C18", "管理页动作完整性", worst, count, details)
+
+
 # ---------------------------------------------------------------------------
 # 主流程
 # ---------------------------------------------------------------------------
@@ -965,6 +1206,10 @@ def run_checks(path: str, fix: bool = False) -> dict:
         check_c12(doc),
         check_c13(doc),
         check_c14(doc),
+        check_c15(doc),
+        check_c16(doc),
+        check_c17(doc),
+        check_c18(doc),
     ]
 
     summary = {"fail": 0, "warn": 0, "pass": 0}

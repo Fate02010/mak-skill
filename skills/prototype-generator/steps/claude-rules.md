@@ -70,7 +70,7 @@ Agent(prompt="负责 订单模块 需求文档 ...", run_in_background=True)
 
 ### 阶段 A：语义建模
 
-- 用 `Agent` 按模块分批并行生成 `page_model_[模块英文名].json`，每批最多 3 个子 agent
+- 用 `Agent` 按模块分批并行生成 `.prototype-generator/page_models/page_model_[模块英文名].json`，每批最多 3 个子 agent
 - 每个 Agent 负责 ≤ 2 个真实页面时最稳定；超过则拆分
 - 子任务只负责页面类型、字段、列表列、状态枚举、跳转、CRUD 标记
 
@@ -83,16 +83,16 @@ Agent(prompt="负责 订单模块 需求文档 ...", run_in_background=True)
 **Claude shell 示例：**
 
 ```text
-Bash("mkdir -p .../page_specs")
-Bash("python3 .../build_page_spec.py .../page_model_user.json .../page_specs/page_spec_user.md", run_in_background=True)
-Bash("python3 .../render.py .../step5-component-styles.md .../page_specs/page_spec_user.md .../drawio_user_tmp.xml", run_in_background=True)
+Bash("mkdir -p .../.prototype-generator/page_models .../.prototype-generator/page_specs .../.prototype-generator/tmp")
+Bash("python3 .../build_page_spec.py .../.prototype-generator/page_models/page_model_user.json .../.prototype-generator/page_specs/page_spec_user.md", run_in_background=True)
+Bash("python3 .../render.py .../step5-component-styles.md .../.prototype-generator/page_specs/page_spec_user.md .../.prototype-generator/tmp/drawio_user_tmp.xml", run_in_background=True)
 ```
 
 补充强约束：
 
-- `page_spec_*.md` 只能写入 `WORK_DIR/page_specs/`
+- `page_spec_*.md` 只能写入 `WORK_DIR/.prototype-generator/page_specs/`
 - 如果 `WORK_DIR` 根目录出现新的 `page_spec_*.md`，说明流程仍在走旧路径，必须修正后重跑
-- render 只允许读取 `page_specs/` 目录内的 page_spec
+- render 只允许读取 `.prototype-generator/page_specs/` 目录内的 page_spec
 
 ---
 
@@ -101,7 +101,7 @@ Bash("python3 .../render.py .../step5-component-styles.md .../page_specs/page_sp
 Claude draw.io 模式与 Codex 使用同一套 `page_model` JSON 契约：
 
 - 契约文件：`SKILL_DIR/steps/page-model-spec.md`
-- 新生成内容统一写 `page_model_[模块英文名].json`
+- 新生成内容统一写 `WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json`
 - `page_spec` 由 `build_page_spec.py` 自动生成
 
 ---

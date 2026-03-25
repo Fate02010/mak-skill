@@ -8,7 +8,7 @@
 
 HTML 模式也必须走：
 
-`requirements -> page_specs/page_spec_*.md -> HTML render`
+`requirements -> .prototype-generator/page_specs/page_spec_*.md -> HTML render`
 
 禁止从需求文档直接生成最终 HTML。
 
@@ -30,7 +30,7 @@ cp SKILL_DIR/templates/common.css WORK_DIR/prototypes/common.css
 
 主进程必须先确认本轮 HTML 任务会为每个模块写出：
 
-- `WORK_DIR/page_specs/page_spec_[模块英文名].md`
+- `WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md`
 
 ### 分模块规则
 
@@ -62,7 +62,7 @@ cp SKILL_DIR/templates/common.css WORK_DIR/prototypes/common.css
 | `[页面名称N]` | 该模块负责的具体页面名 |
 | `[章节名]` | 需求文档中对应章节标题 |
 | `[风格]` / `[颜色]` | 实际设计风格和主色调 |
-| `[PAGE_SPEC_PATH]` | `WORK_DIR/page_specs/page_spec_[模块英文名].md` |
+| `[PAGE_SPEC_PATH]` | `WORK_DIR/.prototype-generator/page_specs/page_spec_[模块英文名].md` |
 | `[CRUD 页面清单]` | 从阶段 5-2 CRUD 完整性检查结果中提取，格式：`- [列表页名] → 需要：新增/编辑[对象名]弹窗/页面 + 删除确认弹窗`；若该模块无 CRUD 操作则填 `无 CRUD 操作` |
 | `[需求文档读取指令]` | **单文件模式**：`读取 [WORK_DIR]/requirements/详细需求文档.md 中以下章节`<br>**分拆模式**：`先读取 [WORK_DIR]/requirements/index.md；再读取 [WORK_DIR]/requirements/详细需求文档_overview.md（至少获取用户角色 §2、系统边界 §2.5、模块职责 §2.8、导航结构 §3.5/§3.6、关键业务事件 §4.5、枚举值字典 §5.5、权限与数据口径 §5.8）；再读取 [WORK_DIR]/requirements/详细需求文档_[模块中文名].md 中以下章节` |
 

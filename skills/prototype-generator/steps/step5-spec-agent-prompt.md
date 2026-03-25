@@ -1,7 +1,7 @@
 # 规格化 Agent 提示词模板（draw.io 阶段 A：page_model）
 
 > 本文件仅用于 draw.io 模式。
-> 从现在开始，子 agent 不再直接输出 `page_spec`，统一先输出 `page_model_[模块英文名].json`。
+> 从现在开始，子 agent 不再直接输出 `page_spec`，统一先输出 `.prototype-generator/page_models/page_model_[模块英文名].json`。
 
 ---
 
@@ -28,14 +28,14 @@
 
 ## 强制输出规则
 
-1. 唯一允许的文件产物：`WORK_DIR/page_model_[模块英文名].json`
+1. 唯一允许的文件产物：`WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json`
 2. 控制台只允许输出一行完成标记
 3. 禁止输出 Markdown 表格、`page_spec`、XML、描述性页面说明
 
 完成标记格式：
 
 ```text
-✅ [模块名] page_model 完成，共 N 个页面，已写入 page_model_[模块英文名].json
+✅ [模块名] page_model 完成，共 N 个页面，已写入 .prototype-generator/page_models/page_model_[模块英文名].json
 ```
 
 ---
@@ -128,7 +128,7 @@
 ## 第五步：写入 JSON
 
 写入路径：
-[WORK_DIR的实际绝对路径]/page_model_[模块英文名].json
+[WORK_DIR的实际绝对路径]/.prototype-generator/page_models/page_model_[模块英文名].json
 
 JSON 要求：
 - 合法 JSON
@@ -178,5 +178,5 @@ JSON 要求：
 }
 
 完成后仅输出：
-✅ [模块名] page_model 完成，共 N 个页面，已写入 page_model_[模块英文名].json
+✅ [模块名] page_model 完成，共 N 个页面，已写入 .prototype-generator/page_models/page_model_[模块英文名].json
 ```

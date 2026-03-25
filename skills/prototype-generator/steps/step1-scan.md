@@ -1,4 +1,4 @@
-# Step 1：扫描资料，生成 RountMap.md
+# Step 1：扫描资料，生成 `.prototype-generator/RountMap.md`
 
 **目标：** 快速摸清产品资料的整体结构，建立一份"资料导航索引"，方便后续按需精准读取。
 
@@ -13,7 +13,7 @@
 | Excel | `.xlsx` / `.xls` / `.csv` | 用脚本提取表格内容 |
 | PPT | `.pptx` / `.ppt` | 用脚本提取每页文本 |
 | 图片 | `.png` / `.jpg` / `.jpeg` / `.gif` / `.webp` | 读取图片并做视觉理解 |
-| ZIP | `.zip` | 先查看压缩包清单，再按需解压到 `WORK_DIR/unzipped/` 后读取 |
+| ZIP | `.zip` | 先查看压缩包清单，再按需解压到 `WORK_DIR/.prototype-generator/unzipped/` 后读取 |
 
 > 遇到 Word / Excel / PPT / ZIP 文件时，读取 `SKILL_DIR/steps/step1-file-readers.md` 获取读取命令。
 
@@ -66,6 +66,6 @@
 
 读取时根据格式使用对应方式（非文本格式见 `SKILL_DIR/steps/step1-file-readers.md`）。
 
-4. 读取 `SKILL_DIR/steps/step1-routemap-format.md` 获取格式规范，生成 `RountMap.md` 保存到 `WORK_DIR`，记录每个文件的用户确认优先级。
+4. 读取 `SKILL_DIR/steps/step1-routemap-format.md` 获取格式规范，生成 `RountMap.md` 保存到 `WORK_DIR/.prototype-generator/`，记录每个文件的用户确认优先级。
 
 > 文件超过 20 个时，先扫描目录结构，再按子目录分批读取摘要，避免一次加载过多内容。
