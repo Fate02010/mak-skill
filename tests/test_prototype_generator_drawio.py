@@ -49,6 +49,28 @@ def _render_drawio(markdown: str, tmpdir: Path, diagram_id: str) -> Path:
     return drawio_path
 
 
+def _write_drawio(tmpdir: Path, diagram_id: str, diagram_name: str, swimlane_name: str, swimlane_width: int, cells: str) -> Path:
+    drawio_path = tmpdir / f"{diagram_id}.drawio"
+    drawio_path.write_text(
+        "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+        "<mxfile host=\"app.diagrams.net\" modified=\"2026-03-25T00:00:00.000Z\" "
+        "agent=\"prototype-generator-test\" version=\"24.0.0\" type=\"device\">\n"
+        f"<diagram id=\"{diagram_id}\" name=\"{diagram_name}\">\n"
+        f"  <mxGraphModel dx=\"1280\" dy=\"900\" grid=\"0\" gridSize=\"10\" guides=\"1\" tooltips=\"1\" connect=\"1\" arrows=\"1\" fold=\"1\" page=\"1\" pageScale=\"1\" pageWidth=\"1780\" pageHeight=\"1000\" math=\"0\" shadow=\"0\">\n"
+        "    <root>\n"
+        "      <mxCell id=\"0\" />\n"
+        "      <mxCell id=\"1\" parent=\"0\" />\n"
+        f"      <mxCell id=\"S1\" value=\"{swimlane_name}\" style=\"swimlane;startSize=30;fillColor=#f0f4ff;strokeColor=#1e88e5;fontStyle=1;fontSize=13;\" vertex=\"1\" parent=\"1\"><mxGeometry x=\"16\" y=\"16\" width=\"{swimlane_width}\" height=\"960\" as=\"geometry\" /></mxCell>\n"
+        f"{cells}\n"
+        "    </root>\n"
+        "  </mxGraphModel>\n"
+        "</diagram>\n"
+        "</mxfile>\n",
+        encoding="utf-8",
+    )
+    return drawio_path
+
+
 def _rule_result(report: dict, rule: str) -> dict:
     for item in report["results"]:
         if item["rule"] == rule:
@@ -227,6 +249,78 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertEqual(report["summary"]["warn"], 0, _report_message(report))
         self.assertEqual(_rule_result(report, "C3")["status"], "PASS")
         self.assertEqual(_rule_result(report, "C14")["status"], "PASS")
+
+    def test_validate_c13_accepts_rendered_text_table_rows(self):
+        cells = """
+      <mxCell id="S1_2" value="员工管理页" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;shadow=1;" vertex="1" parent="S1"><mxGeometry x="208" y="40" width="1440" height="56" as="geometry" /></mxCell>
+      <mxCell id="S1_3" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;" vertex="1" parent="S1"><mxGeometry x="208" y="96" width="1440" height="864" as="geometry" /></mxCell>
+      <mxCell id="S1_4" value="关键词搜索" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;" vertex="1" parent="S1"><mxGeometry x="240" y="152" width="200" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_5" value="状态▼" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;" vertex="1" parent="S1"><mxGeometry x="456" y="152" width="120" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_6" value="时间范围▼" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;" vertex="1" parent="S1"><mxGeometry x="592" y="152" width="144" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_7" value="查询" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="S1"><mxGeometry x="752" y="152" width="88" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_8" value="新增员工" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="S1"><mxGeometry x="1152" y="152" width="120" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_9" value="员工姓名" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="232" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_10" value="员工账号" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="232" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_11" value="状态" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="496" y="232" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_12" value="张运营" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="280" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_13" value="ops_zhang" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="280" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_14" value="正常" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="496" y="280" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_15" value="李商品" style="text;html=1;strokeColor=none;fillColor=#fafafa;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="328" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_16" value="goods_li" style="text;html=1;strokeColor=none;fillColor=#fafafa;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="328" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_17" value="正常" style="text;html=1;strokeColor=none;fillColor=#fafafa;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="496" y="328" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_18" value="王客服" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="376" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_19" value="service_wang" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="376" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_20" value="停用" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="496" y="376" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_21" value="页面摘要&#xa;页面：员工管理页&#xa;用途：员工账号维护&#xa;角色：系统管理员" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=10;fontColor=#5d4037;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;" vertex="1" parent="S1"><mxGeometry x="1464" y="40" width="216" height="96" as="geometry" /></mxCell>
+      <mxCell id="S1_22" value="业务规则&#xa;默认按更新时间倒序&#xa;仅系统管理员可停用员工" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=10;fontColor=#5d4037;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;" vertex="1" parent="S1"><mxGeometry x="1464" y="152" width="216" height="96" as="geometry" /></mxCell>
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            drawio_path = _write_drawio(Path(tmp), "rendered_list", "后台-组织权限", "员工管理页", 1680, cells)
+            report = VALIDATE.run_checks(str(drawio_path))
+        self.assertEqual(_rule_result(report, "C13")["status"], "PASS", _report_message(report))
+
+    def test_validate_c13_treats_login_logs_as_list_pages(self):
+        cells = """
+      <mxCell id="S1_2" value="管理后台登录日志页" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=14;fontStyle=1;verticalAlign=middle;shadow=1;" vertex="1" parent="S1"><mxGeometry x="208" y="40" width="1440" height="56" as="geometry" /></mxCell>
+      <mxCell id="S1_3" value="" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#f5f5f5;strokeColor=none;" vertex="1" parent="S1"><mxGeometry x="208" y="96" width="1440" height="864" as="geometry" /></mxCell>
+      <mxCell id="S1_4" value="操作人" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="232" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_5" value="登录时间" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="232" width="176" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_6" value="结果" style="text;html=1;strokeColor=none;fillColor=#f5f5f5;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="544" y="232" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_7" value="查询" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="S1"><mxGeometry x="752" y="152" width="88" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_8" value="导出日志" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1e88e5;fontColor=#1e88e5;fontSize=13;" vertex="1" parent="S1"><mxGeometry x="856" y="152" width="104" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_9" value="管理员A" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="280" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_10" value="2026-03-25 10:00" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="280" width="176" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_11" value="成功" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="544" y="280" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_12" value="管理员B" style="text;html=1;strokeColor=none;fillColor=#fafafa;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="328" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_13" value="2026-03-25 09:40" style="text;html=1;strokeColor=none;fillColor=#fafafa;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="328" width="176" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_14" value="失败" style="text;html=1;strokeColor=none;fillColor=#fafafa;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="544" y="328" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_15" value="管理员C" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="240" y="376" width="128" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_16" value="2026-03-25 09:00" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="368" y="376" width="176" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_17" value="成功" style="text;html=1;strokeColor=none;fillColor=#ffffff;align=left;verticalAlign=middle;fontSize=12;spacingLeft=8;" vertex="1" parent="S1"><mxGeometry x="544" y="376" width="96" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_18" value="页面摘要&#xa;页面：管理后台登录日志页&#xa;用途：查看登录记录&#xa;角色：管理员" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=10;fontColor=#5d4037;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;" vertex="1" parent="S1"><mxGeometry x="1464" y="40" width="216" height="96" as="geometry" /></mxCell>
+      <mxCell id="S1_19" value="业务规则&#xa;默认保留90天登录日志&#xa;支持按结果筛选" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#fffde7;strokeColor=#f9a825;fontSize=10;fontColor=#5d4037;align=left;verticalAlign=top;spacingLeft=8;spacingTop=8;" vertex="1" parent="S1"><mxGeometry x="1464" y="152" width="216" height="96" as="geometry" /></mxCell>
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            drawio_path = _write_drawio(Path(tmp), "login_log", "后台-审计反馈", "管理后台登录日志页", 1680, cells)
+            report = VALIDATE.run_checks(str(drawio_path))
+        self.assertEqual(_rule_result(report, "C13")["status"], "PASS", _report_message(report))
+
+    def test_validate_c13_treats_rejection_confirm_dialog_as_form_modal(self):
+        cells = """
+      <mxCell id="S1_2" value="提现拒绝确认弹窗" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=15;fontStyle=1;" vertex="1" parent="S1"><mxGeometry x="48" y="72" width="240" height="24" as="geometry" /></mxCell>
+      <mxCell id="S1_3" value="拒绝原因" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;" vertex="1" parent="S1"><mxGeometry x="48" y="112" width="88" height="24" as="geometry" /></mxCell>
+      <mxCell id="S1_4" value="请输入拒绝原因" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;" vertex="1" parent="S1"><mxGeometry x="144" y="112" width="200" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_5" value="通知用户" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;" vertex="1" parent="S1"><mxGeometry x="48" y="168" width="88" height="24" as="geometry" /></mxCell>
+      <mxCell id="S1_6" value="短信/站内信" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;" vertex="1" parent="S1"><mxGeometry x="144" y="168" width="200" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_7" value="补充说明" style="text;html=1;strokeColor=none;fillColor=none;align=left;verticalAlign=middle;fontSize=13;" vertex="1" parent="S1"><mxGeometry x="48" y="224" width="88" height="24" as="geometry" /></mxCell>
+      <mxCell id="S1_8" value="输入处理建议" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#bdbdbd;align=left;spacingLeft=8;arcSize=4;" vertex="1" parent="S1"><mxGeometry x="144" y="224" width="200" height="48" as="geometry" /></mxCell>
+      <mxCell id="S1_9" value="取消" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ffffff;strokeColor=#1e88e5;fontColor=#1e88e5;fontSize=13;" vertex="1" parent="S1"><mxGeometry x="224" y="288" width="80" height="40" as="geometry" /></mxCell>
+      <mxCell id="S1_10" value="确认" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#1e88e5;strokeColor=none;fontColor=#ffffff;fontSize=13;fontStyle=1;" vertex="1" parent="S1"><mxGeometry x="312" y="288" width="80" height="40" as="geometry" /></mxCell>
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            drawio_path = _write_drawio(Path(tmp), "reject_modal", "后台-分销管理", "提现拒绝确认弹窗", 592, cells)
+            report = VALIDATE.run_checks(str(drawio_path))
+        self.assertEqual(_rule_result(report, "C13")["status"], "PASS", _report_message(report))
 
 
 if __name__ == "__main__":

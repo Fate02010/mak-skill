@@ -98,6 +98,8 @@ def _is_nav_group_swimlane(children: list[ET.Element]) -> bool:
 
 def _is_auth_like_page(name: str) -> bool:
     text = str(name or "")
+    if "日志" in text:
+        return False
     return any(token in text for token in ("登录", "注册", "找回密码", "重置密码", "验证码"))
 
 
@@ -109,6 +111,11 @@ def _is_overlay_like_page(name: str) -> bool:
 def _is_detail_like_page(name: str) -> bool:
     text = str(name or "")
     return "详情" in text and "列表" not in text
+
+
+def _is_form_like_page(name: str) -> bool:
+    text = str(name or "")
+    return any(token in text for token in ("表单", "编辑页", "设置页", "配置页"))
 
 
 def _is_in_ui_area(cell: ET.Element, threshold: float) -> bool:
@@ -676,9 +683,11 @@ def check_c12(doc: DrawioFile) -> RuleResult:
 def _classify_page_name(name: str) -> str:
     if "删除确认" in name or ("确认" in name and "弹窗" in name and "发货" not in name):
         return "confirm_dialog"
+    if _is_auth_like_page(name):
+        return "login"
     if "工作台" in name or "dashboard" in name.lower() or "后台首页" in name:
         return "dashboard"
-    if "详情" in name:
+    if "详情" in name or (("设置" in name or "处理" in name) and "列表" not in name and "弹窗" not in name):
         return "detail_kv"
     if "授权" in name or "权限" in name and ("抽屉" in name or "角色" in name):
         return "drawer_permission"
@@ -686,7 +695,7 @@ def _classify_page_name(name: str) -> str:
         return "dispatch_board"
     if "分类" in name or "部门岗位" in name or "组织" in name:
         return "tree_manage"
-    if "新增" in name or "编辑" in name or "弹窗" in name:
+    if "新增" in name or "编辑" in name or "弹窗" in name or _is_form_like_page(name):
         return "modal_form"
     return "list_table"
 
@@ -702,28 +711,70 @@ def _count_features(cells: list[ET.Element], threshold: float) -> dict:
         "timeline": 0,
         "tree": 0,
     }
+    row_y_positions = {}
+    input_y_positions = set()
     for cell in cells:
         if not _is_in_ui_area(cell, threshold):
             continue
         style = cell.get("style", "")
         value = cell.get("value", "")
-        if "card" in style and "annotation" not in style:
+        geo = _get_geometry(cell)
+        y = float(geo.get("y", "0")) if geo is not None else 0.0
+
+        is_card_like = (
+            "shadow=1" in style and "arcSize=8" in style and "fillColor=#ffffff" in style
+        ) or (
+            "rounded=1" in style and "strokeColor=#e0e0e0" in style and "fillColor=#ffffff" in style
+        )
+        if is_card_like and "annotation" not in style:
             features["cards"] += 1
-        if "table_row" in style or "list_row" in style:
-            features["rows"] += 1
+
+        is_table_text = (
+            "text;" in style
+            and "fontSize=12" in style
+            and any(token in style for token in ("fillColor=#ffffff", "fillColor=#fafafa", "fillColor=#f5f5f5"))
+        )
+        if is_table_text:
+            row_y_positions[y] = row_y_positions.get(y, 0) + 1
+
         if ("btn" in style or "strokeColor=#1e88e5" in style or
-                "strokeColor=#f44336" in style or "fillColor=#1e88e5" in style):
+                "strokeColor=#f44336" in style or "fillColor=#1e88e5" in style or
+                "fillColor=#f44336" in style):
             features["buttons"] += 1
-        if "input" in style or "select" in style or "textarea" in style:
-            features["inputs"] += 1
+
+        is_input_like = (
+            "rounded=1" in style and
+            "fillColor=#ffffff" in style and
+            "strokeColor=#bdbdbd" in style
+        )
+        if is_input_like:
+            input_y_positions.add(y)
+
         if "tag_" in style or "fillColor=#e8f5e9" in style or "fillColor=#fff3e0" in style:
             features["tags"] += 1
         if "fontStyle=1" in style or "fontSize=16" in style:
             features["titles"] += 1
+        if "fontSize=16" in style and re.fullmatch(r"[0-9]+", value.strip()):
+            features["cards"] += 1
         if "timeline" in style or "处理记录" in value or "时间轴" in value:
             features["timeline"] += 1
-        if "树" in value or "权限" in value and ("分组" in value or "节点" in value):
+        if (
+            "树" in value
+            or ("权限" in value and ("分组" in value or "节点" in value))
+            or "菜单权限" in value
+            or "数据权限" in value
+        ):
             features["tree"] += 1
+
+    data_rows = 0
+    for y, count in row_y_positions.items():
+        if count >= 3:
+            data_rows += 1
+    if data_rows:
+        # 第一组通常是表头，其余为数据行
+        features["rows"] = max(0, data_rows - 1)
+
+    features["inputs"] = max(features["inputs"], len(input_y_positions))
     return features
 
 
@@ -742,9 +793,17 @@ def check_c13(doc: DrawioFile) -> RuleResult:
         archetype = _classify_page_name(name)
         threshold = _annotation_x_threshold(doc.swimlane_width(sl))
         features = _count_features(children, threshold)
+
+        if archetype == "confirm_dialog" and features["inputs"] >= 2:
+            archetype = "modal_form"
         reasons = []
 
-        if archetype == "dashboard":
+        if archetype == "login":
+            if features["inputs"] < 2:
+                reasons.append("登录字段不足")
+            if features["buttons"] < 1:
+                reasons.append("缺少登录按钮")
+        elif archetype == "dashboard":
             if features["cards"] < 4:
                 reasons.append("指标卡不足 4 个")
             if features["rows"] < 2 and features["buttons"] < 2:
@@ -797,7 +856,7 @@ def check_c13(doc: DrawioFile) -> RuleResult:
             if text_like < 2:
                 reasons.append("缺少确认说明文案")
         elif archetype == "modal_form":
-            min_inputs = 2 if "退款" in name or "审核" in name else 4
+            min_inputs = 2 if "退款" in name or "审核" in name else 3 if any(token in name for token in ("配置", "拒绝")) else 4
             if features["inputs"] < min_inputs:
                 reasons.append(f"表单字段少于 {min_inputs} 个")
             if features["buttons"] < 2:
