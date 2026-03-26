@@ -27,6 +27,7 @@ BUILD_PAGE_SPEC = _load_module("build_page_spec_test", SCRIPTS_DIR / "build_page
 RENDER = _load_module("render_test", SCRIPTS_DIR / "render.py")
 VALIDATE = _load_module("validate_test", SCRIPTS_DIR / "validate.py")
 MERGE = _load_module("merge_test", SCRIPTS_DIR / "merge.py")
+CONSISTENCY = _load_module("consistency_test", SCRIPTS_DIR / "check_prototype_consistency.py")
 RUN_PIPELINE = SCRIPTS_DIR / "run_drawio_pipeline.py"
 
 
@@ -262,6 +263,101 @@ def _marketing_list_model() -> dict:
     }
 
 
+def _shipping_modal_model() -> dict:
+    return {
+        "module_name": "后台-订单管理",
+        "module_key": "admin_order_shipping",
+        "pages": [
+            {
+                "page_id": "order_ship_modal",
+                "page_name": "确认发货弹窗",
+                "page_type": "web_form",
+                "page_archetype": "modal_form",
+                "object_name": "发货",
+                "role": "订单客服/履约人员",
+                "purpose": "录入物流信息并完成发货",
+                "fields": [
+                    {"name": "物流公司", "control": "select", "required": True, "options": ["顺丰", "京东"], "validation": ""},
+                    {"name": "物流单号", "control": "input", "required": True, "validation": "6-30位字母数字"},
+                    {"name": "发货备注", "control": "textarea", "required": False, "validation": "200字以内"},
+                ],
+                "actions": [
+                    {"name": "确认发货", "target": "订单列表页", "kind": "primary"},
+                    {"name": "取消", "target": "订单列表页", "kind": "secondary"},
+                ],
+                "business_rules": ["仅待发货订单允许发货"],
+                "status_values": ["待发货", "已发货", "已签收"],
+            }
+        ],
+    }
+
+
+def _bad_shipping_modal_model() -> dict:
+    return {
+        "module_name": "后台-订单发货关闭",
+        "module_key": "admin_order_ship_close",
+        "pages": [
+            {
+                "page_id": "ship_modal",
+                "page_name": "确认发货弹窗",
+                "page_type": "web_form",
+                "page_archetype": "dispatch_board",
+                "object_name": "发货",
+                "fields": [
+                    {"name": "售后状态", "control": "select", "required": True, "options": ["启用", "停用"], "validation": ""},
+                    {"name": "商品明细", "control": "input", "required": True, "validation": ""},
+                    {"name": "支付状态", "control": "select", "required": False, "options": ["启用", "停用"], "validation": ""},
+                    {"name": "收货地址", "control": "textarea", "required": False, "validation": ""},
+                ],
+            }
+        ],
+    }
+
+
+def _bad_marketing_form_model() -> dict:
+    return {
+        "module_name": "后台-营销表单",
+        "module_key": "admin_marketing_form",
+        "pages": [
+            {
+                "page_id": "marketing_form",
+                "page_name": "营销活动表单页",
+                "page_type": "web_form",
+                "page_archetype": "form_page",
+                "object_name": "营销活动",
+                "fields": [
+                    {"name": "TOP活动列表", "control": "input", "required": True, "validation": ""},
+                    {"name": "新增会员数", "control": "input", "required": True, "validation": ""},
+                    {"name": "核销率", "control": "input", "required": False, "validation": ""},
+                    {"name": "活动带来的销售额", "control": "input", "required": False, "validation": ""},
+                ],
+            }
+        ],
+    }
+
+
+def _bad_resource_model() -> dict:
+    return {
+        "module_name": "后台-资源权限",
+        "module_key": "admin_resource",
+        "pages": [
+            {
+                "page_id": "resource_list",
+                "page_name": "资源管理页",
+                "page_type": "web_list",
+                "page_archetype": "list_table",
+                "object_name": "资源",
+                "fields": [
+                    {"name": "关键词", "control": "input", "required": True, "validation": ""},
+                    {"name": "状态", "control": "select", "required": True, "options": ["启用", "停用"], "validation": ""},
+                    {"name": "更新时间", "control": "input", "required": False, "validation": ""},
+                ],
+                "table_columns": ["关键词", "状态", "更新时间"],
+            }
+        ],
+    }
+
+
 def _employee_list_model() -> dict:
     return {
         "module_name": "后台-组织权限",
@@ -472,6 +568,62 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             for snippet in required_snippets:
                 self.assertIn(snippet, text, path.as_posix())
 
+    def test_workflow_docs_require_forced_context_compression(self):
+        expectations = {
+            SKILL_DIR / "SKILL.md": [
+                "本 Skill 默认将“上下文压缩”视为正式门禁",
+                "功能点数 `> 12`",
+                "预计原型页面 / swimlane 数 `> 8`",
+                "requirements/module_briefs/模块摘要_*.md",
+                "`index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`",
+            ],
+            SKILL_DIR / "AGENTS.md": [
+                "默认强制压缩模式",
+                "requirements/module_briefs/模块摘要_[模块中文名].md",
+                "`index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`",
+                "Step 6 审视优先对照 `module_brief + page_spec + 任务清单`",
+            ],
+            STEPS_DIR / "step4-requirements.md": [
+                "判断是否进入默认强制压缩模式",
+                "功能点数 `> 12`",
+                "关键用户角色数 `> 3`",
+                "必须生成：",
+                "requirements/module_briefs/模块摘要_[模块中文名].md",
+            ],
+            STEPS_DIR / "step4-parallel.md": [
+                "module_briefs/",
+                "模块摘要_[模块中文名].md",
+                "先读对应模块摘要",
+                "Step 5 / Step 6 默认读取顺序",
+            ],
+            STEPS_DIR / "step5-common.md": [
+                "分拆模式下，子 agent 的默认读取顺序必须是 `index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`",
+                "缺少 `module_brief` 时，禁止启动 Step 5 子 agent",
+            ],
+            STEPS_DIR / "step5-agent-prompt.md": [
+                "先读取模块摘要，提取页面清单、页面 archetype、关键字段索引、状态摘要、CRUD 闭环和跨模块跳转",
+            ],
+            STEPS_DIR / "step5-html.md": [
+                "再读取 [WORK_DIR]/requirements/module_briefs/模块摘要_[模块中文名].md 作为最小执行上下文",
+            ],
+            STEPS_DIR / "step5-drawio.md": [
+                "缺少 `module_brief`，禁止启动生成",
+                "按 `index.md -> overview -> module_brief -> 模块详细文档` 顺序读取",
+            ],
+            STEPS_DIR / "step6-iteration.md": [
+                "分拆模式下优先对照 `module_brief + page_spec + 原型任务清单`",
+                "优先用 `module_brief + page_spec + 原型任务清单` 做结构化字段 diff",
+            ],
+            STEPS_DIR / "codex-rules.md": [
+                "每个模块文档完成后，必须继续生成 `requirements/module_briefs/模块摘要_[模块中文名].md`",
+                "一旦命中任一项，Step 4 不得继续生成单一合并大 PRD",
+            ],
+        }
+        for path, required_snippets in expectations.items():
+            text = path.read_text(encoding="utf-8")
+            for snippet in required_snippets:
+                self.assertIn(snippet, text, path.as_posix())
+
     def test_validate_c13_treats_analysis_pages_as_dashboard(self):
         markdown = _build_page_spec_markdown(_analysis_dashboard_model())
         with tempfile.TemporaryDirectory() as tmp:
@@ -643,6 +795,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertIn("刷新验证码", markdown)
         module_name, swimlanes, elements = _parse_spec(markdown)
         self.assertEqual(module_name, "后台-登录页")
+        self.assertEqual(swimlanes[0]["type"], "web")
         lane_id = swimlanes[0]["swimlane_id"]
         card = _find_element(elements, parent=lane_id, style_key="card")
         captcha_input = _find_element(elements, parent=lane_id, value="请输入验证码")
@@ -667,6 +820,27 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertEqual(_rule_result(report, "C8")["status"], "PASS")
         self.assertEqual(_rule_result(report, "C13")["status"], "PASS")
         self.assertEqual(_rule_result(report, "C15")["status"], "PASS")
+
+    def test_shipping_modal_renders_as_modal_without_nav_bar(self):
+        markdown = _build_page_spec_markdown(_shipping_modal_model())
+        _, swimlanes, elements = _parse_spec(markdown)
+        self.assertEqual(swimlanes[0]["type"], "modal")
+        self.assertEqual(swimlanes[0]["style_key"], "swimlane_modal")
+        self.assertIn("确认发货弹窗", markdown)
+        self.assertNotIn("| 2 | S1 | nav | 确认发货弹窗 |", markdown)
+        self.assertTrue(any(element["component_type"] == "modal_title" for element in elements))
+
+    def test_validate_model_rejects_shipping_modal_with_order_detail_fields(self):
+        with self.assertRaisesRegex(ValueError, "发货"):
+            BUILD_PAGE_SPEC.validate_model(_bad_shipping_modal_model())
+
+    def test_validate_model_rejects_marketing_form_with_analysis_metrics(self):
+        with self.assertRaisesRegex(ValueError, "营销活动页面"):
+            BUILD_PAGE_SPEC.validate_model(_bad_marketing_form_model())
+
+    def test_validate_model_rejects_resource_page_missing_core_fields(self):
+        with self.assertRaisesRegex(ValueError, "资源页面"):
+            BUILD_PAGE_SPEC.validate_model(_bad_resource_model())
 
     def test_edit_modal_keeps_footer_actions_below_last_field(self):
         markdown = _build_page_spec_markdown(_marketing_list_model())
@@ -700,6 +874,62 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             report = VALIDATE.run_checks(str(drawio_path))
         self.assertEqual(report["summary"]["fail"], 0, _report_message(report))
         self.assertEqual(_rule_result(report, "C16")["status"], "PASS")
+
+    def test_consistency_scope_ignores_miniapp_requirements_for_backend_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                    ),
+                    "详细需求文档_小程序-首页.md": (
+                        "# 渔易购 — 小程序-首页需求\n\n"
+                        "#### 功能点 1.1：首页\n"
+                        "- **页面/界面：** 首页、商品分类页\n"
+                    ),
+                },
+            )
+            page_specs_dir = workdir / ".prototype-generator" / "page_specs"
+            page_specs_dir.mkdir(parents=True)
+            (page_specs_dir / "page_spec_admin_login.md").write_text(
+                _build_page_spec_markdown(_login_model()),
+                encoding="utf-8",
+            )
+
+            report = CONSISTENCY.check_consistency(str(workdir / "requirements"), str(page_specs_dir), 0.8, "backend")
+            self.assertEqual(report["scope"], "backend")
+            self.assertNotIn("首页", report["missing_pages"])
+            self.assertEqual(report["summary"]["fail"], 0, json.dumps(report, ensure_ascii=False))
+
+    def test_run_drawio_pipeline_uses_backend_scope_when_product_name_mentions_admin(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                    ),
+                    "详细需求文档_小程序-首页.md": (
+                        "# 渔易购 — 小程序-首页需求\n\n"
+                        "#### 功能点 1.1：首页\n"
+                        "- **页面/界面：** 首页、商品分类页\n"
+                    ),
+                },
+            )
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json", _login_model())
+
+            returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["consistency_scope"], "backend")
+            self.assertNotIn("首页", payload["consistency"]["missing_pages"])
 
     def test_employee_management_infers_add_edit_disable_actions(self):
         markdown = _build_page_spec_markdown(_employee_list_model())

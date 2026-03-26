@@ -141,6 +141,47 @@ def placeholder_value(name: str, idx: int) -> str:
     return f"{text}示例{idx}"
 
 
+def field_names(page: dict) -> list[str]:
+    rows = page.get("fields")
+    if not isinstance(rows, list):
+        return []
+    names = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        name = str(row.get("name", "")).strip()
+        if name:
+            names.append(name)
+    return names
+
+
+def table_column_names(page: dict) -> list[str]:
+    return normalize_list(page.get("table_columns"))
+
+
+def page_terms(model: dict, page: dict) -> str:
+    parts = [
+        str(model.get("module_name", "")).strip(),
+        str(model.get("product_name", "")).strip(),
+        str(page.get("page_name", "")).strip(),
+        str(page.get("object_name", "")).strip(),
+        str(page.get("purpose", "")).strip(),
+        str(page.get("nav_context", "")).strip(),
+    ]
+    parts.extend(field_names(page))
+    parts.extend(table_column_names(page))
+    parts.extend(normalize_list(page.get("jump_targets")))
+    return " ".join(part for part in parts if part)
+
+
+def contains_any(values: list[str], candidates: tuple[str, ...] | set[str]) -> bool:
+    return any(any(token in value for token in candidates) for value in values)
+
+
+def count_matches(values: list[str], candidates: tuple[str, ...] | set[str]) -> int:
+    return sum(1 for value in values if any(token in value for token in candidates))
+
+
 def delete_modal_name(object_name: str) -> str:
     value = str(object_name or "").strip() or "对象"
     return f"删除{value}确认弹窗"
@@ -296,11 +337,27 @@ class PageSpecBuilder:
         if not page_type:
             raise ValueError("page_model 中存在缺少 page_type 的页面")
 
-        if page_type in {"mobile_list", "mobile_form", "mobile_detail", "login", "mobile_home", "profile"}:
+        archetype = self._page_archetype(page)
+        is_modal_page = self._is_modal_page(page, archetype)
+        is_admin_login = page_type == "login" and self._is_admin_login_page(page)
+
+        if is_modal_page:
+            lane_type = "modal"
+            width = 400 if self._is_confirm_modal_page(page) else 800
+            height = 320 if self._is_confirm_modal_page(page) else self._modal_height(self._field_rows(page))
+        elif page_type in {"mobile_list", "mobile_form", "mobile_detail", "mobile_home", "profile"}:
+            lane_type = "mobile"
+            width = MOBILE_SWIMLANE_W
+            height = MOBILE_SWIMLANE_H
+        elif page_type == "login" and not is_admin_login:
             lane_type = "mobile"
             width = MOBILE_SWIMLANE_W
             height = MOBILE_SWIMLANE_H
         elif page_type in {"web_list", "web_form", "web_detail", "dashboard"}:
+            lane_type = "web"
+            width = WEB_SWIMLANE_W
+            height = WEB_SWIMLANE_H
+        elif page_type == "login":
             lane_type = "web"
             width = WEB_SWIMLANE_W
             height = WEB_SWIMLANE_H
@@ -312,16 +369,19 @@ class PageSpecBuilder:
             lane_type,
             width,
             height,
-            "swimlane",
+            "swimlane_modal" if lane_type == "modal" else "swimlane",
         )
         ctx.page = page
-
-        archetype = self._page_archetype(page)
 
         if archetype == "drawer_permission":
             self._build_drawer_permission(ctx)
         elif archetype == "tree_manage":
             self._build_tree_manage(ctx)
+        elif is_modal_page:
+            if self._is_confirm_modal_page(page):
+                self._build_confirm_modal_page(ctx)
+            else:
+                self._build_standalone_modal_form(ctx)
         elif page_type == "web_list":
             self._build_web_list(ctx)
         elif page_type == "mobile_list":
@@ -378,6 +438,23 @@ class PageSpecBuilder:
         if page_type == "login":
             return "login"
         return "list_table"
+
+    def _is_admin_login_page(self, page: dict) -> bool:
+        text = page_terms(self.model, page)
+        return any(token in text for token in ("后台", "管理", "审计"))
+
+    def _is_modal_page(self, page: dict, archetype: str) -> bool:
+        page_name = str(page.get("page_name", "")).strip()
+        page_type = str(page.get("page_type", "")).strip()
+        if archetype == "drawer_permission":
+            return False
+        if page_type not in {"web_form", "web_detail"}:
+            return False
+        return any(token in page_name for token in ("弹窗", "确认", "拒绝", "审核"))
+
+    def _is_confirm_modal_page(self, page: dict) -> bool:
+        page_name = str(page.get("page_name", "")).strip()
+        return any(token in page_name for token in ("删除", "关闭", "确认", "拒绝"))
 
     def _nav_context(self, page: dict) -> str:
         explicit = str(page.get("nav_context", "")).strip()
@@ -942,12 +1019,17 @@ class PageSpecBuilder:
         if len(status_values) > 1:
             self.add_element(swimlane, "text_hint", "状态流转：" + " → ".join(status_values[:4]), 280, 224, 520, 24, "text_hint")
 
-        primary_action = str(actions[0].get("name", "")).strip() if actions else "编辑"
-        secondary_action = str(actions[1].get("name", "")).strip() if len(actions) > 1 else "备注"
-        self.add_element(swimlane, "btn_primary", primary_action or "编辑", 1088, 208, 136, 40, "btn_primary", f"→ {primary_action or '编辑'}")
-        self.add_element(swimlane, "btn_secondary", secondary_action or "备注", 1240, 208, 88, 40, "btn_secondary", f"→ {secondary_action or '备注'}")
-        object_name = str(page.get("object_name", page_name)).strip() or page_name
-        self.add_element(swimlane, "btn_danger_filled", "删除", 1344, 208, 72, 40, "btn_danger_filled", f"→ {delete_modal_name(object_name)}")
+        button_x = 1088
+        for action in actions[:3]:
+            action_name = str(action.get("name", "")).strip()
+            if not action_name:
+                continue
+            target = str(action.get("target", "")).strip()
+            kind = str(action.get("kind", "")).strip()
+            style = "btn_primary" if kind == "primary" else "btn_danger_filled" if kind == "danger" else "btn_secondary"
+            width = 136 if style == "btn_primary" else 104 if style == "btn_danger_filled" else 88
+            self.add_element(swimlane, style, action_name, button_x, 208, width, 40, style, f"→ {target}" if target else "")
+            button_x += width + 16
 
         self.add_element(swimlane, "card", "", 24, 288, 672, 272, "card")
         self.add_element(swimlane, "text_subtitle", "基础信息", 48, 312, 200, 24, "text_subtitle")
@@ -1011,11 +1093,24 @@ class PageSpecBuilder:
         captcha_name = str((captcha_field or {}).get("name", "图形验证码")).strip() or "图形验证码"
         note_text = self._login_note(page, show_captcha)
 
-        card_x = 24
-        card_y = 104 if show_captcha else 136
-        card_w = 328
-        inner_x = 48
-        content_w = 280
+        if ctx.platform == "web":
+            bg_w = WEB_UI_W
+            bg_h = 864
+            card_w = 448
+            card_x = snap8((bg_w - card_w) / 2)
+            card_y = 160 if show_captcha else 184
+            inner_x = card_x + 48
+            content_w = 352
+            title_w = 352
+        else:
+            bg_w = MOBILE_UI_W
+            bg_h = 816
+            card_w = 328
+            card_x = 24
+            card_y = 104 if show_captcha else 136
+            inner_x = 48
+            content_w = 280
+            title_w = 240
         title_y = card_y + 32
         subtitle_y = title_y + 48
         y = subtitle_y + 56
@@ -1036,10 +1131,10 @@ class PageSpecBuilder:
         card_bottom = links_y + (32 if show_self_service_links else 0) + 40
         card_h = snap8(card_bottom - card_y)
 
-        self.add_element(swimlane, "bg", "", 0, 40, 376, 816, "bg")
+        self.add_element(swimlane, "bg", "", 0, 40, bg_w, bg_h, "bg")
         self.add_element(swimlane, "card", "", card_x, card_y, card_w, card_h, "card")
-        self.add_element(swimlane, "text_title", product_name, inner_x, title_y, 240, 40, "text_title")
-        self.add_element(swimlane, "text_hint", f"欢迎使用{page_name}", inner_x, subtitle_y, 240, 24, "text_hint")
+        self.add_element(swimlane, "text_title", product_name, inner_x, title_y, title_w, 40, "text_title")
+        self.add_element(swimlane, "text_hint", f"欢迎使用{page_name}", inner_x, subtitle_y, title_w, 24, "text_hint")
 
         self.add_element(swimlane, "label", account_name, inner_x, account_input_y - 32, content_w, 24, "label")
         account_placeholder = "请输入" + ("后台账号" if is_admin_login else account_name)
@@ -1056,8 +1151,8 @@ class PageSpecBuilder:
         self.add_element(swimlane, "btn_primary", "登录", inner_x, login_btn_y, content_w, 48, "btn_primary", "→ 登录成功后进入首页")
         self.add_element(swimlane, "text_hint", note_text, inner_x, note_y, content_w, 24, "text_hint")
         if show_self_service_links:
-            self.add_element(swimlane, "text_link", "忘记密码？", 96, links_y, 96, 24, "text_link", "→ 忘记密码")
-            self.add_element(swimlane, "text_link", "注册账号", 208, links_y, 96, 24, "text_link", "→ 注册")
+            self.add_element(swimlane, "text_link", "忘记密码？", inner_x + 48, links_y, 96, 24, "text_link", "→ 忘记密码")
+            self.add_element(swimlane, "text_link", "注册账号", inner_x + 160, links_y, 96, 24, "text_link", "→ 注册")
         self._add_annotations(ctx)
 
     def _build_dashboard(self, ctx: PageContext):
@@ -1251,6 +1346,38 @@ class PageSpecBuilder:
         delete_ctx.page = page
         self._build_delete_modal(delete_ctx, object_name)
 
+    def _build_standalone_modal_form(self, ctx: PageContext):
+        page = ctx.page
+        self._build_edit_modal(ctx, str(page.get("page_name", "弹窗")).strip() or "弹窗", self._field_rows(page))
+
+    def _build_confirm_modal_page(self, ctx: PageContext):
+        page = ctx.page
+        page_name = str(page.get("page_name", "确认弹窗")).strip() or "确认弹窗"
+        swimlane = ctx.swimlane_id
+        self.add_element(swimlane, "modal_bg", "", 24, 40, 352, 240, "modal_bg")
+        self.add_element(swimlane, "modal_title", page_name, 48, 56, 240, 24, "modal_title")
+        self.add_element(swimlane, "divider", "", 48, 96, 304, 1, "divider")
+        rules = self._business_rules(page)
+        body = rules[0] if rules else "请确认当前操作是否继续执行。"
+        self.add_element(swimlane, "text_body", body, 48, 124, 272, 56, "text_body")
+        if len(rules) > 1:
+            self.add_element(swimlane, "text_hint", rules[1], 48, 184, 272, 16, "text_hint")
+        actions = page.get("actions") if isinstance(page.get("actions"), list) else []
+        secondary_label = "取消"
+        primary_label = "确认"
+        danger = any(str(action.get("kind", "")).strip() == "danger" for action in actions)
+        for action in actions:
+            name = str(action.get("name", "")).strip()
+            kind = str(action.get("kind", "")).strip()
+            if kind == "secondary" and name:
+                secondary_label = name
+            elif kind in {"primary", "danger"} and name:
+                primary_label = name
+                danger = danger or kind == "danger"
+        self.add_element(swimlane, "btn_secondary", secondary_label, 112, 208, 88, 48, "btn_secondary", "→ 关闭弹窗")
+        primary_style = "btn_danger_filled" if danger or any(token in primary_label for token in ("删除", "关闭", "拒绝")) else "btn_primary"
+        self.add_element(swimlane, primary_style, primary_label, 216, 208, 104, 48, primary_style, f"→ {primary_label}")
+
     def _modal_height(self, fields: list[dict]) -> int:
         rows_h = 0
         for field in fields[:6]:
@@ -1269,9 +1396,10 @@ class PageSpecBuilder:
         label_x = modal_x + 24
         input_x = modal_x + 128
         input_w = min(320 if ctx.swimlane_w >= 800 else 248, modal_w - 168)
+        modal_title = object_name if any(token in object_name for token in ("弹窗", "抽屉", "确认")) else f"新增/编辑{object_name}"
 
         self.add_element(swimlane, "modal_bg", "", modal_x, modal_y, modal_w, modal_h, "modal_bg")
-        self.add_element(swimlane, "modal_title", f"新增/编辑{object_name}", label_x, modal_y + 16, 240, 24, "modal_title")
+        self.add_element(swimlane, "modal_title", modal_title, label_x, modal_y + 16, 240, 24, "modal_title")
         self.add_element(swimlane, "divider", "", label_x, modal_y + 56, modal_w - 48, 1, "divider")
         y = modal_y + 80
         for field in fields[:6]:
@@ -1335,6 +1463,62 @@ def validate_model(model: dict):
         page_archetype = str(page.get("page_archetype", "")).strip()
         if page_archetype and page_archetype not in ALLOWED_ARCHETYPES:
             raise ValueError(f"pages[{idx}] page_archetype 非法: {page_archetype}")
+        semantic_error = semantic_validate_page(model, page)
+        if semantic_error:
+            raise ValueError(f"pages[{idx}] 语义校验失败: {semantic_error}")
+
+
+def semantic_validate_page(model: dict, page: dict) -> str:
+    page_name = str(page.get("page_name", "")).strip()
+    page_type = str(page.get("page_type", "")).strip()
+    object_name = str(page.get("object_name", "")).strip()
+    archetype = str(page.get("page_archetype", "")).strip()
+    names = field_names(page) + table_column_names(page)
+    text = page_terms(model, page)
+
+    if page_type == "login":
+        if count_matches(field_names(page), {"账号", "用户名", "手机号", "邮箱"}) < 1:
+            return "登录页缺少账号字段"
+        if count_matches(field_names(page), {"密码"}) < 1:
+            return "登录页缺少密码字段"
+
+    if archetype == "dispatch_board":
+        if any(token in page_name for token in ("弹窗", "确认", "拒绝")):
+            return "发货/调度 archetype 不能直接用于确认弹窗"
+        if count_matches(names, {"路线", "司机", "客户数", "件数", "发货单", "调度", "物流"}) < 2:
+            return "dispatch_board 缺少路线/司机/物流等调度字段"
+
+    if "发货" in page_name and any(token in page_name for token in ("弹窗", "确认")):
+        logistics_hits = count_matches(names, {"物流公司", "物流单号", "发货备注", "司机", "路线"})
+        if logistics_hits < 2:
+            return "发货弹窗缺少物流公司/物流单号/发货备注/司机/路线等关键字段"
+        if count_matches(names, {"售后状态", "商品明细", "支付状态", "收货地址"}) >= 3 and logistics_hits < 3:
+            return "发货弹窗字段被订单详情字段污染"
+
+    if any(token in text for token in ("营销", "活动")) and not any(token in text for token in ("分析", "报表", "统计")):
+        if count_matches(names, {"活动名称", "活动类型", "活动时间", "开始时间", "结束时间", "关联商品", "活动说明", "活动状态"}) < 2:
+            return "营销活动页面缺少活动名称/类型/时间/关联商品等核心字段"
+        if count_matches(names, {"新增会员数", "核销率", "销售额", "TOP活动"}) >= 2:
+            return "营销活动页面混入分析指标字段"
+
+    if "资源" in text:
+        if count_matches(names, {"资源名称", "资源类型", "资源标识"}) < 2:
+            return "资源页面缺少资源名称/资源类型/资源标识等核心字段"
+
+    if any(token in page_name for token in ("分类", "品类")) or archetype == "tree_manage":
+        if count_matches(names, {"分类名称", "品类名称", "父级分类", "上级分类", "排序值", "关联商品数", "状态"}) < 2:
+            return "分类/品类页面缺少树管理核心字段"
+
+    if any(token in page_name for token in ("部门", "成员", "员工")):
+        expected = {"部门", "成员", "员工", "账号", "角色", "手机号", "上级", "所属部门", "负责人"}
+        if count_matches(names, expected) < 2 and page_type != "login":
+            return "组织人员页面缺少账号/部门/角色/手机号等核心字段"
+
+    if page_type in {"web_form", "web_detail"} and any(token in page_name for token in ("弹窗", "确认")):
+        if object_name and archetype not in {"modal_form", "detail_kv", "drawer_permission", ""} and "弹窗" in page_name:
+            return "弹窗页面 archetype 不匹配 modal_form/detail_kv/drawer_permission"
+
+    return ""
 
 
 def to_markdown(module_name: str, swimlanes: list[dict[str, str]], elements: list[dict[str, str]]) -> str:

@@ -66,6 +66,7 @@ def add_token(container: set[str], value: str):
 @dataclass
 class RequirementPage:
     name: str
+    scope: str
     fields: set[str] = field(default_factory=set)
 
 
@@ -101,12 +102,61 @@ def extract_fields_from_bullets(lines: list[str], start_index: int) -> tuple[lis
     return fields, idx
 
 
+def infer_requirement_scope(path: str) -> str:
+    name = os.path.basename(path)
+    if "后台" in name:
+        return "backend"
+    if "小程序" in name or "app" in name.lower() or "mobile" in name.lower():
+        return "miniapp"
+    return "all"
+
+
+def infer_generated_page_scope(page: dict) -> str:
+    source = str(page.get("source", "")).lower()
+    name = str(page.get("name", ""))
+    if "admin_" in source or "后台" in name:
+        return "backend"
+    if any(token in source for token in ("app_", "mini", "mobile", "wx")) or "小程序" in name:
+        return "miniapp"
+    return "all"
+
+
+def infer_generated_scope(generated_pages: dict[str, dict]) -> str:
+    backend = 0
+    miniapp = 0
+    for page in generated_pages.values():
+        scope = infer_generated_page_scope(page)
+        if scope == "backend":
+            backend += 1
+        elif scope == "miniapp":
+            miniapp += 1
+    if backend and not miniapp:
+        return "backend"
+    if miniapp and not backend:
+        return "miniapp"
+    if backend >= miniapp * 2 and backend >= 2:
+        return "backend"
+    if miniapp >= backend * 2 and miniapp >= 2:
+        return "miniapp"
+    return "all"
+
+
+def requirement_page_entry(mapping: list[RequirementPage], scope: str, name: str) -> RequirementPage:
+    for page in mapping:
+        if page.scope == scope and page.name == name:
+            return page
+    page = RequirementPage(name=name, scope=scope)
+    mapping.append(page)
+    return page
+
+
 def assign_fields_to_pages(
     pages: list[str],
     list_fields: set[str],
     form_fields: set[str],
     detail_fields: set[str],
-    mapping: dict[str, RequirementPage],
+    mapping: list[RequirementPage],
+    scope: str,
 ):
     list_like = [
         page for page in pages
@@ -119,19 +169,20 @@ def assign_fields_to_pages(
     detail_like = [page for page in pages if "详情" in page]
 
     for page in pages:
-        mapping.setdefault(page, RequirementPage(name=page))
+        requirement_page_entry(mapping, scope, page)
 
     for page in list_like:
-        mapping[page].fields.update(list_fields)
+        requirement_page_entry(mapping, scope, page).fields.update(list_fields)
     for page in form_like:
-        mapping[page].fields.update(form_fields)
+        requirement_page_entry(mapping, scope, page).fields.update(form_fields)
     for page in detail_like:
-        mapping[page].fields.update(detail_fields)
+        requirement_page_entry(mapping, scope, page).fields.update(detail_fields)
 
 
-def parse_requirement_file(path: str, mapping: dict[str, RequirementPage]):
+def parse_requirement_file(path: str, mapping: list[RequirementPage]):
     with open(path, "r", encoding="utf-8") as f:
         lines = f.read().splitlines()
+    scope = infer_requirement_scope(path)
 
     current_pages: list[str] = []
     list_fields: set[str] = set()
@@ -140,7 +191,7 @@ def parse_requirement_file(path: str, mapping: dict[str, RequirementPage]):
 
     def flush():
         if current_pages:
-            assign_fields_to_pages(current_pages, list_fields, form_fields, detail_fields, mapping)
+            assign_fields_to_pages(current_pages, list_fields, form_fields, detail_fields, mapping, scope)
 
     idx = 0
     while idx < len(lines):
@@ -159,7 +210,7 @@ def parse_requirement_file(path: str, mapping: dict[str, RequirementPage]):
             raw = line.split("**页面/界面：**", 1)[1].strip()
             current_pages = split_page_names(raw)
             for page in current_pages:
-                mapping.setdefault(page, RequirementPage(name=page))
+                requirement_page_entry(mapping, scope, page)
             idx += 1
             continue
 
@@ -316,22 +367,27 @@ def load_page_specs(path: str) -> dict[str, dict]:
     return result
 
 
-def check_consistency(requirements_path: str, page_specs_dir: str, coverage_threshold: float) -> dict:
-    requirement_pages: dict[str, RequirementPage] = {}
+def check_consistency(requirements_path: str, page_specs_dir: str, coverage_threshold: float, scope: str = "auto") -> dict:
+    requirement_pages: list[RequirementPage] = []
     for path in collect_requirement_files(requirements_path):
         parse_requirement_file(path, requirement_pages)
 
     generated_pages = load_page_specs(page_specs_dir)
     generated_by_normalized = {page["normalized"]: page for page in generated_pages.values()}
+    resolved_scope = infer_generated_scope(generated_pages) if scope == "auto" else scope
+    filtered_requirement_pages = [
+        page for page in requirement_pages
+        if resolved_scope == "all" or page.scope in {resolved_scope, "all"}
+    ]
 
     missing_pages = []
     missing_field_pages = []
     low_coverage = []
     checked_pages = 0
 
-    requirement_norm_map = {normalize_name(page.name): page.name for page in requirement_pages.values()}
+    requirement_norm_map = {normalize_name(page.name): page.name for page in filtered_requirement_pages}
 
-    for req_page in requirement_pages.values():
+    for req_page in filtered_requirement_pages:
         normalized = normalize_name(req_page.name)
         generated = generated_by_normalized.get(normalized)
         if not generated:
@@ -375,7 +431,8 @@ def check_consistency(requirements_path: str, page_specs_dir: str, coverage_thre
     warn = bool(extra_pages)
     return {
         "coverage_threshold": coverage_threshold,
-        "requirements_pages": len(requirement_pages),
+        "scope": resolved_scope,
+        "requirements_pages": len(filtered_requirement_pages),
         "generated_pages": len(generated_pages),
         "checked_pages": checked_pages,
         "missing_pages": missing_pages,
@@ -395,6 +452,7 @@ def main():
     parser.add_argument("requirements_path")
     parser.add_argument("page_specs_dir")
     parser.add_argument("--threshold", type=float, default=0.8)
+    parser.add_argument("--scope", choices=["auto", "all", "backend", "miniapp"], default="auto")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -405,12 +463,13 @@ def main():
         print(f"错误：page_specs 目录不存在 — {args.page_specs_dir}", file=sys.stderr)
         sys.exit(1)
 
-    report = check_consistency(args.requirements_path, args.page_specs_dir, args.threshold)
+    report = check_consistency(args.requirements_path, args.page_specs_dir, args.threshold, args.scope)
     if args.json_output:
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         print("=== 覆盖率与一致性检查 ===")
         print(f"coverage threshold: {report['coverage_threshold']}")
+        print(f"scope: {report['scope']}")
         print(f"requirements 页面数：{report['requirements_pages']}")
         print(f"page_specs 页面数：{report['generated_pages']}")
         print(f"已检查页面数：{report['checked_pages']}")

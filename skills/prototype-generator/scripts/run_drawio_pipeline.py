@@ -43,6 +43,15 @@ RULE_TO_LAYER = {
 }
 
 
+def _consistency_scope(product_name: str) -> str:
+    text = str(product_name or "")
+    if "后台" in text:
+        return "backend"
+    if any(token in text for token in ("小程序", "APP", "移动端")):
+        return "miniapp"
+    return "auto"
+
+
 def _run_command(cmd: list[str]) -> dict:
     completed = subprocess.run(cmd, capture_output=True, text=True)
     return {
@@ -239,7 +248,18 @@ def main():
             _print_human_summary(report)
         raise SystemExit(1)
 
-    consistency_result = _run_command([sys.executable, str(consistency_script), str(requirements_dir), str(page_specs_dir), "--json"])
+    consistency_scope = _consistency_scope(args.product_name)
+    consistency_result = _run_command(
+        [
+            sys.executable,
+            str(consistency_script),
+            str(requirements_dir),
+            str(page_specs_dir),
+            "--scope",
+            consistency_scope,
+            "--json",
+        ]
+    )
     consistency_report = _parse_json_stdout(consistency_result)
 
     tmp_xmls = sorted(tmp_dir.glob("drawio_*_tmp.xml"))
@@ -299,6 +319,7 @@ def main():
         "max_parallel": max_parallel,
         "final_drawio": str(final_drawio),
         "consistency": consistency_report,
+        "consistency_scope": consistency_scope,
         "tmp_validations": {tmp_xml.name: payload for tmp_xml, payload in tmp_reports},
         "final_validation": final_report,
         "failure_routing": failure_routing,
