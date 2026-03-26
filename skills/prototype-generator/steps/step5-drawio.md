@@ -220,6 +220,12 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/.prototype-generator/tmp/drawio_[
 
 `page_model -> build_page_spec.py -> render.py -> check_prototype_consistency.py -> validate(tmp) -> merge.py -> validate(final) -> visual review -> failure routing -> next round`
 
+默认不要手工拼装这条链路，直接运行：
+
+```bash
+python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format drawio --json
+```
+
 ### 每轮固定动作
 
 1. 用 `scripts/run_drawio_pipeline.py` 或等价主进程脚本生成真实 `.drawio`

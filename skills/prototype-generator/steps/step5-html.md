@@ -2,6 +2,14 @@
 
 本文件仅在 OUTPUT_FORMAT=html 时加载。
 
+自治模式下，不要靠人工逐页重试；统一通过：
+
+```bash
+python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format html --json
+```
+
+主控器内部会调用 `run_html_pipeline.py` 生成 HTML、执行一致性校验、结构校验，并把失败路由回 `page_spec`。
+
 ---
 
 ## HTML 两段式规则

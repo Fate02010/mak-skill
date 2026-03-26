@@ -14,6 +14,7 @@ Before declaring success:
 - required compressed-doc artifacts exist when compression mode is active
 - `validate.py` passes
 - `check_prototype_consistency.py` passes
+- autonomous mode runs through `scripts/run_autonomous_pipeline.py` as the only round controller
 
 ## draw.io-Specific Recovery
 

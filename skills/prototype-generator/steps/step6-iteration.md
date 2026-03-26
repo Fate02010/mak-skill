@@ -4,6 +4,15 @@
 
 若用户已授权自治模式，本步骤默认不等待用户逐轮确认，而是直接进入“审视 -> 修复 -> 真实 `.drawio` 复测”的自迭代闭环；仅在达到熔断轮次后再向用户汇报剩余阻塞项。
 
+自治模式优先使用统一主控器：
+
+```bash
+python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format drawio --json
+python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format html --json
+```
+
+主控器会把每轮报告落到 `WORK_DIR/.prototype-generator/rounds/round_XX/`，并持续更新 `autoloop_state.json` 与 `执行状态.md`。
+
 ---
 
 ## 阶段 6-0：需求对照审视（强制，不可跳过）

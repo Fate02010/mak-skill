@@ -14,6 +14,9 @@ SKILL_DIR = REPO_ROOT / "skills" / "prototype-generator"
 SCRIPTS_DIR = SKILL_DIR / "scripts"
 STEPS_DIR = SKILL_DIR / "steps"
 
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
 
 def _load_module(name: str, path: Path):
     spec = importlib.util.spec_from_file_location(name, path)
@@ -36,11 +39,16 @@ def _read_frontmatter(path: Path) -> str:
 BUILD_PAGE_SPEC = _load_module("build_page_spec_test", SCRIPTS_DIR / "build_page_spec.py")
 RENDER = _load_module("render_test", SCRIPTS_DIR / "render.py")
 VALIDATE = _load_module("validate_test", SCRIPTS_DIR / "validate.py")
+HTML_UTILS = _load_module("html_utils_test", SCRIPTS_DIR / "html_utils.py")
+VALIDATE_HTML = _load_module("validate_html_test", SCRIPTS_DIR / "validate_html.py")
+HTML_CONSISTENCY = _load_module("html_consistency_test", SCRIPTS_DIR / "check_html_consistency.py")
 MERGE = _load_module("merge_test", SCRIPTS_DIR / "merge.py")
 CONSISTENCY = _load_module("consistency_test", SCRIPTS_DIR / "check_prototype_consistency.py")
 BRIEF_CONSISTENCY = _load_module("brief_consistency_test", SCRIPTS_DIR / "check_module_brief_consistency.py")
 CONTEXT_BUDGET = _load_module("context_budget_test", SCRIPTS_DIR / "check_context_budget.py")
 RUN_PIPELINE = SCRIPTS_DIR / "run_drawio_pipeline.py"
+RUN_HTML_PIPELINE = SCRIPTS_DIR / "run_html_pipeline.py"
+RUN_AUTO_PIPELINE = SCRIPTS_DIR / "run_autonomous_pipeline.py"
 
 
 def _build_page_spec_markdown(model: dict) -> str:
@@ -776,6 +784,49 @@ def _run_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
     return completed.returncode, payload
 
 
+def _run_html_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
+    completed = subprocess.run(
+        [sys.executable, str(RUN_HTML_PIPELINE), str(workdir), product_name, "--json"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
+    return completed.returncode, payload
+
+
+def _run_autoloop_cli(workdir: Path, product_name: str, format_name: str, *, max_rounds: int = 5) -> tuple[int, dict]:
+    completed = subprocess.run(
+        [
+            sys.executable,
+            str(RUN_AUTO_PIPELINE),
+            str(workdir),
+            product_name,
+            "--format",
+            format_name,
+            "--max-rounds",
+            str(max_rounds),
+            "--json",
+        ],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
+    return completed.returncode, payload
+
+
+def _write_html_page_spec(path: Path, module_name: str, module_key: str, pages: list[dict]):
+    payload = {
+        "module_name": module_name,
+        "module_key": module_key,
+        "output_format": "html",
+        "pages": pages,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(HTML_UTILS.to_markdown(payload), encoding="utf-8")
+
+
 class PrototypeGeneratorDrawioTests(unittest.TestCase):
     def test_normalize_output_path_coerces_legacy_root_paths_into_hidden_artifact_dir(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -835,6 +886,16 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             text = path.read_text(encoding="utf-8")
             for snippet in required_snippets:
                 self.assertIn(snippet, text, path.as_posix())
+
+    def test_docs_promote_unified_autonomous_entrypoint(self):
+        for path in (
+            SKILL_DIR / "SKILL.md",
+            STEPS_DIR / "step5-drawio.md",
+            STEPS_DIR / "step5-html.md",
+            STEPS_DIR / "step6-iteration.md",
+        ):
+            text = path.read_text(encoding="utf-8")
+            self.assertIn("run_autonomous_pipeline.py", text, path.as_posix())
 
     def test_workflow_docs_require_forced_context_compression(self):
         expectations = {
@@ -1804,6 +1865,174 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             drawio_path = _write_drawio(Path(tmp), "reject_modal", "后台-分销管理", "提现拒绝确认弹窗", 592, cells)
             report = VALIDATE.run_checks(str(drawio_path))
         self.assertEqual(_rule_result(report, "C13")["status"], "PASS", _report_message(report))
+
+    def test_html_pipeline_renders_index_and_review_findings(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "is_nav_page": False,
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户", "编辑"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "停用"],
+                    }
+                ],
+            )
+
+            returncode, payload = _run_html_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertTrue((workdir / "prototypes" / "index.html").is_file())
+            self.assertEqual(payload["failure_routing"][0]["layer"], "page_spec")
+            self.assertTrue(any(item["rule"] == "LOW_COVERAGE" for item in payload["review_findings"]))
+
+    def test_validate_html_flags_broken_links_and_missing_css(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "broken.html").write_text(
+                "<!DOCTYPE html><html><head><title>Broken</title></head><body>"
+                "<div class='page-shell' data-prototype-shell='1' data-page-name='坏页' data-page-type='web_list'>"
+                "<main class='page-main'><a href='missing.html'>缺失</a></main>"
+                "</div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H2")["status"], "FAIL")
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H4")["status"], "FAIL")
+
+    def test_autonomous_html_pipeline_repairs_page_spec_and_converges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "is_nav_page": False,
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用"],
+                    }
+                ],
+            )
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["status"], "passed")
+            self.assertGreaterEqual(len(payload["rounds"]), 2)
+            repaired_spec = (workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md").read_text(encoding="utf-8")
+            self.assertIn("手机号", repaired_spec)
+            self.assertIn("状态", repaired_spec)
+
+    def test_autonomous_drawio_pipeline_repairs_page_model_and_converges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                        "- 账号\n"
+                        "- 密码\n"
+                        "- 图形验证码\n"
+                    ),
+                },
+            )
+            broken_login = _login_model()
+            broken_login["pages"][0]["fields"] = [{"name": "账号", "control": "input", "required": True, "validation": "请输入后台账号"}]
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json", broken_login)
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "drawio")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["status"], "passed")
+            self.assertGreaterEqual(len(payload["rounds"]), 2)
+            repaired = json.loads((workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json").read_text(encoding="utf-8"))
+            repaired_fields = [item["name"] for item in repaired["pages"][0]["fields"]]
+            self.assertIn("密码", repaired_fields)
+            self.assertIn("图形验证码", repaired_fields)
+
+    def test_autonomous_pipeline_records_blockers_after_max_rounds(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                    ),
+                },
+            )
+            completed = subprocess.run(
+                [
+                    sys.executable,
+                    str(RUN_AUTO_PIPELINE),
+                    str(workdir),
+                    "渔易购-后台管理",
+                    "--format",
+                    "html",
+                    "--max-rounds",
+                    "2",
+                    "--vision-review",
+                    "required",
+                    "--json",
+                ],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
+
+            self.assertNotEqual(completed.returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["status"], "failed")
+            self.assertTrue(payload["blocked_findings"])
 
 
 if __name__ == "__main__":

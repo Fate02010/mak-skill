@@ -129,6 +129,7 @@ metadata:
 
 自治模式下：
 - draw.io 主流程默认最多自迭代 5 轮；每轮都必须生成真实 `WORK_DIR/prototypes/[产品名称].drawio`
+- 自治主控器统一入口：`scripts/run_autonomous_pipeline.py <work_dir> <product_name> --format drawio|html`
 - 任一时刻最多只允许 3 个并行 agent 或并行模块任务
 - 每轮都必须执行：`check_prototype_consistency.py` → 模块级 `validate.py` → `merge.py` → 最终 `validate.py`
 - 最终 `.drawio` 未通过前，禁止宣告完成
@@ -157,6 +158,7 @@ metadata:
 - 所有中间产物必须收敛到 `WORK_DIR/.prototype-generator/`；`WORK_DIR` 根目录只允许保留 `requirements/`、`prototypes/` 和用户原始资料
 - 登录页、弹窗、抽屉等容易出现错位的骨架页，若用户反馈布局异常，优先修改 `build_page_spec.py` 或对应模板，并补充几何回归测试覆盖该版式
 - 推荐使用 `scripts/run_drawio_pipeline.py` 执行真实产物级门禁；该脚本负责编排 `build_page_spec.py -> render.py -> check_prototype_consistency.py -> validate.py -> merge.py -> validate.py`
+- 若已进入自治模式，统一由 `scripts/run_autonomous_pipeline.py` 调 `run_drawio_pipeline.py` / `run_html_pipeline.py` 并记录轮次账本
 - draw.io 最终交付前必须对真实 `.drawio` 做视觉分析；至少覆盖登录页、列表页、详情页/授权页三类 archetype
 
 ### 用户交互门禁

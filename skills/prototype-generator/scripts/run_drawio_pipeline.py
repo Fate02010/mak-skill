@@ -36,6 +36,7 @@ if str(SCRIPT_DIR) not in sys.path:
     sys.path.insert(0, str(SCRIPT_DIR))
 
 import rulepack as RULEPACK
+from review_finding import make_finding, severity_from_status
 
 
 RULE_TO_LAYER = {
@@ -165,6 +166,100 @@ def _collect_failure_routing(consistency_report: dict, tmp_reports: list[tuple[P
     return routing
 
 
+def _collect_review_findings(scope: str, consistency_report: dict, tmp_reports: list[tuple[Path, dict]], final_report: dict) -> list[dict]:
+    findings: list[dict] = []
+    for page in consistency_report.get("missing_pages", []):
+        findings.append(make_finding(format="drawio", scope=scope, page_or_sheet=page, layer="page_model", rule="MISSING_PAGE", severity="error", message="requirements 页面未生成", repair_target="page_model"))
+    for item in consistency_report.get("missing_field_pages", []):
+        findings.append(
+            make_finding(
+                format="drawio",
+                scope=scope,
+                page_or_sheet=item.get("page", ""),
+                layer="page_model",
+                rule="MISSING_FIELDS",
+                severity="error",
+                message=f"页面缺少字段: {', '.join(item.get('missing_fields', [])[:5])}",
+                repair_target="page_model",
+            )
+        )
+    for item in consistency_report.get("low_coverage_pages", []):
+        findings.append(
+            make_finding(
+                format="drawio",
+                scope=scope,
+                page_or_sheet=item.get("page", ""),
+                layer="page_model",
+                rule="LOW_COVERAGE",
+                severity="error",
+                message=f"字段覆盖率过低: {item.get('coverage', 0)}",
+                repair_target="page_model",
+            )
+        )
+    for item in consistency_report.get("action_mismatch_pages", []):
+        findings.append(
+            make_finding(
+                format="drawio",
+                scope=scope,
+                page_or_sheet=item.get("page", ""),
+                layer="page_model",
+                rule="ACTION_MISMATCH",
+                severity="error",
+                message="页面动作与需求不一致",
+                repair_target="page_model",
+            )
+        )
+    for item in consistency_report.get("layout_mismatch_pages", []):
+        findings.append(
+            make_finding(
+                format="drawio",
+                scope=scope,
+                page_or_sheet=item.get("page", ""),
+                layer="page_spec",
+                rule="LAYOUT_MISMATCH",
+                severity="error",
+                message="页面骨架与需求不一致",
+                repair_target="page_spec",
+            )
+        )
+    for tmp_xml, report in tmp_reports:
+        for item in report.get("results", []):
+            if item.get("status") == "PASS":
+                continue
+            for detail in item.get("details", []) or [tmp_xml.name]:
+                target_layer = RULE_TO_LAYER.get(item.get("rule", ""), "page_spec")
+                findings.append(
+                    make_finding(
+                        format="drawio",
+                        scope=scope,
+                        page_or_sheet=str(detail),
+                        layer=target_layer,
+                        rule=item.get("rule", ""),
+                        severity=severity_from_status(item.get("status", "")),
+                        message=item.get("title", ""),
+                        repair_target=target_layer,
+                    )
+                )
+    for item in final_report.get("results", []):
+        if item.get("status") == "PASS":
+            continue
+        for detail in item.get("details", []) or ["final"]:
+            target_layer = RULE_TO_LAYER.get(item.get("rule", ""), "page_spec")
+            findings.append(
+                make_finding(
+                    format="drawio",
+                    scope=scope,
+                    page_or_sheet=str(detail),
+                    layer=target_layer,
+                    rule=item.get("rule", ""),
+                    severity=severity_from_status(item.get("status", "")),
+                    message=item.get("title", ""),
+                    repair_target=target_layer,
+                )
+            )
+    return findings
+
+
 def _print_human_summary(report: dict):
     print("=== draw.io pipeline ===")
     print(f"work_dir: {report['work_dir']}")
@@ -254,6 +349,10 @@ def main():
             "context_budget": context_budget_report,
             "summary": {"fail": 1, "warn": context_budget_report.get("summary", {}).get("warn", 0), "pass": 0},
             "failure_routing": [{"layer": "requirements", "reason": "上下文预算预检失败", "pages": context_budget_report.get("failures", [])}],
+            "review_findings": [
+                make_finding(format="drawio", scope="all", page_or_sheet=item, layer="requirements", rule="CONTEXT_BUDGET", severity="error", message="上下文预算预检失败", repair_target="requirements")
+                for item in context_budget_report.get("failures", [])
+            ],
         }
         if args.json_output:
             print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -283,6 +382,11 @@ def main():
                 "module_brief_consistency": brief_consistency_report,
                 "summary": {"fail": 1, "warn": context_budget_report.get("summary", {}).get("warn", 0), "pass": 0},
                 "failure_routing": [{"layer": "requirements", "reason": "module_brief 覆盖率校验失败", "pages": [item for item in brief_fail_items if item]}],
+                "review_findings": [
+                    make_finding(format="drawio", scope="all", page_or_sheet=item, layer="requirements", rule="MODULE_BRIEF", severity="error", message="module_brief 覆盖率校验失败", repair_target="requirements")
+                    for item in brief_fail_items
+                    if item
+                ],
             }
             if args.json_output:
                 print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -313,6 +417,10 @@ def main():
             "build_failures": build_failures,
             "summary": {"fail": 1, "warn": 0, "pass": 0},
             "failure_routing": [{"layer": "page_model", "reason": "page_spec 构建失败", "pages": [item["model"] for item in build_failures]}],
+            "review_findings": [
+                make_finding(format="drawio", scope="all", page_or_sheet=item["model"], layer="page_model", rule="BUILD", severity="error", message="page_spec 构建失败", repair_target="page_model")
+                for item in build_failures
+            ],
         }
         if args.json_output:
             print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -342,6 +450,10 @@ def main():
             "render_failures": render_failures,
             "summary": {"fail": 1, "warn": 0, "pass": 0},
             "failure_routing": [{"layer": "render_merge", "reason": "模块渲染失败", "pages": [item["page_spec"] for item in render_failures]}],
+            "review_findings": [
+                make_finding(format="drawio", scope="all", page_or_sheet=item["page_spec"], layer="render_merge", rule="RENDER", severity="error", message="模块渲染失败", repair_target="render_merge")
+                for item in render_failures
+            ],
         }
         if args.json_output:
             print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -415,6 +527,7 @@ def main():
         }
 
     failure_routing = _collect_failure_routing(consistency_report, tmp_reports, final_report)
+    review_findings = _collect_review_findings(consistency_scope, consistency_report, tmp_reports, final_report)
 
     fail = 0
     warn = 0
@@ -436,6 +549,17 @@ def main():
         "tmp_xml_count": len(tmp_xmls),
         "max_parallel": max_parallel,
         "final_drawio": str(final_drawio),
+        "artifacts": {
+            "page_models_dir": str(page_models_dir),
+            "page_specs_dir": str(page_specs_dir),
+            "tmp_dir": str(tmp_dir),
+            "final_drawio": str(final_drawio),
+        },
+        "coverage": {
+            "missing_pages": consistency_report.get("missing_pages", []),
+            "missing_field_pages": consistency_report.get("missing_field_pages", []),
+            "low_coverage_pages": consistency_report.get("low_coverage_pages", []),
+        },
         "active_rulepack": active_rulepack_payload,
         "active_rulepack_path": str(active_rulepack_path),
         "context_budget": context_budget_report,
@@ -443,8 +567,13 @@ def main():
         "consistency": consistency_report,
         "consistency_scope": consistency_scope,
         "tmp_validations": {tmp_xml.name: payload for tmp_xml, payload in tmp_reports},
+        "validator_results": {
+            "tmp": {tmp_xml.name: payload for tmp_xml, payload in tmp_reports},
+            "final": final_report,
+        },
         "final_validation": final_report,
         "failure_routing": failure_routing,
+        "review_findings": review_findings,
         "summary": {
             "fail": fail,
             "warn": warn,
