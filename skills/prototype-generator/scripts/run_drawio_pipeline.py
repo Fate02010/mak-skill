@@ -31,6 +31,12 @@ import shutil
 import subprocess
 import sys
 
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import rulepack as RULEPACK
+
 
 RULE_TO_LAYER = {
     "C10": "page_model",
@@ -45,10 +51,26 @@ RULE_TO_LAYER = {
 
 def _consistency_scope(product_name: str) -> str:
     text = str(product_name or "")
+    scopes = []
     if "后台" in text:
-        return "backend"
-    if any(token in text for token in ("小程序", "APP", "移动端")):
-        return "miniapp"
+        scopes.append("admin")
+    if "小程序" in text:
+        scopes.append("miniapp")
+    if "H5" in text:
+        scopes.append("h5")
+    if "大屏" in text:
+        scopes.append("bigscreen")
+    if "官网" in text or "门户" in text:
+        scopes.append("portal")
+    if "工控机" in text or "HMI" in text:
+        scopes.append("industrial")
+    if any(token in text for token in ("APP", "App", "移动端")):
+        scopes.append("app")
+    scopes = list(dict.fromkeys(scopes))
+    if len(scopes) == 1:
+        return scopes[0]
+    if len(scopes) > 1:
+        return "mixed"
     return "auto"
 
 
@@ -109,6 +131,18 @@ def _collect_failure_routing(consistency_report: dict, tmp_reports: list[tuple[P
             "reason": "字段覆盖率过低",
             "pages": [item["page"] for item in consistency_report["low_coverage_pages"]],
         })
+    if consistency_report.get("action_mismatch_pages"):
+        routing.append({
+            "layer": "page_model",
+            "reason": "页面动作与需求不一致",
+            "pages": [item["page"] for item in consistency_report["action_mismatch_pages"]],
+        })
+    if consistency_report.get("layout_mismatch_pages"):
+        routing.append({
+            "layer": "page_spec",
+            "reason": "页面骨架与需求不一致",
+            "pages": [item["page"] for item in consistency_report["layout_mismatch_pages"]],
+        })
 
     for tmp_xml, report in tmp_reports:
         for item in report.get("results", []):
@@ -154,6 +188,9 @@ def main():
     parser.add_argument("product_name")
     parser.add_argument("--max-parallel", type=int, default=3)
     parser.add_argument("--keep-tmp", action="store_true")
+    parser.add_argument("--rulepack", default="")
+    parser.add_argument("--rulepack-override", default="")
+    parser.add_argument("--dump-rulepack", action="store_true")
     parser.add_argument("--json", action="store_true", dest="json_output")
     args = parser.parse_args()
 
@@ -168,6 +205,7 @@ def main():
     requirements_dir = work_dir / "requirements"
     prototypes_dir = work_dir / "prototypes"
     final_drawio = prototypes_dir / f"{args.product_name}.drawio"
+    active_rulepack_path = artifact_dir / "active_rulepack.json"
 
     page_specs_dir.mkdir(parents=True, exist_ok=True)
     tmp_dir.mkdir(parents=True, exist_ok=True)
@@ -193,6 +231,17 @@ def main():
     page_models = sorted(page_models_dir.glob("page_model_*.json"))
     if not page_models:
         raise SystemExit(f"未找到 page_model_*.json: {page_models_dir}")
+
+    effective_rulepack = RULEPACK.resolve_effective_rulepack(
+        explicit_name=args.rulepack or None,
+        work_dir=str(work_dir),
+        override_path=args.rulepack_override or None,
+    )
+    active_rulepack_payload = RULEPACK.build_active_rulepack_metadata(effective_rulepack)
+    active_rulepack_path.write_text(
+        json.dumps(active_rulepack_payload, ensure_ascii=False, indent=2) + "\n",
+        encoding="utf-8",
+    )
 
     context_budget_result = _run_command([sys.executable, str(context_budget_script), str(work_dir), "--json"])
     context_budget_report = _parse_json_stdout(context_budget_result)
@@ -244,7 +293,10 @@ def main():
     def build_task(model_path: Path) -> dict:
         suffix = _module_suffix(model_path)
         output_spec = page_specs_dir / f"page_spec_{suffix}.md"
-        return _run_command([sys.executable, str(build_script), str(model_path), str(output_spec)])
+        cmd = [sys.executable, str(build_script), str(model_path), str(output_spec)]
+        if effective_rulepack.get("detected_pack") and effective_rulepack.get("detected_pack") != "base":
+            cmd.extend(["--rulepack", effective_rulepack["detected_pack"]])
+        return _run_command(cmd)
 
     build_results = _parallel_map(page_models, max_parallel, build_task)
     build_failures = [
@@ -306,6 +358,8 @@ def main():
             str(page_specs_dir),
             "--scope",
             consistency_scope,
+            "--rulepack",
+            effective_rulepack.get("detected_pack", "base"),
             "--json",
         ]
     )
@@ -314,7 +368,14 @@ def main():
     tmp_xmls = sorted(tmp_dir.glob("drawio_*_tmp.xml"))
 
     def validate_tmp_task(tmp_xml: Path) -> dict:
-        return _run_command([sys.executable, str(validate_script), str(tmp_xml), "--json"])
+        return _run_command([
+            sys.executable,
+            str(validate_script),
+            str(tmp_xml),
+            "--rulepack",
+            effective_rulepack.get("detected_pack", "base"),
+            "--json",
+        ])
 
     tmp_validate_results = _parallel_map(tmp_xmls, max_parallel, validate_tmp_task)
     tmp_reports: list[tuple[Path, dict]] = []
@@ -324,12 +385,20 @@ def main():
     merge_cmd = [sys.executable, str(merge_script), str(final_drawio), args.product_name]
     if args.keep_tmp:
         merge_cmd.append("--keep-tmp")
+    merge_cmd.extend(["--rulepack", effective_rulepack.get("detected_pack", "base")])
     merge_cmd.extend(["--glob", str(tmp_dir / "drawio_*_tmp.xml")])
     merge_result = _run_command(merge_cmd)
 
     final_report = {}
     if merge_result["returncode"] == 0 and final_drawio.exists():
-        final_result = _run_command([sys.executable, str(validate_script), str(final_drawio), "--json"])
+        final_result = _run_command([
+            sys.executable,
+            str(validate_script),
+            str(final_drawio),
+            "--rulepack",
+            effective_rulepack.get("detected_pack", "base"),
+            "--json",
+        ])
         final_report = _parse_json_stdout(final_result)
     else:
         final_report = {
@@ -367,6 +436,8 @@ def main():
         "tmp_xml_count": len(tmp_xmls),
         "max_parallel": max_parallel,
         "final_drawio": str(final_drawio),
+        "active_rulepack": active_rulepack_payload,
+        "active_rulepack_path": str(active_rulepack_path),
         "context_budget": context_budget_report,
         "module_brief_consistency": brief_consistency_report,
         "consistency": consistency_report,
@@ -388,6 +459,8 @@ def main():
         print(json.dumps(report, ensure_ascii=False, indent=2))
     else:
         _print_human_summary(report)
+        if args.dump_rulepack:
+            print(json.dumps(active_rulepack_payload, ensure_ascii=False, indent=2))
 
     raise SystemExit(0 if fail == 0 else 1)
 

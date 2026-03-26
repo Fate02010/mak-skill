@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from __future__ import annotations
+
 """
 validate.py — draw.io 文件自动化验收检查，输出问题报告。
 
@@ -20,6 +22,22 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from typing import Optional
+from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import rulepack as RULEPACK
+
+
+ACTIVE_RULEPACK = RULEPACK.resolve_effective_rulepack(explicit_name="base")
+
+
+def set_active_rulepack(rulepack: dict):
+    global ACTIVE_RULEPACK
+    ACTIVE_RULEPACK = rulepack or RULEPACK.resolve_effective_rulepack(explicit_name="base")
 
 
 # ---------------------------------------------------------------------------
@@ -739,11 +757,21 @@ def _classify_page_name(name: str) -> str:
         return "confirm_dialog"
     if _is_auth_like_page(name):
         return "login"
+    if any(token in name for token in ("官网首页", "品牌官网", "产品官网", "落地页")):
+        return "portal_landing"
+    if any(token in name for token in ("门户首页", "业务门户", "门户工作台")):
+        return "portal_hub"
+    if any(token in name for token in ("官网内容", "资讯详情", "文章详情", "案例详情")):
+        return "portal_content"
+    if any(token in name for token in ("工控机", "HMI", "产线控制台", "中控台", "设备监控台")):
+        return "industrial_hmi"
     dashboard_tokens = ("工作台", "dashboard", "后台首页", "分析", "统计", "报表", "总览", "概览")
     if not _is_overlay_like_page(name) and any(
         token in name.lower() if token == "dashboard" else token in name
         for token in dashboard_tokens
     ):
+        return "dashboard"
+    if any(token in name for token in ("大屏", "驾驶舱", "指挥中心")):
         return "dashboard"
     if "详情" in name or (("设置" in name or "处理" in name) and "列表" not in name and "弹窗" not in name):
         return "detail_kv"
@@ -866,6 +894,28 @@ def check_c13(doc: DrawioFile) -> RuleResult:
                 reasons.append("指标卡不足 4 个")
             if features["rows"] < 2 and features["buttons"] < 2:
                 reasons.append("缺少待办区或快捷入口区")
+        elif archetype == "portal_landing":
+            if features["cards"] < 3:
+                reasons.append("官网落地页内容区不足")
+            if features["buttons"] < 2:
+                reasons.append("缺少主 CTA / 次 CTA")
+        elif archetype == "portal_hub":
+            if features["cards"] < 3:
+                reasons.append("门户聚合区不足")
+            if features["rows"] < 2:
+                reasons.append("缺少待办或通知列表")
+        elif archetype == "portal_content":
+            if features["cards"] < 2:
+                reasons.append("缺少正文区或侧栏区")
+            if features["titles"] < 2:
+                reasons.append("内容标题层级不足")
+        elif archetype == "industrial_hmi":
+            if features["cards"] < 3:
+                reasons.append("工控态势区不足")
+            if features["buttons"] < 3:
+                reasons.append("缺少启动/暂停/急停等操作")
+            if features["rows"] < 2:
+                reasons.append("缺少报警或流程列表")
         elif archetype == "detail_kv":
             if features["tags"] < 1:
                 reasons.append("缺少状态区")
@@ -1131,20 +1181,17 @@ def check_c17(doc: DrawioFile) -> RuleResult:
 # ---- C18 管理页动作完整性 -------------------------------------------------
 
 def check_c18(doc: DrawioFile) -> RuleResult:
-    expectations = [
-        ("员工管理页", {"新增", "编辑", "停用"}),
-        ("司机管理页", {"新增", "编辑", "停用"}),
-        ("管理员管理页", {"新增", "编辑", "停用"}),
-        ("分销会员管理页", {"审核", "改等级"}),
-        ("分销等级管理页", {"新增", "编辑"}),
-        ("轮播图管理页", {"新增", "编辑", "下线"}),
-        ("公告管理页", {"查看", "编辑"}),
-        ("评论管理页", {"详情", "审核"}),
-        ("会员管理页", {"查看", "编辑"}),
-        ("会员等级管理页", {"新增", "编辑"}),
-        ("满额优惠管理页", {"新增", "编辑", "删除"}),
-        ("优惠券管理页", {"新增", "编辑", "删除"}),
-        ("订单管理页（后台）", {"详情", "发货", "关闭"}),
+    expectations = []
+    for item in ACTIVE_RULEPACK.get("action_expectations", []):
+        if not isinstance(item, dict):
+            continue
+        page_name = str(item.get("page_name", "")).strip()
+        actions = {str(action).strip() for action in item.get("actions", []) if str(action).strip()}
+        if page_name and actions:
+            expectations.append((page_name, actions))
+
+    fallback_expectations = [
+        (("员工管理页", "司机管理页", "管理员管理页"), {"编辑", "停用"}),
     ]
     worst = "PASS"
     details: list = []
@@ -1157,8 +1204,28 @@ def check_c18(doc: DrawioFile) -> RuleResult:
         children = [c for c in doc.swimlane_children.get(sid, []) if _is_in_ui_area(c, threshold)]
         values = [_plain_value(c.get("value", "")) for c in children]
         values = [v for v in values if v]
+        matched = False
         for page_name, expected_tokens in expectations:
             if page_name != name:
+                continue
+            matched = True
+            hit = set()
+            for value in values:
+                for token in expected_tokens:
+                    if token in value:
+                        hit.add(token)
+            if hit != expected_tokens:
+                worst = "FAIL"
+                count += 1
+                missing = " / ".join(sorted(expected_tokens - hit))
+                details.append(f"{name}: 缺少关键动作 {missing}")
+            break
+
+        if matched:
+            continue
+
+        for names, expected_tokens in fallback_expectations:
+            if name not in names:
                 continue
             hit = set()
             for value in values:
@@ -1179,8 +1246,10 @@ def check_c18(doc: DrawioFile) -> RuleResult:
 # 主流程
 # ---------------------------------------------------------------------------
 
-def run_checks(path: str, fix: bool = False) -> dict:
+def run_checks(path: str, fix: bool = False, rulepack_name: str | None = None) -> dict:
     """执行所有检查并返回结构化结果。"""
+    work_dir = Path(path).resolve().parent.parent if Path(path).resolve().parent.name == "prototypes" else Path(path).resolve().parent
+    set_active_rulepack(RULEPACK.resolve_effective_rulepack(explicit_name=rulepack_name, work_dir=str(work_dir)))
     # C7 先做 XML 合法性预检 — 解析失败直接报错
     try:
         doc = DrawioFile(path)
@@ -1194,6 +1263,14 @@ def run_checks(path: str, fix: bool = False) -> dict:
             ],
             "summary": {"fail": 1, "warn": 0, "pass": 0},
         }
+
+    if not rulepack_name and ACTIVE_RULEPACK.get("detected_pack") == "base":
+        text_parts = [doc.swimlane_name(sl) for sl in doc.swimlanes]
+        detected_name, scores = RULEPACK.detect_rulepack_name_from_text("\n".join(text_parts))
+        if detected_name != "base":
+            detected = RULEPACK.resolve_effective_rulepack(explicit_name=detected_name)
+            detected["score_breakdown"] = scores
+            set_active_rulepack(detected)
 
     results = [
         check_c7(doc),
@@ -1229,6 +1306,7 @@ def run_checks(path: str, fix: bool = False) -> dict:
 
     return {
         "file": os.path.basename(path),
+        "rulepack": RULEPACK.build_active_rulepack_metadata(ACTIVE_RULEPACK),
         "stats": {
             "swimlanes": len(doc.swimlanes),
             "mxcells": len(doc.all_cells),
@@ -1276,6 +1354,7 @@ def format_json(report: dict) -> str:
     """将报告格式化为 JSON。"""
     out = {
         "file": report["file"],
+        "rulepack": report.get("rulepack", {}),
         "stats": report["stats"],
         "results": report["results"],
         "summary": report["summary"],
@@ -1289,6 +1368,7 @@ def main():
     parser.add_argument("drawio_file", help="要检查的 .drawio 文件路径")
     parser.add_argument("--fix", action="store_true",
                         help="自动修复可修复的问题（坐标对齐）")
+    parser.add_argument("--rulepack", default="", help="显式指定规则包")
     parser.add_argument("--json", action="store_true", dest="json_output",
                         help="输出 JSON 格式报告")
     args = parser.parse_args()
@@ -1297,7 +1377,7 @@ def main():
         print(f"错误：文件不存在 — {args.drawio_file}", file=sys.stderr)
         sys.exit(1)
 
-    report = run_checks(args.drawio_file, fix=args.fix)
+    report = run_checks(args.drawio_file, fix=args.fix, rulepack_name=args.rulepack or None)
 
     if args.json_output:
         print(format_json(report))

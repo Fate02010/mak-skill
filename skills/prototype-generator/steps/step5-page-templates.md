@@ -33,6 +33,26 @@
 | `mobile_swimlane_w` | `592` |
 | `mobile_swimlane_h` | `856` |
 
+### Bigscreen
+
+| token | 值 |
+|---|---|
+| `bigscreen_ui_w` | `1920` |
+| `bigscreen_annotation_x` | `1944` |
+| `bigscreen_annotation_w` | `240` |
+| `bigscreen_swimlane_w` | `2208` |
+| `bigscreen_swimlane_h` | `1120` |
+
+### Industrial
+
+| token | 值 |
+|---|---|
+| `industrial_ui_w` | `1368` |
+| `industrial_annotation_x` | `1392` |
+| `industrial_annotation_w` | `216` |
+| `industrial_swimlane_w` | `1608` |
+| `industrial_swimlane_h` | `960` |
+
 ---
 
 ## 页面类型与固定骨架
@@ -48,6 +68,11 @@
 | `dashboard` | nav + bg + 4 个指标卡 + 待办卡 + 快捷入口卡 + annotation |
 | `mobile_home` | nav + search_input + banner + 分类 icon + 商品卡片 + bottom_bar + annotation |
 | `profile` | header_bg + avatar + 用户信息 + list_row 菜单 + bottom_bar + annotation |
+| `portal_home` | nav + hero + CTA + 能力区 + 案例/资讯区 + annotation |
+| `portal_content` | nav + breadcrumb + 正文区 + 侧栏推荐/CTA + annotation |
+| `portal_hub` | nav + 快捷入口卡 + 待办区 + 通知区 + annotation |
+| `bigscreen_dashboard` | nav + 场景切换 + 6 个 KPI 卡 + 地图/趋势/告警区 + annotation |
+| `industrial_console` | nav + 状态条 + 流程区 + 报警区 + 大按钮操作区 + annotation |
 
 ---
 

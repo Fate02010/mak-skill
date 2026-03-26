@@ -76,6 +76,11 @@
 - dashboard
 - mobile_home
 - profile
+- portal_home
+- portal_content
+- portal_hub
+- bigscreen_dashboard
+- industrial_console
 
 判断规则：
 - 有查询/筛选/表格/分页：web_list
@@ -87,14 +92,24 @@
 - 数据统计/待办/快捷入口：dashboard
 - 搜索+轮播+分类+商品流：首页 mobile_home
 - 我的/个人中心：profile
+- 官网首页 / 品牌落地页：portal_home
+- 官网文章 / 案例 / 方案详情：portal_content
+- 登录后业务门户 / 快捷入口聚合页：portal_hub
+- 指挥中心 / 驾驶舱 / 数据大屏：bigscreen_dashboard
+- 工控机触控台 / HMI 监控页：industrial_console
 
 ## 第四步：字段与动作提取
 
 对每个页面提取：
+- terminal_type
+- terminal_name
 - page_id
 - page_name
+- canonical_page_name
 - page_type
 - page_archetype
+- page_kind
+- layout_mode
 - object_name
 - role
 - purpose
@@ -119,8 +134,12 @@
 - 若需求文档已写明页面原型类型，必须原样输出到 `page_archetype`；未写明时也要按 `drawio-spec.md` 先判型
 - 页面名含“弹窗/确认/拒绝”时，优先判为 `modal_form` 或 `detail_kv`；只有权限页才允许 `drawer_permission`，禁止把确认弹窗判成 `dispatch_board`
 - 页面名含“发货”且是弹窗时，字段必须来自发货动作本身，如 `物流公司`、`物流单号`、`发货备注`、`司机/路线`，不得误抄订单详情字段
+- 页面名含“关闭订单确认”时，必须输出 `关闭原因` 和风险提示，不能只写一句确认文案
 - 页面名含“营销/活动”但不含“分析/报表/统计”时，字段必须来自活动配置，不得生成 `新增会员数`、`核销率`、`销售额`、`TOP活动列表` 这类分析指标
-- 页面名含“资源管理”时，至少提取 `资源名称`、`资源类型`、`资源标识`；页面名含“品类/分类”时，至少提取 `分类名称/品类名称`、`父级分类`、`排序值`
+- 页面名含“资源管理”时，至少提取 `资源名称`、`资源类型`、`资源标识`、`上级资源`、`排序值`，并按树形资源页建模；不得混入 `时间范围`、`更新时间`、`创建人`、分页这类通用列表字段
+- 订单列表页必须提取 `订单编号`、`用户信息`、`商品摘要`、`实付金额`、`订单状态`、`售后状态`、`下单时间`，并在动作里体现 `详情/发货/关闭/备注`
+- 订单详情页必须提取 `支付信息`、`售后信息`、`操作区`，并按状态设置 `发货/关闭/备注/确认收货/查看售后`
+- `订单管理页（后台）` 视为 `订单列表页` 的后台命名；`确认发货弹窗` 视为 `发货弹窗` 的后台命名，不要额外创造第二套页面
 - 若需求文档明确了左侧菜单或 TabBar 归属，必须据此判断 `is_nav_page` 和页面模块归属，不能自行改挂到其他导航下
 - 若需求文档明确了导航路径，必须写入 `nav_context`
 - 若需求文档明确了权限、数据范围、按钮前置条件或关键业务事件，必须反映到 `actions`、`status_values`、`jump_targets` 的选择上
@@ -138,10 +157,14 @@ JSON 要求：
 - 合法 JSON
 - 顶层必须含 `module_name`、`module_key`、`pages`
 - `pages` 不能为空
+- 顶层必须显式输出 `terminal_type` 与 `terminal_name`
+- `terminal_type` 只能是 `admin` / `miniapp` / `app` / `h5` / `bigscreen` / `portal` / `industrial`
+- `terminal_name` 必须分别对应 `后台` / `小程序` / `App` / `H5` / `大屏` / `官网门户` / `工控机`
 - `page_id` 在模块内唯一
 - `module_name` 必须是**最终 sheet 名**，不是中间产物名
 - `module_name` 禁止出现：`page_spec`、`spec`、`tmp`、`后台管理`、`APP系统`、`商品与内容`、`人员与权限`、`订单与履约` 等大杂烩命名
-- `module_name` 推荐格式：`后台-员工管理`、`后台-订单管理`、`后台-发货单管理`、`小程序-首页`、`小程序-会员中心`
+- `module_name` 推荐格式：`后台-员工管理`、`后台-订单管理`、`小程序-首页`、`App-会员中心`、`H5-活动报名`、`大屏-指挥中心`、`官网门户-产品官网`、`工控机-产线监控`
+- `module_name` 必须使用 `[terminal_name]-[业务模块]` 格式，禁止 `terminal_type=industrial` 却输出 `大屏-产线监控`
 - 若模块名中出现 `与/和/及/` 连接多个业务域，先拆模块再输出 JSON；不要把多个实体塞进一个 `page_model`
 - Web 列表页若需求未明确要求统计卡片或摘要挂件，不得为了“填满页面”虚构图标卡片、伪统计块或装饰组件
 - 表单/弹窗若字段较多，必须保证底部按钮区与表单字段分离，不得出现按钮覆盖输入框

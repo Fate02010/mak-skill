@@ -22,56 +22,32 @@ from copy import deepcopy
 from datetime import datetime, timezone
 from typing import Optional
 import xml.etree.ElementTree as ET
+from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import rulepack as RULEPACK
+
+
+ACTIVE_RULEPACK = RULEPACK.resolve_effective_rulepack(explicit_name="base")
+
+
+def set_active_rulepack(rulepack: dict):
+    global ACTIVE_RULEPACK
+    ACTIVE_RULEPACK = rulepack or RULEPACK.resolve_effective_rulepack(explicit_name="base")
 
 
 def normalize_diagram_name(value: str) -> str:
-    text = str(value or "").strip()
-    text = re.sub(r"^(page[_-]?spec|spec|tmp)\s*[:：_-]?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+", "", text)
-    replacements = {
-        "后台-通用与看板": "后台-工作台",
-        "后台-人员与权限": "后台-组织权限",
-        "后台-商品与内容": "后台-商品管理",
-        "后台-会员与营销": "后台-会员运营",
-        "后台-订单与履约": "后台-订单管理",
-        "后台-物联与溯源基础数据": "后台-溯源基础数据",
-        "小程序-账号与首页": "小程序-首页",
-        "小程序-商品与交易": "小程序-商品交易",
-        "小程序-订单与会员": "小程序-订单中心",
-    }
-    return replacements.get(text, text)
+    return RULEPACK.normalize_module_name(value, ACTIVE_RULEPACK)
 
 
 def normalize_page_name(module_name: str, page_name: str) -> str:
     text = str(page_name or "").strip()
     module = normalize_diagram_name(module_name)
-    replacements = {
-        "商品列表页（后台）": "商品管理-商品列表",
-        "新增/编辑商品弹窗": "商品管理-添加编辑商品",
-        "删除商品确认弹窗": "商品管理-删除商品确认",
-        "分类管理页": "商品管理-分类管理",
-        "新增/编辑分类弹窗": "商品管理-添加编辑分类",
-        "轮播图管理页": "商品管理-轮播图管理",
-        "公告管理页": "商品管理-公告管理",
-        "评论管理页": "商品管理-评论管理",
-        "新增/编辑通用弹窗": "商品管理-通用编辑弹窗",
-        "删除确认弹窗": "商品管理-删除确认",
-        "订单管理页（后台）": "订单管理-订单列表",
-        "订单详情页（后台）": "订单管理-订单详情",
-        "发货单列表页": "发货单管理",
-        "发货单详情页": "发货单详情",
-        "确认发货弹窗": "订单管理-确认发货",
-        "退款处理弹窗": "订单管理-退款处理",
-        "工作台Dashboard": "工作台-Dashboard",
-        "工作台（后台）": "工作台-Dashboard",
-        "后台首页": "工作台-Dashboard",
-        "会员管理页": "会员管理",
-        "鱼塘管理页": "鱼塘管理",
-        "运输桶管理页": "运输桶管理",
-        "员工管理页": "员工管理",
-        "角色管理页": "权限管理-角色列表",
-        "登录页（后台）": "登录页",
-    }
+    replacements = ACTIVE_RULEPACK.get("merge_name_rules", {})
     if text in replacements:
         return replacements[text]
     text = re.sub(r"页（后台）$", "", text)
@@ -509,6 +485,7 @@ def main():
     consumed = {"--keep-tmp", "--split-swimlanes", "--no-nav"}
     rest = [a for a in args[2:] if a not in consumed]
     include_pages = None
+    explicit_rulepack = None
 
     if "--include-pages" in rest:
         include_idx = rest.index("--include-pages")
@@ -521,6 +498,14 @@ def main():
             if item.strip()
         }
         del rest[include_idx:include_idx + 2]
+
+    if "--rulepack" in rest:
+        rulepack_idx = rest.index("--rulepack")
+        if rulepack_idx + 1 >= len(rest):
+            print("错误：--rulepack 后需要提供规则包名称", file=sys.stderr)
+            sys.exit(1)
+        explicit_rulepack = rest[rulepack_idx + 1]
+        del rest[rulepack_idx:rulepack_idx + 2]
 
     # 检查 --glob 模式
     if "--glob" in rest:
@@ -535,6 +520,9 @@ def main():
             sys.exit(1)
     else:
         tmp_files = rest
+
+    work_dir = Path(output_path).resolve().parent.parent
+    set_active_rulepack(RULEPACK.resolve_effective_rulepack(explicit_name=explicit_rulepack, work_dir=str(work_dir)))
 
     merge(
         output_path,

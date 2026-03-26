@@ -66,6 +66,8 @@
   --w-web: 1440px;
   --w-content-web: 1200px;
   --w-sidebar: 240px;
+  --w-bigscreen: 1920px;
+  --w-industrial: 1368px;
 }
 
 /* ── 全局重置 ── */
@@ -78,11 +80,75 @@ body { animation: fadeIn .3s ease; }
 
 /* ── 移动端布局 ── */
 body.mobile { width: var(--w-mobile); margin: 0 auto; }
+body.h5 { width: var(--w-mobile); margin: 0 auto; background: #eef3f8; }
+.h5-browser-bar {
+  height: 40px;
+  margin: var(--sp-2) auto;
+  width: calc(var(--w-mobile) - var(--sp-4));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-full);
+  background: var(--bg-card);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--sp-3);
+  color: var(--text-secondary);
+  box-shadow: var(--shadow-sm);
+}
 
 /* ── Web 后台布局 ── */
 .layout { display: flex; min-height: 100vh; }
 .sidebar { width: var(--w-sidebar); background: var(--bg-card); border-right: 1px solid var(--border); }
 .main-content { flex: 1; padding: var(--sp-6); }
+.portal-shell {
+  min-height: 100vh;
+  background: linear-gradient(180deg, #f7f9fc 0%, #eef4fb 100%);
+}
+.portal-hero {
+  width: min(var(--w-content-web), calc(100vw - var(--sp-12)));
+  margin: 0 auto;
+  padding: var(--sp-12) 0;
+  display: grid;
+  grid-template-columns: 1.2fr 1fr;
+  gap: var(--sp-8);
+}
+.portal-grid {
+  width: min(var(--w-content-web), calc(100vw - var(--sp-12)));
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--sp-4);
+}
+.bigscreen-shell {
+  width: var(--w-bigscreen);
+  min-height: 100vh;
+  margin: 0 auto;
+  background: radial-gradient(circle at top, #0f2942 0%, #081521 62%, #050d14 100%);
+  color: #e8f2ff;
+  padding: var(--sp-4);
+}
+.bigscreen-grid {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--sp-4);
+}
+.industrial-shell {
+  width: var(--w-industrial);
+  min-height: 100vh;
+  margin: 0 auto;
+  background: #edf1f5;
+  padding: var(--sp-4);
+}
+.industrial-grid {
+  display: grid;
+  grid-template-columns: 2fr 1.2fr;
+  gap: var(--sp-4);
+}
+.industrial-action-bar {
+  display: flex;
+  gap: var(--sp-4);
+  align-items: center;
+}
 
 /* ── 登录页布局（独立页，无导航） ── */
 .login-page {

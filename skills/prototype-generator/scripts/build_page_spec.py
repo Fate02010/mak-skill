@@ -7,7 +7,9 @@ build_page_spec.py - 从 page_model JSON 生成标准化 page_spec markdown。
 
 page_model 采用强约束 JSON，示例:
 {
-  "module_name": "用户模块",
+  "terminal_type": "admin",
+  "terminal_name": "后台",
+  "module_name": "后台-用户管理",
   "module_key": "user",
   "pages": [
     {
@@ -41,7 +43,16 @@ import math
 import os
 import re
 import sys
+import argparse
 from dataclasses import dataclass
+from pathlib import Path
+
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+import rulepack as RULEPACK
 
 
 GRID = 8
@@ -61,6 +72,36 @@ WEB_ANN_W = 216
 WEB_SWIMLANE_W = 1680
 WEB_SWIMLANE_H = 960
 
+BIGSCREEN_UI_W = 1920
+BIGSCREEN_ANN_X = 1944
+BIGSCREEN_ANN_W = 240
+BIGSCREEN_SWIMLANE_W = 2208
+BIGSCREEN_SWIMLANE_H = 1120
+
+INDUSTRIAL_UI_W = 1368
+INDUSTRIAL_ANN_X = 1392
+INDUSTRIAL_ANN_W = 216
+INDUSTRIAL_SWIMLANE_W = 1608
+INDUSTRIAL_SWIMLANE_H = 960
+
+ALLOWED_PAGE_TYPES = {
+    "web_list",
+    "mobile_list",
+    "web_form",
+    "mobile_form",
+    "mobile_detail",
+    "web_detail",
+    "login",
+    "dashboard",
+    "mobile_home",
+    "profile",
+    "portal_home",
+    "portal_content",
+    "portal_hub",
+    "bigscreen_dashboard",
+    "industrial_console",
+}
+
 ALLOWED_ARCHETYPES = {
     "dashboard",
     "list_table",
@@ -75,6 +116,66 @@ ALLOWED_ARCHETYPES = {
     "mobile_home",
     "profile",
     "login",
+    "portal_landing",
+    "portal_content",
+    "portal_hub",
+    "bigscreen_board",
+    "industrial_hmi",
+}
+
+ALLOWED_PAGE_KINDS = {
+    "list",
+    "detail",
+    "form_modal",
+    "confirm_modal",
+    "tree_list",
+    "login",
+    "dashboard",
+    "landing",
+    "content",
+    "hub",
+    "console",
+    "monitor",
+}
+
+ALLOWED_LAYOUT_MODES = {
+    "web",
+    "mobile",
+    "modal",
+    "tree",
+    "drawer",
+    "login",
+    "h5",
+    "portal",
+    "bigscreen",
+    "industrial",
+}
+
+ALLOWED_TERMINAL_TYPES = {
+    "admin",
+    "miniapp",
+    "app",
+    "h5",
+    "bigscreen",
+    "portal",
+    "industrial",
+}
+
+TERMINAL_NAME_BY_TYPE = {
+    "admin": "后台",
+    "miniapp": "小程序",
+    "app": "App",
+    "h5": "H5",
+    "bigscreen": "大屏",
+    "portal": "官网门户",
+    "industrial": "工控机",
+}
+
+PLATFORM_DIMENSIONS = {
+    "mobile": (MOBILE_UI_W, MOBILE_ANN_X, MOBILE_ANN_W),
+    "web": (WEB_UI_W, WEB_ANN_X, WEB_ANN_W),
+    "bigscreen": (BIGSCREEN_UI_W, BIGSCREEN_ANN_X, BIGSCREEN_ANN_W),
+    "industrial": (INDUSTRIAL_UI_W, INDUSTRIAL_ANN_X, INDUSTRIAL_ANN_W),
 }
 
 
@@ -141,6 +242,23 @@ def placeholder_value(name: str, idx: int) -> str:
     return f"{text}示例{idx}"
 
 
+def canonical_action_name(value: str, rulepack: dict | None = None) -> str:
+    return RULEPACK.canonical_action_name(value, rulepack)
+
+
+def action_names(page: dict) -> list[str]:
+    values = []
+    actions = page.get("actions")
+    if isinstance(actions, list):
+        for action in actions:
+            if not isinstance(action, dict):
+                continue
+            name = canonical_action_name(action.get("name", ""), page.get("_rulepack"))
+            if name:
+                values.append(name)
+    return values
+
+
 def field_names(page: dict) -> list[str]:
     rows = page.get("fields")
     if not isinstance(rows, list):
@@ -194,47 +312,153 @@ def enable_disable_label(page_name: str) -> str:
     return "停用"
 
 
-def normalize_module_name(value: str) -> str:
-    text = str(value or "").strip()
-    text = re.sub(r"^(page[_-]?spec|spec|tmp)\s*[:：_-]?\s*", "", text, flags=re.IGNORECASE)
-    text = re.sub(r"\s+", "", text)
-    replacements = {
-        "后台-通用与看板": "后台-工作台",
-        "后台-人员与权限": "后台-组织权限",
-        "后台-商品与内容": "后台-商品管理",
-        "后台-会员与营销": "后台-会员运营",
-        "后台-订单与履约": "后台-订单管理",
-        "后台-物联与溯源基础数据": "后台-溯源基础数据",
-        "小程序-账号与首页": "小程序-首页",
-        "小程序-商品与交易": "小程序-商品交易",
-        "小程序-订单与会员": "小程序-订单中心",
+def normalize_terminal_type(value: str) -> str:
+    text = str(value or "").strip().lower()
+    aliases = {
+        "backend": "admin",
+        "admin": "admin",
+        "web_admin": "admin",
+        "miniapp": "miniapp",
+        "mini_app": "miniapp",
+        "wechat_miniapp": "miniapp",
+        "wechat-miniapp": "miniapp",
+        "app": "app",
+        "mobile_app": "app",
+        "mobile-app": "app",
+        "h5": "h5",
+        "mobile_web": "h5",
+        "mobile-web": "h5",
+        "web_h5": "h5",
+        "web-h5": "h5",
+        "bigscreen": "bigscreen",
+        "big_screen": "bigscreen",
+        "big-screen": "bigscreen",
+        "datav": "bigscreen",
+        "portal": "portal",
+        "official_site": "portal",
+        "official-site": "portal",
+        "website": "portal",
+        "industrial": "industrial",
+        "industrial_hmi": "industrial",
+        "industrial-hmi": "industrial",
+        "hmi": "industrial",
+        "ipc": "industrial",
     }
-    return replacements.get(text, text)
+    return aliases.get(text, text)
 
 
-def invalid_module_name_reason(value: str) -> str:
-    text = normalize_module_name(value)
+def expected_terminal_name(terminal_type: str) -> str:
+    return TERMINAL_NAME_BY_TYPE.get(normalize_terminal_type(terminal_type), "")
+
+
+def normalize_terminal_name(value: str, terminal_type: str = "") -> str:
+    text = str(value or "").strip()
+    if text:
+        return text
+    return expected_terminal_name(terminal_type)
+
+
+def normalize_module_name(value: str, rulepack: dict | None = None) -> str:
+    return RULEPACK.normalize_module_name(value, rulepack)
+
+
+def invalid_module_name_reason(value: str, rulepack: dict | None = None) -> str:
+    text = normalize_module_name(value, rulepack)
     raw = str(value or "").strip()
     if not text:
         return "module_name 为空"
     if re.search(r"(page[_-]?spec|spec|tmp)\s*[:：_-]?", raw, flags=re.IGNORECASE):
         return "module_name 含中间产物前缀"
-    if text in {"APP系统", "后台管理", "小程序端", "移动端", "Web端", "前台"}:
+    if text in {"APP系统", "后台管理", "小程序端", "移动端", "Web端", "前台", "官网门户", "大屏", "工控机", "工控机界面", "H5"}:
         return "module_name 仍是系统层命名"
-    if text in {
-        "后台-人员与权限",
-        "后台-商品与内容",
-        "后台-会员与营销",
-        "后台-订单与履约",
-        "后台-通用与看板",
-        "后台-物联与溯源基础数据",
-        "小程序-账号与首页",
-        "小程序-商品与交易",
-        "小程序-订单与会员",
-    }:
-        return "module_name 仍是聚合模块命名，应拆分为更具体业务模块"
-    if re.match(r"^(后台|小程序|H5|APP|App|Web|移动端)[-—].*[与和及/].+", text):
+    if re.match(r"^(后台|小程序|H5|APP|App|Web|移动端|大屏|官网门户|工控机)[-—].*[与和及/].+", text):
         return "module_name 同时包含终端前缀和多个业务域，应拆分"
+    return ""
+
+
+def module_business_name(module_name: str, terminal_name: str) -> str:
+    text = str(module_name or "").strip()
+    prefix = f"{terminal_name}-" if terminal_name else ""
+    if prefix and text.startswith(prefix):
+        return text[len(prefix):].strip() or text
+    return text
+
+
+def resolve_model_rulepack(model: dict, explicit_rulepack: str | None = None) -> dict:
+    return RULEPACK.resolve_effective_rulepack(explicit_name=explicit_rulepack, model=model)
+
+
+def _profile_matches(profile: dict, page_name: str, page_type: str, text: str, archetype: str) -> bool:
+    if profile.get("page_name_contains_all") and not all(token in page_name for token in profile["page_name_contains_all"]):
+        return False
+    if profile.get("page_name_contains_any") and not any(token in page_name for token in profile["page_name_contains_any"]):
+        return False
+    if profile.get("text_contains_any") and not any(token in text for token in profile["text_contains_any"]):
+        return False
+    if profile.get("text_excludes_any") and any(token in text for token in profile["text_excludes_any"]):
+        return False
+    if profile.get("page_type_any") and page_type not in set(profile["page_type_any"]):
+        return False
+    if profile.get("required_archetypes") and archetype not in set(profile["required_archetypes"]):
+        return False
+    return True
+
+
+def _count_matches(values: list[str], expected: list[str]) -> int:
+    expected_set = set(expected)
+    return sum(1 for item in values if item in expected_set)
+
+
+def _semantic_error_from_profile(profile: dict, page: dict, text: str, names: list[str], actions: set[str], archetype: str) -> str:
+    page_name = str(page.get("page_name", "")).strip()
+    page_type = str(page.get("page_type", "")).strip()
+    if not _profile_matches(profile, page_name, page_type, text, archetype):
+        return ""
+
+    messages = profile.get("messages", {})
+    any_fields = profile.get("required_fields_any", [])
+    any_min = int(profile.get("required_fields_any_min", 0) or 0)
+    any_hits = _count_matches(names, any_fields) if any_fields else 0
+    if any_fields and any_hits < any_min:
+        return messages.get("required_any", "页面缺少核心字段")
+
+    core_fields = profile.get("required_fields_core", [])
+    core_min = int(profile.get("required_fields_core_min", 0) or 0)
+    core_hits = _count_matches(names, core_fields) if core_fields else 0
+    if core_fields and core_hits < core_min:
+        return messages.get("required_core", "页面缺少核心字段")
+
+    required_actions = set(profile.get("required_actions", []))
+    required_actions_min = int(profile.get("required_actions_min", 0) or 0)
+    if required_actions and len(actions.intersection(required_actions)) < required_actions_min:
+        return messages.get("required_actions", "页面缺少核心动作")
+
+    forbidden_fields = profile.get("forbidden_fields", [])
+    forbidden_min = int(profile.get("forbidden_fields_min", 0) or 0)
+    forbidden_hits = _count_matches(names, forbidden_fields) if forbidden_fields else 0
+    forbidden_when_required_below = profile.get("forbidden_when_required_below")
+    if forbidden_fields and forbidden_hits >= forbidden_min:
+        if forbidden_when_required_below is None or any_hits < int(forbidden_when_required_below):
+            return messages.get("forbidden", "页面混入不应出现的字段")
+
+    alt_forbidden = profile.get("alt_forbidden_group", [])
+    alt_forbidden_min = int(profile.get("alt_forbidden_group_min", 0) or 0)
+    alt_required = profile.get("alt_required_group", [])
+    alt_required_min = int(profile.get("alt_required_group_min", 0) or 0)
+    if alt_forbidden and _count_matches(names, alt_forbidden) >= alt_forbidden_min and _count_matches(names, alt_required) < alt_required_min:
+        return messages.get("alt_forbidden", "页面字段语义漂移")
+
+    required_rules_any = profile.get("required_rules_any", [])
+    required_rules_any_min = int(profile.get("required_rules_any_min", 0) or 0)
+    if required_rules_any and _count_matches(normalize_list(page.get("business_rules")), required_rules_any) < required_rules_any_min:
+        return messages.get("required_rules", "页面缺少业务规则提示")
+
+    allowed_context_fields = profile.get("allowed_context_fields", [])
+    allowed_context_fields_min = int(profile.get("allowed_context_fields_min", 0) or 0)
+    if forbidden_fields and forbidden_hits >= forbidden_min and allowed_context_fields:
+        if _count_matches(names, allowed_context_fields) < allowed_context_fields_min:
+            return messages.get("forbidden", "页面混入不应出现的字段")
+
     return ""
 
 
@@ -250,21 +474,25 @@ class PageContext:
 
     @property
     def ui_w(self) -> int:
-        return MOBILE_UI_W if self.platform == "mobile" else WEB_UI_W
+        return PLATFORM_DIMENSIONS[self.platform][0]
 
     @property
     def ann_x(self) -> int:
-        return MOBILE_ANN_X if self.platform == "mobile" else WEB_ANN_X
+        return PLATFORM_DIMENSIONS[self.platform][1]
 
     @property
     def ann_w(self) -> int:
-        return MOBILE_ANN_W if self.platform == "mobile" else WEB_ANN_W
+        return PLATFORM_DIMENSIONS[self.platform][2]
 
 
 class PageSpecBuilder:
-    def __init__(self, model: dict):
+    def __init__(self, model: dict, rulepack: dict | None = None):
         self.model = model
-        self.module_name = normalize_module_name(model.get("module_name", "模块"))
+        self.rulepack = rulepack or resolve_model_rulepack(model)
+        self.module_name = normalize_module_name(model.get("module_name", "模块"), self.rulepack)
+        self.terminal_type = normalize_terminal_type(model.get("terminal_type", ""))
+        self.terminal_name = normalize_terminal_name(model.get("terminal_name", ""), self.terminal_type)
+        self.business_module_name = module_business_name(self.module_name, self.terminal_name)
         self.swimlanes: list[dict[str, str]] = []
         self.elements: list[dict[str, str]] = []
         self.next_swimlane = 1
@@ -289,7 +517,15 @@ class PageSpecBuilder:
         }
         self.swimlanes.append(lane)
         self.next_element_id_by_swimlane[swimlane_id] = 2
-        platform = "mobile" if lane_type == "mobile" else "web"
+        platform = {
+            "mobile": "mobile",
+            "h5": "mobile",
+            "web": "web",
+            "portal": "web",
+            "modal": "web",
+            "bigscreen": "bigscreen",
+            "industrial": "industrial",
+        }.get(lane_type, "web")
         return PageContext(swimlane_id, {}, platform, x, y, width, height)
 
     def add_element(
@@ -346,11 +582,23 @@ class PageSpecBuilder:
             width = 400 if self._is_confirm_modal_page(page) else 800
             height = 320 if self._is_confirm_modal_page(page) else self._modal_height(self._field_rows(page))
         elif page_type in {"mobile_list", "mobile_form", "mobile_detail", "mobile_home", "profile"}:
-            lane_type = "mobile"
+            lane_type = "h5" if self.terminal_type == "h5" else "mobile"
             width = MOBILE_SWIMLANE_W
             height = MOBILE_SWIMLANE_H
+        elif page_type in {"portal_home", "portal_content", "portal_hub"}:
+            lane_type = "portal"
+            width = WEB_SWIMLANE_W
+            height = WEB_SWIMLANE_H
+        elif page_type == "bigscreen_dashboard":
+            lane_type = "bigscreen"
+            width = BIGSCREEN_SWIMLANE_W
+            height = BIGSCREEN_SWIMLANE_H
+        elif page_type == "industrial_console":
+            lane_type = "industrial"
+            width = INDUSTRIAL_SWIMLANE_W
+            height = INDUSTRIAL_SWIMLANE_H
         elif page_type == "login" and not is_admin_login:
-            lane_type = "mobile"
+            lane_type = "h5" if self.terminal_type == "h5" else "mobile"
             width = MOBILE_SWIMLANE_W
             height = MOBILE_SWIMLANE_H
         elif page_type in {"web_list", "web_form", "web_detail", "dashboard"}:
@@ -375,7 +623,7 @@ class PageSpecBuilder:
 
         if archetype == "drawer_permission":
             self._build_drawer_permission(ctx)
-        elif archetype == "tree_manage":
+        elif archetype == "tree_manage" or self._is_resource_tree_page(page):
             self._build_tree_manage(ctx)
         elif is_modal_page:
             if self._is_confirm_modal_page(page):
@@ -385,23 +633,51 @@ class PageSpecBuilder:
         elif page_type == "web_list":
             self._build_web_list(ctx)
         elif page_type == "mobile_list":
-            self._build_mobile_list(ctx)
+            if self.terminal_type == "h5":
+                self._build_h5_list(ctx)
+            else:
+                self._build_mobile_list(ctx)
         elif page_type == "web_form":
             self._build_web_form(ctx)
         elif page_type == "mobile_form":
-            self._build_mobile_form(ctx)
+            if self.terminal_type == "h5":
+                self._build_h5_form(ctx)
+            else:
+                self._build_mobile_form(ctx)
         elif page_type == "mobile_detail":
-            self._build_mobile_detail(ctx)
+            if self.terminal_type == "h5":
+                self._build_h5_detail(ctx)
+            else:
+                self._build_mobile_detail(ctx)
         elif page_type == "web_detail":
-            self._build_web_detail(ctx)
+            if self._is_order_detail_page(page):
+                self._build_order_detail(ctx)
+            else:
+                self._build_web_detail(ctx)
         elif page_type == "login":
             self._build_login(ctx)
         elif page_type == "dashboard":
             self._build_dashboard(ctx)
         elif page_type == "mobile_home":
-            self._build_mobile_home(ctx)
+            if self.terminal_type == "h5":
+                self._build_h5_home(ctx)
+            else:
+                self._build_mobile_home(ctx)
         elif page_type == "profile":
-            self._build_profile(ctx)
+            if self.terminal_type == "h5":
+                self._build_h5_profile(ctx)
+            else:
+                self._build_profile(ctx)
+        elif page_type == "portal_home":
+            self._build_portal_home(ctx)
+        elif page_type == "portal_content":
+            self._build_portal_content(ctx)
+        elif page_type == "portal_hub":
+            self._build_portal_hub(ctx)
+        elif page_type == "bigscreen_dashboard":
+            self._build_bigscreen_dashboard(ctx)
+        elif page_type == "industrial_console":
+            self._build_industrial_console(ctx)
 
         if page_type in {"web_list", "mobile_list"} and as_bool(page.get("needs_crud")):
             self._build_modal_pair(page, lane_type)
@@ -413,13 +689,35 @@ class PageSpecBuilder:
 
         name = str(page.get("page_name", "")).strip()
         page_type = str(page.get("page_type", "")).strip()
+        if "资源管理" in name:
+            return "tree_manage"
+        if page_type == "portal_home":
+            return "portal_landing"
+        if page_type == "portal_content":
+            return "portal_content"
+        if page_type == "portal_hub":
+            return "portal_hub"
+        if page_type == "bigscreen_dashboard":
+            return "bigscreen_board"
+        if page_type == "industrial_console":
+            return "industrial_hmi"
         if "登录" in name or page_type == "login":
             return "login"
+        if any(token in name for token in ("官网首页", "落地页", "品牌官网", "产品官网")):
+            return "portal_landing"
+        if any(token in name for token in ("门户首页", "业务门户", "门户工作台")):
+            return "portal_hub"
+        if any(token in name for token in ("官网", "门户", "案例", "资讯", "文章")) and page_type.startswith("portal"):
+            return "portal_content"
+        if any(token in name for token in ("大屏", "驾驶舱", "指挥中心")):
+            return "bigscreen_board"
+        if any(token in name for token in ("工控", "HMI", "产线控制台", "中控台", "设备监控台")):
+            return "industrial_hmi"
         if "工作台" in name or ("首页" in name and page_type == "dashboard"):
             return "dashboard"
         if "授权" in name or ("权限" in name and "抽屉" in name):
             return "drawer_permission"
-        if any(token in name for token in ("发货", "调度", "路线", "司机")):
+        if any(token in name for token in ("调度看板", "配送调度", "路线调度", "司机调度")):
             return "dispatch_board"
         if any(token in name for token in ("分类", "组织", "部门", "岗位", "树")):
             return "tree_manage"
@@ -440,6 +738,8 @@ class PageSpecBuilder:
         return "list_table"
 
     def _is_admin_login_page(self, page: dict) -> bool:
+        if self.terminal_type == "admin":
+            return True
         text = page_terms(self.model, page)
         return any(token in text for token in ("后台", "管理", "审计"))
 
@@ -454,18 +754,47 @@ class PageSpecBuilder:
 
     def _is_confirm_modal_page(self, page: dict) -> bool:
         page_name = str(page.get("page_name", "")).strip()
-        return any(token in page_name for token in ("删除", "关闭", "确认", "拒绝"))
+        raw_fields = page.get("fields")
+        if isinstance(raw_fields, list) and raw_fields:
+            return False
+        if "发货" in page_name:
+            return False
+        if any(token in page_name for token in ("删除", "关闭", "拒绝")):
+            return True
+        return "确认" in page_name
 
     def _nav_context(self, page: dict) -> str:
         explicit = str(page.get("nav_context", "")).strip()
         if explicit:
             return explicit
         page_type = str(page.get("page_type", "")).strip()
-        if page_type.startswith("web") or page_type == "dashboard":
-            return f"后台 / {self.module_name}"
+        if self.terminal_type == "admin" and (page_type.startswith("web") or page_type == "dashboard"):
+            return f"{self.terminal_name} / {self.business_module_name}"
         if page_type in {"mobile_list", "mobile_form", "mobile_detail", "mobile_home", "profile"}:
-            return "小程序主导航"
+            if self.terminal_type == "app":
+                return "App主导航"
+            if self.terminal_type == "miniapp":
+                return "小程序主导航"
+            if self.terminal_type == "h5":
+                return "H5页面栈"
+            return "移动端主导航"
+        if page_type in {"portal_home", "portal_content"}:
+            return "官网顶栏导航"
+        if page_type == "portal_hub":
+            return "门户主导航"
+        if page_type == "bigscreen_dashboard":
+            return "大屏场景导航"
+        if page_type == "industrial_console":
+            return "工位操作导航"
         return "独立页"
+
+    def _add_h5_shell(self, swimlane: str, page_name: str):
+        self.add_element(swimlane, "card", "", 8, 40, 360, 40, "card")
+        self.add_element(swimlane, "text_link", "←", 16, 48, 24, 24, "text_link", "→ 返回上一页")
+        self.add_element(swimlane, "text_hint", "浏览器地址栏 · 安全访问", 56, 48, 224, 24, "text_hint")
+        self.add_element(swimlane, "text_link", "分享", 296, 48, 48, 24, "text_link", "→ 打开分享面板")
+        self.add_element(swimlane, "nav", page_name, 0, 96, 376, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 152, 376, 648, "bg")
 
     def _table_behavior_lines(self, page: dict) -> list[str]:
         value = page.get("table_behaviors")
@@ -632,6 +961,64 @@ class PageSpecBuilder:
             return values
         return ["待处理", "处理中", "已完成", "已取消", "已归档"]
 
+    def _page_text(self, page: dict) -> str:
+        return page_terms(self.model, page)
+
+    def _is_order_list_page(self, page: dict) -> bool:
+        text = self._page_text(page)
+        return (
+            str(page.get("page_type", "")).strip() == "web_list"
+            and "订单" in text
+            and not any(token in text for token in ("售后", "退款", "发货单", "支付日志"))
+        )
+
+    def _is_order_detail_page(self, page: dict) -> bool:
+        text = self._page_text(page)
+        return (
+            str(page.get("page_type", "")).strip() == "web_detail"
+            and "订单" in text
+            and not any(token in text for token in ("售后", "退款"))
+        )
+
+    def _is_resource_tree_page(self, page: dict) -> bool:
+        text = self._page_text(page)
+        return "资源管理" in text or ("资源" in text and str(page.get("page_type", "")).strip() == "web_list")
+
+    def _order_row_actions(self, status: str) -> list[tuple[str, str, str]]:
+        if "待支付" in status:
+            return [
+                ("详情", "btn_sm", "→ 订单详情页（后台）"),
+                ("关闭", "btn_sm_danger", "→ 关闭订单确认弹窗"),
+                ("备注", "btn_sm", "→ 备注弹窗"),
+            ]
+        if "待发货" in status:
+            return [
+                ("详情", "btn_sm", "→ 订单详情页（后台）"),
+                ("发货", "btn_sm", "→ 确认发货弹窗"),
+                ("关闭", "btn_sm_danger", "→ 关闭订单确认弹窗"),
+            ]
+        if "待收货" in status:
+            return [
+                ("详情", "btn_sm", "→ 订单详情页（后台）"),
+                ("确认收货", "btn_sm", "→ 订单详情页（后台）"),
+                ("备注", "btn_sm", "→ 备注弹窗"),
+            ]
+        if "已完成" in status:
+            return [
+                ("详情", "btn_sm", "→ 订单详情页（后台）"),
+                ("查看售后", "btn_sm", "→ 售后订单页"),
+                ("备注", "btn_sm", "→ 备注弹窗"),
+            ]
+        if "已关闭" in status:
+            return [
+                ("详情", "btn_sm", "→ 订单详情页（后台）"),
+                ("备注", "btn_sm", "→ 备注弹窗"),
+            ]
+        return [
+            ("详情", "btn_sm", "→ 订单详情页（后台）"),
+            ("备注", "btn_sm", "→ 备注弹窗"),
+        ]
+
     def _match_field(self, fields: list[dict], tokens: tuple[str, ...]) -> dict | None:
         for field in fields:
             name = str(field.get("name", "")).strip()
@@ -651,6 +1038,9 @@ class PageSpecBuilder:
         page_name = str(page.get("page_name", "")).strip()
         object_name = str(page.get("object_name", "")).strip() or "对象"
         actions = page.get("actions") if isinstance(page.get("actions"), list) else []
+
+        if self._is_order_list_page(page):
+            return "", self._order_row_actions("待发货")
 
         add_label = ""
         row_actions: list[tuple[str, str, str]] = []
@@ -769,9 +1159,12 @@ class PageSpecBuilder:
                 else:
                     value = placeholder_value(name, row_idx + 1)
                 self.add_element(swimlane, "table_cell", value, x_positions[col_idx], y, widths[col_idx], 48, row_style)
-            action_width = 40 if len(row_actions) >= 3 else 48 if len(row_actions) == 2 else 56
+            effective_row_actions = row_actions
+            if self._is_order_list_page(page):
+                effective_row_actions = self._order_row_actions(statuses[row_idx % len(statuses)])
+            action_width = 40 if len(effective_row_actions) >= 3 else 48 if len(effective_row_actions) == 2 else 56
             action_x = 1296
-            for action_name, action_style, tooltip in row_actions:
+            for action_name, action_style, tooltip in effective_row_actions:
                 self.add_element(swimlane, action_style, action_name, action_x, y + 8, action_width, 32, action_style, tooltip)
                 action_x += action_width + 8
 
@@ -870,6 +1263,27 @@ class PageSpecBuilder:
             self.add_element(swimlane, "bottom_bar", "首页 · 列表 · 消息 · 我的", 0, 800, 376, 56, "bottom_bar")
         self._add_annotations(ctx)
 
+    def _build_h5_list(self, ctx: PageContext):
+        page = ctx.page
+        swimlane = ctx.swimlane_id
+        page_name = str(page.get("page_name", "H5列表页")).strip()
+        object_name = str(page.get("object_name", "内容")).strip() or "内容"
+        statuses = self._status_values(page)
+
+        self._add_h5_shell(swimlane, page_name)
+        self.add_element(swimlane, "search_input", f"搜索{object_name}", 16, 168, 344, 40, "search_input")
+        self.add_element(swimlane, "text_hint", "筛选：最新发布 / 热门推荐 / 限时活动", 16, 224, 280, 20, "text_hint")
+        for idx in range(4):
+            y = 264 + idx * 120
+            status = statuses[idx % len(statuses)]
+            self.add_element(swimlane, "card", "", 16, y, 344, 104, "card")
+            self.add_element(swimlane, "text_subtitle", f"{object_name}{idx + 1}", 32, y + 16, 168, 24, "text_subtitle")
+            self.add_element(swimlane, "text_hint", placeholder_value("活动时间", idx + 1), 32, y + 48, 144, 20, "text_hint")
+            self.add_element(swimlane, "tag", status, 248, y + 16, 80, 24, tag_style_for_status(status))
+            self.add_element(swimlane, "btn_secondary", "查看详情", 232, y + 56, 96, 32, "btn_secondary", f"→ {page_name}详情")
+        self.add_element(swimlane, "btn_primary", "联系客服", 16, 744, 344, 48, "btn_primary", "→ 在线咨询")
+        self._add_annotations(ctx)
+
     def _build_web_form(self, ctx: PageContext):
         page = ctx.page
         swimlane = ctx.swimlane_id
@@ -935,6 +1349,29 @@ class PageSpecBuilder:
         self.add_element(swimlane, "btn_primary", "提交", 16, min(y + 16, 736), 344, 48, "btn_primary", "→ 提交成功后返回")
         self._add_annotations(ctx)
 
+    def _build_h5_form(self, ctx: PageContext):
+        page = ctx.page
+        swimlane = ctx.swimlane_id
+        page_name = str(page.get("page_name", "H5表单页")).strip()
+        fields = self._field_rows(page)
+
+        self._add_h5_shell(swimlane, page_name)
+        y = 176
+        for field in fields[:5]:
+            name = str(field.get("name", "字段")).strip() or "字段"
+            required = as_bool(field.get("required"))
+            control = str(field.get("control", "input")).strip() or "input"
+            label_style = "label_required" if required else "label"
+            self.add_element(swimlane, "label", f"{name} *" if required else name, 16, y, 88, 24, label_style)
+            style_key = "textarea" if control == "textarea" else "select" if control == "select" else "input"
+            height = 88 if control == "textarea" else 48
+            placeholder = ("请选择" if control == "select" else "请输入") + name
+            self.add_element(swimlane, control, placeholder, 16, y + 24, 344, height, style_key)
+            y += 120 if control == "textarea" else 88
+        self.add_element(swimlane, "text_hint", "提交后将保留浏览器分享链路", 16, 704, 240, 20, "text_hint")
+        self.add_element(swimlane, "btn_primary", "立即提交", 16, 736, 344, 48, "btn_primary", "→ 提交成功页")
+        self._add_annotations(ctx)
+
     def _build_mobile_detail(self, ctx: PageContext):
         page = ctx.page
         swimlane = ctx.swimlane_id
@@ -994,6 +1431,101 @@ class PageSpecBuilder:
             primary_label = actions[0].get("name", "确认") if actions else "确认"
             self.add_element(swimlane, "btn_secondary", "返回", 16, 736, 104, 48, "btn_secondary", "→ 返回来源页")
             self.add_element(swimlane, "btn_primary", primary_label, 248, 736, 112, 48, "btn_primary", f"→ {primary_label}")
+
+        self._add_annotations(ctx)
+
+    def _build_h5_detail(self, ctx: PageContext):
+        page = ctx.page
+        swimlane = ctx.swimlane_id
+        page_name = str(page.get("page_name", "H5详情页")).strip()
+        statuses = self._status_values(page)
+
+        self._add_h5_shell(swimlane, page_name)
+        self.add_element(swimlane, "card", "", 16, 176, 344, 184, "card")
+        self.add_element(swimlane, "text_title", page_name, 32, 200, 224, 32, "text_title")
+        self.add_element(swimlane, "tag", statuses[0], 264, 208, 64, 24, tag_style_for_status(statuses[0]))
+        self.add_element(swimlane, "text_body", "活动亮点、流程说明、适用规则与用户权益摘要", 32, 248, 264, 48, "text_body")
+        self.add_element(swimlane, "text_hint", "分享后保留当前活动参数与来源渠道", 32, 312, 248, 20, "text_hint")
+        self.add_element(swimlane, "card", "", 16, 384, 344, 280, "card")
+        self.add_element(swimlane, "text_subtitle", "详情说明", 32, 408, 120, 24, "text_subtitle")
+        for idx, label in enumerate(["活动时间", "参与门槛", "使用范围", "客服说明"]):
+            y = 448 + idx * 48
+            self.add_element(swimlane, "label", label, 32, y, 88, 24, "label")
+            self.add_element(swimlane, "text_value", placeholder_value(label, idx + 1), 136, y, 168, 24, "text_value")
+        self.add_element(swimlane, "btn_secondary", "在线咨询", 16, 736, 112, 48, "btn_secondary", "→ 联系客服")
+        self.add_element(swimlane, "btn_primary", "立即报名", 232, 736, 128, 48, "btn_primary", "→ 报名表单")
+        self._add_annotations(ctx)
+
+    def _build_order_detail(self, ctx: PageContext):
+        page = ctx.page
+        swimlane = ctx.swimlane_id
+        page_name = str(page.get("page_name", "订单详情页（后台）")).strip()
+        status_values = self._status_values(page)
+        current_status = status_values[0] if status_values else "待发货"
+        top_actions = self._order_row_actions(current_status)
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
+        self.add_element(swimlane, "breadcrumb", f"首页 / {self.module_name} / {page_name}", 24, 112, 440, 24, "breadcrumb")
+        self.add_element(swimlane, "btn_secondary", "返回列表", 1296, 104, 120, 40, "btn_secondary", "→ 返回来源页")
+
+        self.add_element(swimlane, "card", "", 24, 160, 1392, 120, "card")
+        self.add_element(swimlane, "text_subtitle", "状态与操作", 48, 184, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 48, 216, 1344, 1, "divider")
+        self.add_element(swimlane, "label", "当前状态", 48, 232, 88, 24, "label")
+        self.add_element(swimlane, "tag", current_status, 152, 232, 88, 24, tag_style_for_status(current_status))
+        self.add_element(swimlane, "text_hint", "状态流转：待支付 → 待发货 → 待收货 → 已完成 / 已关闭", 280, 232, 520, 24, "text_hint")
+
+        button_x = 952
+        for action_name, action_style, tooltip in top_actions:
+            width = 104 if action_style == "btn_sm_danger" else 96 if len(action_name) >= 4 else 88
+            style_key = "btn_danger_filled" if action_style == "btn_sm_danger" else "btn_secondary"
+            if action_name in {"发货", "确认收货"}:
+                style_key = "btn_primary"
+                width = 104
+            self.add_element(swimlane, style_key, action_name, button_x, 224, width, 40, style_key, tooltip)
+            button_x += width + 16
+
+        left_fields = ["订单编号", "订单状态", "用户信息", "收货地址", "商品明细", "金额明细"]
+        right_fields = ["支付信息", "售后信息", "备注记录", "溯源摘要", "物流信息", "操作区"]
+
+        self.add_element(swimlane, "card", "", 24, 304, 680, 264, "card")
+        self.add_element(swimlane, "text_subtitle", "订单基础信息", 48, 328, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 48, 360, 632, 1, "divider")
+        row_y = 376
+        for idx, name in enumerate(left_fields):
+            base_x = 48 if idx % 2 == 0 else 360
+            value_x = 152 if idx % 2 == 0 else 464
+            if idx and idx % 2 == 0:
+                row_y += 48
+            self.add_element(swimlane, "label", name, base_x, row_y, 88, 24, "label")
+            self.add_element(swimlane, "text_value", placeholder_value(name, idx + 1), value_x, row_y, 176, 24, "text_value")
+
+        self.add_element(swimlane, "card", "", 728, 304, 688, 264, "card")
+        self.add_element(swimlane, "text_subtitle", "支付与售后", 752, 328, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 752, 360, 640, 1, "divider")
+        row_y = 376
+        for idx, name in enumerate(right_fields):
+            base_x = 752 if idx % 2 == 0 else 1064
+            value_x = 856 if idx % 2 == 0 else 1168
+            if idx and idx % 2 == 0:
+                row_y += 48
+            self.add_element(swimlane, "label", name, base_x, row_y, 88, 24, "label")
+            self.add_element(swimlane, "text_value", placeholder_value(name, idx + 7), value_x, row_y, 176, 24, "text_value")
+
+        self.add_element(swimlane, "card", "", 24, 600, 1392, 248, "card")
+        self.add_element(swimlane, "text_subtitle", "备注记录与处理轨迹", 48, 624, 220, 24, "text_subtitle")
+        self.add_element(swimlane, "divider", "", 48, 656, 1344, 1, "divider")
+        record_labels = ["下单成功", "客服备注", "履约处理"]
+        for idx, label in enumerate(record_labels):
+            y = 672 + idx * 48
+            self.add_element(swimlane, "icon", str(idx + 1), 48, y, 24, 24, "icon")
+            self.add_element(swimlane, "text_body", label, 88, y, 120, 24, "text_body")
+            self.add_element(swimlane, "text_hint", f"2026-03-{12 + idx:02d} 10:3{idx}", 224, y, 176, 24, "text_hint")
+            self.add_element(swimlane, "text_hint", "处理人：" + placeholder_value("处理人", idx + 1), 448, y, 176, 24, "text_hint")
+            self.add_element(swimlane, "text_hint", "结果：" + status_values[min(idx, len(status_values) - 1)], 720, y, 176, 24, "text_hint")
+            if idx < len(record_labels) - 1:
+                self.add_element(swimlane, "divider", "", 88, y + 32, 1240, 1, "divider")
 
         self._add_annotations(ctx)
 
@@ -1084,7 +1616,7 @@ class PageSpecBuilder:
         account_field = self._match_field(fields, ("账号", "用户名", "手机号", "邮箱", "手机"))
         password_field = self._match_field(fields, ("密码",))
         captcha_field = self._match_field(fields, ("验证码", "校验码"))
-        is_admin_login = any(token in f"{page_name} {product_name} {self.module_name}" for token in ("后台", "管理", "审计"))
+        is_admin_login = self._is_admin_login_page(page)
         show_captcha = captcha_field is not None or is_admin_login
         show_self_service_links = not is_admin_login
 
@@ -1177,6 +1709,181 @@ class PageSpecBuilder:
         self.add_element(swimlane, "text_subtitle", "快捷入口", 752, 344, 120, 24, "text_subtitle")
         for idx, label in enumerate(["用户管理", "订单处理", "营销活动", "报表导出"]):
             self.add_element(swimlane, "btn_secondary", label, 752 + (idx % 2) * 184, 392 + (idx // 2) * 72, 160, 48, "btn_secondary", f"→ {label}")
+        self._add_annotations(ctx)
+
+    def _build_portal_home(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page = ctx.page
+        page_name = str(page.get("page_name", "官网首页")).strip()
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
+        self.add_element(swimlane, "card", "", 24, 128, 1392, 248, "card")
+        self.add_element(swimlane, "text_title", "品牌主张 / Hero 主视觉", 56, 168, 336, 40, "text_title")
+        self.add_element(swimlane, "text_body", "突出产品价值、行业方案、典型场景和信任背书。", 56, 224, 360, 48, "text_body")
+        self.add_element(swimlane, "btn_primary", "立即咨询", 56, 296, 120, 48, "btn_primary", "→ 联系销售")
+        self.add_element(swimlane, "btn_secondary", "查看方案", 192, 296, 120, 48, "btn_secondary", "→ 方案中心")
+        self.add_element(swimlane, "img_placeholder", "官网主视觉", 920, 152, 416, 176, "img_placeholder")
+
+        self.add_element(swimlane, "text_subtitle", "核心能力", 24, 408, 120, 24, "text_subtitle")
+        for idx, label in enumerate(["行业方案", "产品能力", "客户案例"]):
+            x = 24 + idx * 456
+            self.add_element(swimlane, "card", "", x, 448, 424, 152, "card")
+            self.add_element(swimlane, "text_subtitle", label, x + 24, 472, 160, 24, "text_subtitle")
+            self.add_element(swimlane, "text_body", f"{label}的关键卖点、场景说明和可信背书。", x + 24, 512, 248, 48, "text_body")
+            self.add_element(swimlane, "text_link", "查看详情", x + 24, 568, 96, 24, "text_link", f"→ {label}")
+
+        self.add_element(swimlane, "card", "", 24, 632, 1392, 176, "card")
+        self.add_element(swimlane, "text_subtitle", "案例与新闻", 48, 656, 160, 24, "text_subtitle")
+        for idx, label in enumerate(["客户案例", "行业资讯", "活动报名"]):
+            self.add_element(swimlane, "list_row", label, 48, 704 + idx * 40, 320, 32, "list_row")
+        self.add_element(swimlane, "text_hint", "页脚：联系方式 / 公司地址 / 法务链接 / 社媒入口", 48, 776, 392, 20, "text_hint")
+        self._add_annotations(ctx)
+
+    def _build_portal_content(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page_name = str(ctx.page.get("page_name", "官网内容页")).strip()
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
+        self.add_element(swimlane, "breadcrumb", f"首页 / 官网门户 / {page_name}", 24, 120, 440, 24, "breadcrumb")
+        self.add_element(swimlane, "card", "", 24, 168, 888, 624, "card")
+        self.add_element(swimlane, "text_title", page_name, 56, 200, 480, 40, "text_title")
+        self.add_element(swimlane, "text_hint", "发布时间：2026-03-26  来源：官网门户", 56, 248, 264, 20, "text_hint")
+        self.add_element(swimlane, "img_placeholder", "内容头图", 56, 288, 824, 168, "img_placeholder")
+        for idx, text in enumerate(["产品概述", "方案优势", "实施流程", "服务保障"]):
+            self.add_element(swimlane, "text_subtitle", text, 56, 488 + idx * 72, 160, 24, "text_subtitle")
+            self.add_element(swimlane, "text_body", f"{text}的详细内容、说明段落和关键信息摘要。", 56, 520 + idx * 72, 496, 32, "text_body")
+        self.add_element(swimlane, "card", "", 944, 168, 472, 624, "card")
+        self.add_element(swimlane, "text_subtitle", "推荐入口", 968, 200, 160, 24, "text_subtitle")
+        for idx, label in enumerate(["预约演示", "下载白皮书", "联系顾问", "返回首页"]):
+            self.add_element(swimlane, "btn_secondary", label, 968, 248 + idx * 72, 184, 48, "btn_secondary", f"→ {label}")
+        self.add_element(swimlane, "text_hint", "侧栏：相关推荐 / 联系方式 / 表单入口", 968, 568, 232, 20, "text_hint")
+        self._add_annotations(ctx)
+
+    def _build_portal_hub(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page_name = str(ctx.page.get("page_name", "业务门户")).strip()
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
+        self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
+        self.add_element(swimlane, "card", "", 24, 128, 1392, 128, "card")
+        self.add_element(swimlane, "text_title", "欢迎进入业务门户", 48, 160, 280, 40, "text_title")
+        self.add_element(swimlane, "text_hint", "待办消息、快捷入口、常用模块和角色提醒统一聚合。", 48, 208, 360, 20, "text_hint")
+
+        self.add_element(swimlane, "text_subtitle", "快捷入口", 24, 288, 120, 24, "text_subtitle")
+        for idx, label in enumerate(["审批中心", "数据报表", "任务工单", "通知公告"]):
+            x = 24 + idx * 344
+            self.add_element(swimlane, "card", "", x, 328, 320, 128, "card")
+            self.add_element(swimlane, "icon", str(idx + 1), x + 24, 360, 40, 40, "icon")
+            self.add_element(swimlane, "text_subtitle", label, x + 80, 360, 136, 24, "text_subtitle")
+            self.add_element(swimlane, "text_hint", "进入对应业务模块", x + 80, 392, 152, 20, "text_hint")
+
+        self.add_element(swimlane, "card", "", 24, 496, 680, 248, "card")
+        self.add_element(swimlane, "text_subtitle", "我的待办", 48, 520, 120, 24, "text_subtitle")
+        for idx in range(4):
+            self.add_element(swimlane, "list_row", f"待处理任务 {idx + 1}", 48, 568 + idx * 40, 608, 32, "list_row")
+
+        self.add_element(swimlane, "card", "", 728, 496, 688, 248, "card")
+        self.add_element(swimlane, "text_subtitle", "通知与公告", 752, 520, 160, 24, "text_subtitle")
+        for idx in range(4):
+            self.add_element(swimlane, "list_row", f"系统通知 {idx + 1}", 752, 568 + idx * 40, 616, 32, "list_row")
+        self._add_annotations(ctx)
+
+    def _build_bigscreen_dashboard(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page_name = str(ctx.page.get("page_name", "大屏指挥中心")).strip()
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, BIGSCREEN_UI_W, 64, "nav")
+        self.add_element(swimlane, "bg", "", 0, 104, BIGSCREEN_UI_W, 1016, "bg")
+        for idx, label in enumerate(["全局总览", "生产态势", "告警中心"]):
+            self.add_element(swimlane, "btn_secondary", label, 1248 + idx * 184, 56, 160, 40, "btn_secondary", f"→ {label}")
+        self.add_element(swimlane, "text_subtitle", "实时指标", 32, 136, 120, 24, "text_subtitle")
+        for idx in range(6):
+            x = 32 + idx * 304
+            self.add_element(swimlane, "card", "", x, 176, 272, 120, "card")
+            self.add_element(swimlane, "text_hint", f"指标 {idx + 1}", x + 24, 200, 112, 24, "text_hint")
+            self.add_element(swimlane, "text_title", str((idx + 1) * 128), x + 24, 232, 120, 32, "text_title")
+        self.add_element(swimlane, "card", "", 32, 336, 616, 312, "card")
+        self.add_element(swimlane, "text_subtitle", "区域态势图", 56, 360, 160, 24, "text_subtitle")
+        self.add_element(swimlane, "img_placeholder", "地图 / 态势图", 56, 408, 568, 216, "img_placeholder")
+        self.add_element(swimlane, "card", "", 680, 336, 600, 312, "card")
+        self.add_element(swimlane, "text_subtitle", "趋势分析", 704, 360, 160, 24, "text_subtitle")
+        for idx in range(5):
+            self.add_element(swimlane, "list_row", f"趋势维度 {idx + 1}", 704, 408 + idx * 40, 528, 32, "list_row")
+        self.add_element(swimlane, "card", "", 1312, 336, 576, 312, "card")
+        self.add_element(swimlane, "text_subtitle", "告警与事件", 1336, 360, 160, 24, "text_subtitle")
+        for idx in range(5):
+            self.add_element(swimlane, "list_row", f"告警事件 {idx + 1}", 1336, 408 + idx * 40, 504, 32, "list_row")
+        self.add_element(swimlane, "card", "", 32, 688, 1856, 200, "card")
+        self.add_element(swimlane, "text_subtitle", "场景说明与轮播控制", 56, 712, 200, 24, "text_subtitle")
+        self.add_element(swimlane, "text_body", "支持大屏轮播、自动刷新、场景切换和值班态展示。", 56, 752, 320, 32, "text_body")
+        self._add_annotations(ctx)
+
+    def _build_industrial_console(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page_name = str(ctx.page.get("page_name", "工控机控制台")).strip()
+        statuses = self._status_values(ctx.page)
+
+        self.add_element(swimlane, "nav", page_name, 0, 40, INDUSTRIAL_UI_W, 64, "nav")
+        self.add_element(swimlane, "bg", "", 0, 104, INDUSTRIAL_UI_W, 856, "bg")
+        self.add_element(swimlane, "text_hint", "设备在线：12 / 12   班次：白班   网络状态：正常", 24, 120, 320, 20, "text_hint")
+        for idx, label in enumerate(["产线状态", "设备稼动率", "待处理告警"]):
+            x = 24 + idx * 320
+            self.add_element(swimlane, "card", "", x, 160, 288, 112, "card")
+            self.add_element(swimlane, "text_hint", label, x + 24, 184, 136, 24, "text_hint")
+            self.add_element(swimlane, "text_title", "正常" if idx == 0 else str(90 + idx), x + 24, 216, 120, 32, "text_title")
+        self.add_element(swimlane, "card", "", 24, 304, 792, 360, "card")
+        self.add_element(swimlane, "text_subtitle", "工艺流程区", 48, 328, 160, 24, "text_subtitle")
+        for idx, label in enumerate(["上料", "检测", "分拣", "封装"]):
+            x = 64 + idx * 176
+            self.add_element(swimlane, "icon", str(idx + 1), x, 432, 40, 40, "icon")
+            self.add_element(swimlane, "text_subtitle", label, x - 16, 488, 80, 24, "text_subtitle")
+            self.add_element(swimlane, "tag", statuses[idx % len(statuses)], x - 20, 528, 88, 24, tag_style_for_status(statuses[idx % len(statuses)]))
+        self.add_element(swimlane, "card", "", 848, 304, 496, 360, "card")
+        self.add_element(swimlane, "text_subtitle", "报警与处置", 872, 328, 160, 24, "text_subtitle")
+        for idx in range(5):
+            self.add_element(swimlane, "list_row", f"报警事件 {idx + 1}", 872, 376 + idx * 40, 424, 32, "list_row")
+        self.add_element(swimlane, "btn_primary", "启动产线", 24, 712, 160, 56, "btn_primary", "→ 启动流程")
+        self.add_element(swimlane, "btn_secondary", "暂停产线", 208, 712, 160, 56, "btn_secondary", "→ 暂停流程")
+        self.add_element(swimlane, "btn_danger_filled", "急停", 392, 712, 160, 56, "btn_danger_filled", "→ 紧急停机")
+        self.add_element(swimlane, "card", "", 584, 696, 760, 160, "card")
+        self.add_element(swimlane, "text_subtitle", "参数面板", 608, 720, 120, 24, "text_subtitle")
+        for idx, label in enumerate(["目标产量", "当前班次", "温度阈值", "维护模式"]):
+            x = 608 + (idx % 2) * 320
+            y = 760 + (idx // 2) * 40
+            self.add_element(swimlane, "label", label, x, y, 96, 24, "label")
+            self.add_element(swimlane, "text_value", placeholder_value(label, idx + 1), x + 120, y, 144, 24, "text_value")
+        self._add_annotations(ctx)
+
+    def _build_h5_home(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page_name = str(ctx.page.get("page_name", "H5首页")).strip()
+
+        self._add_h5_shell(swimlane, page_name)
+        self.add_element(swimlane, "search_input", "搜索活动/资讯/服务", 16, 168, 344, 40, "search_input")
+        self.add_element(swimlane, "img_placeholder", "H5活动 Banner", 16, 224, 344, 120, "img_placeholder")
+        for idx, label in enumerate(["新品推荐", "限时活动", "服务说明"]):
+            self.add_element(swimlane, "card", "", 16, 376 + idx * 112, 344, 96, "card")
+            self.add_element(swimlane, "text_subtitle", label, 32, 400 + idx * 112, 144, 24, "text_subtitle")
+            self.add_element(swimlane, "text_hint", "移动 Web 传播入口 / 分享链路 / 咨询转化", 32, 432 + idx * 112, 224, 20, "text_hint")
+        self.add_element(swimlane, "btn_secondary", "在线咨询", 16, 744, 112, 48, "btn_secondary", "→ 联系客服")
+        self.add_element(swimlane, "btn_primary", "立即参与", 232, 744, 128, 48, "btn_primary", "→ 活动详情")
+        self._add_annotations(ctx)
+
+    def _build_h5_profile(self, ctx: PageContext):
+        swimlane = ctx.swimlane_id
+        page_name = str(ctx.page.get("page_name", "H5个人中心")).strip()
+
+        self._add_h5_shell(swimlane, page_name)
+        self.add_element(swimlane, "card", "", 16, 176, 344, 120, "card")
+        self.add_element(swimlane, "avatar", "头像", 32, 208, 56, 56, "avatar")
+        self.add_element(swimlane, "text_title", "游客 / 会员", 104, 208, 144, 32, "text_title")
+        self.add_element(swimlane, "text_hint", "手机号授权后同步浏览记录与报名记录", 104, 240, 176, 20, "text_hint")
+        for idx, label in enumerate(["报名记录", "浏览历史", "优惠权益", "联系客服"]):
+            y = 320 + idx * 72
+            self.add_element(swimlane, "list_row", label, 16, y, 344, 48, "list_row")
+        self.add_element(swimlane, "btn_primary", "授权手机号", 16, 736, 344, 48, "btn_primary", "→ 手机授权")
         self._add_annotations(ctx)
 
     def _build_mobile_home(self, ctx: PageContext):
@@ -1294,41 +2001,66 @@ class PageSpecBuilder:
         page_name = str(page.get("page_name", "树管理页")).strip()
         object_name = str(page.get("object_name", "对象")).strip() or "对象"
         statuses = self._status_values(page)
+        is_resource = self._is_resource_tree_page(page)
 
         self.add_element(swimlane, "nav", page_name, 0, 40, 1440, 56, "nav")
         self.add_element(swimlane, "bg", "", 0, 96, 1440, 864, "bg")
         self.add_element(swimlane, "breadcrumb", f"首页 / {self.module_name} / {page_name}", 24, 112, 440, 24, "breadcrumb")
         self.add_element(swimlane, "card", "", 24, 160, 328, 680, "card")
-        self.add_element(swimlane, "text_subtitle", f"{object_name}层级", 48, 184, 120, 24, "text_subtitle")
-        tree_rows = ["▾ 总部", "  ▸ 华东大区", "  ▾ 华南大区", "    • 广州门店", "    • 深圳门店"]
+        self.add_element(swimlane, "text_subtitle", "资源树" if is_resource else f"{object_name}层级", 48, 184, 120, 24, "text_subtitle")
+        tree_rows = (
+            ["▾ 系统管理", "  ▾ 角色管理", "    • 新增角色", "  ▾ 资源管理", "    • 新增资源"]
+            if is_resource
+            else ["▾ 总部", "  ▸ 华东大区", "  ▾ 华南大区", "    • 广州门店", "    • 深圳门店"]
+        )
         for idx, label in enumerate(tree_rows):
             self.add_element(swimlane, "list_row", label, 48, 232 + idx * 56, 272, 40, "list_row")
 
         self.add_element(swimlane, "card", "", 376, 160, 1040, 680, "card")
         self.add_element(swimlane, "input", f"搜索{object_name}", 400, 184, 224, 48, "input")
-        self.add_element(swimlane, "select", "状态 ▼", 640, 184, 136, 48, "select")
+        self.add_element(swimlane, "select", ("资源类型 ▼" if is_resource else "状态 ▼"), 640, 184, 136, 48, "select")
         self.add_element(swimlane, "btn_primary", f"新增{object_name}", 1264, 184, 128, 48, "btn_primary", f"→ 新增/编辑{object_name}弹窗")
 
-        columns = ["名称", "上级", "负责人", "状态", "更新时间"]
-        widths = [224, 200, 176, 144, 216]
-        x_positions = [400, 624, 824, 1000, 1144]
+        if is_resource:
+            columns = ["资源名称", "资源类型", "资源标识", "上级资源", "排序值", "状态"]
+            widths = [216, 160, 208, 184, 136, 136]
+            x_positions = [400, 616, 776, 984, 1168, 1304]
+        else:
+            columns = ["名称", "上级", "负责人", "状态", "更新时间"]
+            widths = [224, 200, 176, 144, 216]
+            x_positions = [400, 624, 824, 1000, 1144]
         for idx, name in enumerate(columns):
             self.add_element(swimlane, "table_header", name, x_positions[idx], 256, widths[idx], 40, "table_header")
-        self.add_element(swimlane, "table_header", "操作", 1360, 256, 56, 40, "table_header")
+        action_x = 1360 if not is_resource else 1448
+        action_w = 56 if not is_resource else 120
+        self.add_element(swimlane, "table_header", "操作", action_x, 256, action_w, 40, "table_header")
 
         for row_idx in range(4):
             y = 304 + row_idx * 48
             row_style = "table_row_odd" if row_idx % 2 == 0 else "table_row_even"
-            values = [
-                f"{object_name}{row_idx + 1}",
-                "华南大区" if row_idx % 2 == 0 else "总部",
-                placeholder_value("负责人", row_idx + 1),
-                statuses[row_idx % len(statuses)],
-                placeholder_value("更新时间", row_idx + 1),
-            ]
+            values = (
+                [
+                    f"资源名称{row_idx + 1}",
+                    ["menu", "page", "button", "menu"][row_idx],
+                    f"system:resource:{row_idx + 1}",
+                    "角色管理" if row_idx % 2 == 0 else "系统管理",
+                    str((row_idx + 1) * 10),
+                    statuses[row_idx % len(statuses)],
+                ]
+                if is_resource
+                else [
+                    f"{object_name}{row_idx + 1}",
+                    "华南大区" if row_idx % 2 == 0 else "总部",
+                    placeholder_value("负责人", row_idx + 1),
+                    statuses[row_idx % len(statuses)],
+                    placeholder_value("更新时间", row_idx + 1),
+                ]
+            )
             for col_idx, value in enumerate(values):
                 self.add_element(swimlane, "table_cell", value, x_positions[col_idx], y, widths[col_idx], 48, row_style)
-            self.add_element(swimlane, "btn_sm", "编辑", 1360, y + 8, 48, 32, "btn_sm", f"→ 新增/编辑{object_name}弹窗")
+            self.add_element(swimlane, "btn_sm", "编辑", action_x, y + 8, 48, 32, "btn_sm", f"→ 新增/编辑{object_name}弹窗")
+            if is_resource:
+                self.add_element(swimlane, "btn_sm_danger", "删除", action_x + 56, y + 8, 48, 32, "btn_sm_danger", f"→ {delete_modal_name(object_name)}")
 
         self._add_annotations(ctx)
 
@@ -1389,6 +2121,7 @@ class PageSpecBuilder:
 
     def _build_edit_modal(self, ctx: PageContext, object_name: str, fields: list[dict]):
         swimlane = ctx.swimlane_id
+        page = ctx.page
         modal_x = 40 if ctx.swimlane_w >= 800 else 24
         modal_y = 48
         modal_w = ctx.swimlane_w - modal_x * 2
@@ -1397,6 +2130,24 @@ class PageSpecBuilder:
         input_x = modal_x + 128
         input_w = min(320 if ctx.swimlane_w >= 800 else 248, modal_w - 168)
         modal_title = object_name if any(token in object_name for token in ("弹窗", "抽屉", "确认")) else f"新增/编辑{object_name}"
+        actions = page.get("actions") if isinstance(page.get("actions"), list) else []
+        page_name = str(page.get("page_name", "")).strip()
+        page_type = str(page.get("page_type", "")).strip()
+        secondary_label = "取消"
+        primary_label = "确认"
+        primary_tooltip = "→ 保存后关闭弹窗"
+        if page_type in {"web_form", "web_detail"} and any(token in page_name for token in ("弹窗", "确认", "拒绝")):
+            for action in actions:
+                name = str(action.get("name", "")).strip()
+                if not name:
+                    continue
+                target = str(action.get("target", "")).strip()
+                kind = str(action.get("kind", "")).strip()
+                if kind == "secondary":
+                    secondary_label = name
+                elif kind in {"primary", "danger"}:
+                    primary_label = name
+                    primary_tooltip = f"→ {target}" if target else f"→ {name}"
 
         self.add_element(swimlane, "modal_bg", "", modal_x, modal_y, modal_w, modal_h, "modal_bg")
         self.add_element(swimlane, "modal_title", modal_title, label_x, modal_y + 16, 240, 24, "modal_title")
@@ -1420,8 +2171,8 @@ class PageSpecBuilder:
         footer_top = max(y + 32, modal_y + modal_h - 88)
         btn_y = min(footer_top + 24, modal_y + modal_h - 56)
         self.add_element(swimlane, "divider", "", label_x, footer_top, modal_w - 48, 1, "divider")
-        self.add_element(swimlane, "btn_secondary", "取消", modal_x + modal_w - 216, btn_y, 88, 48, "btn_secondary", "→ 关闭弹窗")
-        self.add_element(swimlane, "btn_primary", "确认", modal_x + modal_w - 112, btn_y, 104, 48, "btn_primary", "→ 保存后关闭弹窗")
+        self.add_element(swimlane, "btn_secondary", secondary_label, modal_x + modal_w - 216, btn_y, 88, 48, "btn_secondary", "→ 关闭弹窗")
+        self.add_element(swimlane, "btn_primary", primary_label, modal_x + modal_w - 112, btn_y, 104, 48, "btn_primary", primary_tooltip)
 
     def _build_delete_modal(self, ctx: PageContext, object_name: str):
         swimlane = ctx.swimlane_id
@@ -1433,14 +2184,29 @@ class PageSpecBuilder:
         self.add_element(swimlane, "btn_danger_filled", "确认删除", 216, 208, 104, 48, "btn_danger_filled", "→ 删除后返回列表")
 
 
-def validate_model(model: dict):
+def validate_model(model: dict, rulepack: dict | None = None):
     if not isinstance(model, dict):
         raise ValueError("page_model 必须是 JSON 对象")
+    rulepack = rulepack or resolve_model_rulepack(model)
+    terminal_type = normalize_terminal_type(model.get("terminal_type", ""))
+    terminal_name = normalize_terminal_name(model.get("terminal_name", ""), terminal_type)
+    if not terminal_type:
+        raise ValueError("page_model 缺少 terminal_type")
+    if terminal_type not in ALLOWED_TERMINAL_TYPES:
+        raise ValueError(f"page_model terminal_type 非法: {terminal_type}")
+    if not terminal_name:
+        raise ValueError("page_model 缺少 terminal_name")
+    expected_name = expected_terminal_name(terminal_type)
+    if terminal_name != expected_name:
+        raise ValueError(f"page_model terminal_name 与 terminal_type 不匹配: {terminal_name}")
     if not str(model.get("module_name", "")).strip():
         raise ValueError("page_model 缺少 module_name")
-    reason = invalid_module_name_reason(model.get("module_name", ""))
+    reason = invalid_module_name_reason(model.get("module_name", ""), rulepack)
     if reason:
         raise ValueError(f"page_model 的 module_name 不合法：{reason}")
+    normalized_module_name = normalize_module_name(model.get("module_name", ""), rulepack)
+    if not normalized_module_name.startswith(f"{terminal_name}-"):
+        raise ValueError("page_model 的 module_name 必须以 terminal_name- 作为前缀")
     pages = model.get("pages")
     if not isinstance(pages, list) or not pages:
         raise ValueError("page_model 缺少非空 pages")
@@ -1460,9 +2226,21 @@ def validate_model(model: dict):
             raise ValueError(f"pages[{idx}] 缺少 page_name")
         if not page_type:
             raise ValueError(f"pages[{idx}] 缺少 page_type")
+        if page_type not in ALLOWED_PAGE_TYPES:
+            raise ValueError(f"pages[{idx}] page_type 非法: {page_type}")
         page_archetype = str(page.get("page_archetype", "")).strip()
         if page_archetype and page_archetype not in ALLOWED_ARCHETYPES:
             raise ValueError(f"pages[{idx}] page_archetype 非法: {page_archetype}")
+        page_kind = str(page.get("page_kind", "")).strip()
+        if page_kind and page_kind not in ALLOWED_PAGE_KINDS:
+            raise ValueError(f"pages[{idx}] page_kind 非法: {page_kind}")
+        layout_mode = str(page.get("layout_mode", "")).strip()
+        if layout_mode and layout_mode not in ALLOWED_LAYOUT_MODES:
+            raise ValueError(f"pages[{idx}] layout_mode 非法: {layout_mode}")
+        canonical_page_name = str(page.get("canonical_page_name", "")).strip()
+        if "canonical_page_name" in page and not canonical_page_name:
+            raise ValueError(f"pages[{idx}] canonical_page_name 不能为空")
+        page["_rulepack"] = rulepack
         semantic_error = semantic_validate_page(model, page)
         if semantic_error:
             raise ValueError(f"pages[{idx}] 语义校验失败: {semantic_error}")
@@ -1475,6 +2253,8 @@ def semantic_validate_page(model: dict, page: dict) -> str:
     archetype = str(page.get("page_archetype", "")).strip()
     names = field_names(page) + table_column_names(page)
     text = page_terms(model, page)
+    actions = set(action_names(page))
+    rulepack = page.get("_rulepack") or resolve_model_rulepack(model)
 
     if page_type == "login":
         if count_matches(field_names(page), {"账号", "用户名", "手机号", "邮箱"}) < 1:
@@ -1488,18 +2268,10 @@ def semantic_validate_page(model: dict, page: dict) -> str:
         if count_matches(names, {"路线", "司机", "客户数", "件数", "发货单", "调度", "物流"}) < 2:
             return "dispatch_board 缺少路线/司机/物流等调度字段"
 
-    if "发货" in page_name and any(token in page_name for token in ("弹窗", "确认")):
-        logistics_hits = count_matches(names, {"物流公司", "物流单号", "发货备注", "司机", "路线"})
-        if logistics_hits < 2:
-            return "发货弹窗缺少物流公司/物流单号/发货备注/司机/路线等关键字段"
-        if count_matches(names, {"售后状态", "商品明细", "支付状态", "收货地址"}) >= 3 and logistics_hits < 3:
-            return "发货弹窗字段被订单详情字段污染"
-
-    if any(token in text for token in ("营销", "活动")) and not any(token in text for token in ("分析", "报表", "统计")):
-        if count_matches(names, {"活动名称", "活动类型", "活动时间", "开始时间", "结束时间", "关联商品", "活动说明", "活动状态"}) < 2:
-            return "营销活动页面缺少活动名称/类型/时间/关联商品等核心字段"
-        if count_matches(names, {"新增会员数", "核销率", "销售额", "TOP活动"}) >= 2:
-            return "营销活动页面混入分析指标字段"
+    for profile in (rulepack.get("semantic_profiles") or {}).values():
+        message = _semantic_error_from_profile(profile, page, text, names, actions, archetype)
+        if message:
+            return message
 
     if "资源" in text:
         if count_matches(names, {"资源名称", "资源类型", "资源标识"}) < 2:
@@ -1587,18 +2359,21 @@ def normalize_output_path(model_path: str, output_path: str) -> str:
 
 
 def main():
-    if len(sys.argv) != 3:
-        print(f"用法: python3 {sys.argv[0]} <page_model_json> <output_page_spec_md>", file=sys.stderr)
-        sys.exit(1)
+    parser = argparse.ArgumentParser(description="从 page_model JSON 生成标准化 page_spec markdown")
+    parser.add_argument("page_model_json")
+    parser.add_argument("output_page_spec_md")
+    parser.add_argument("--rulepack", default="")
+    args = parser.parse_args()
 
-    model_path = sys.argv[1]
-    output_path = normalize_output_path(model_path, sys.argv[2])
+    model_path = args.page_model_json
+    output_path = normalize_output_path(model_path, args.output_page_spec_md)
 
     with open(model_path, "r", encoding="utf-8") as f:
         model = json.load(f)
 
-    validate_model(model)
-    builder = PageSpecBuilder(model)
+    rulepack = resolve_model_rulepack(model, args.rulepack or None)
+    validate_model(model, rulepack)
+    builder = PageSpecBuilder(model, rulepack)
     module_name, swimlanes, elements = builder.build()
     markdown = to_markdown(module_name, swimlanes, elements)
 

@@ -24,6 +24,15 @@ def _load_module(name: str, path: Path):
     return module
 
 
+def _read_frontmatter(path: Path) -> str:
+    text = path.read_text(encoding="utf-8")
+    if not text.startswith("---\n"):
+        raise AssertionError(f"missing frontmatter in {path}")
+    _, rest = text.split("---\n", 1)
+    frontmatter, _ = rest.split("\n---\n", 1)
+    return frontmatter
+
+
 BUILD_PAGE_SPEC = _load_module("build_page_spec_test", SCRIPTS_DIR / "build_page_spec.py")
 RENDER = _load_module("render_test", SCRIPTS_DIR / "render.py")
 VALIDATE = _load_module("validate_test", SCRIPTS_DIR / "validate.py")
@@ -116,8 +125,16 @@ def _int_value(element: dict, key: str) -> int:
     return int(element[key])
 
 
-def _drawer_permission_model() -> dict:
+def _terminalized(model: dict, terminal_type: str = "admin", terminal_name: str = "后台") -> dict:
     return {
+        "terminal_type": terminal_type,
+        "terminal_name": terminal_name,
+        **model,
+    }
+
+
+def _drawer_permission_model() -> dict:
+    return _terminalized({
         "module_name": "后台-组织权限",
         "module_key": "admin_auth",
         "pages": [
@@ -148,11 +165,11 @@ def _drawer_permission_model() -> dict:
                 "states": {"loading": "保存中按钮禁用", "error": "保存失败保留勾选结果"},
             }
         ],
-    }
+    })
 
 
 def _detail_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-订单管理",
         "module_key": "admin_order",
         "pages": [
@@ -167,34 +184,22 @@ def _detail_model() -> dict:
                 "nav_context": "后台-订单履约 / 订单管理",
                 "fields": [
                     {"name": "订单编号", "control": "input", "required": True, "validation": "系统自动生成"},
-                    {"name": "下单时间", "control": "input", "required": True, "validation": ""},
-                    {"name": "会员名称", "control": "input", "required": True, "validation": ""},
-                    {"name": "手机号", "control": "input", "required": True, "validation": "手机号格式"},
-                    {
-                        "name": "配送方式",
-                        "control": "select",
-                        "required": True,
-                        "options": ["冷链配送", "门店自提"],
-                        "validation": "",
-                    },
-                    {
-                        "name": "支付方式",
-                        "control": "select",
-                        "required": True,
-                        "options": ["微信支付", "余额支付"],
-                        "validation": "",
-                    },
+                    {"name": "订单状态", "control": "select", "required": True, "options": ["待发货", "待收货", "已完成"], "validation": ""},
+                    {"name": "用户信息", "control": "input", "required": True, "validation": ""},
                     {"name": "收货地址", "control": "input", "required": True, "validation": ""},
-                    {"name": "商品金额", "control": "input", "required": True, "validation": ""},
-                    {"name": "运费", "control": "input", "required": True, "validation": ""},
-                    {"name": "优惠金额", "control": "input", "required": False, "validation": ""},
-                    {"name": "应付金额", "control": "input", "required": True, "validation": ""},
-                    {"name": "客服备注", "control": "textarea", "required": False, "validation": "200字以内"},
+                    {"name": "商品明细", "control": "textarea", "required": True, "validation": ""},
+                    {"name": "金额明细", "control": "textarea", "required": True, "validation": ""},
+                    {"name": "支付信息", "control": "textarea", "required": True, "validation": ""},
+                    {"name": "售后信息", "control": "textarea", "required": False, "validation": ""},
+                    {"name": "备注记录", "control": "textarea", "required": False, "validation": "200字以内"},
+                    {"name": "溯源摘要", "control": "input", "required": False, "validation": ""},
+                    {"name": "操作区", "control": "input", "required": True, "validation": ""},
                 ],
                 "status_values": ["待发货", "已发货", "已完成", "已退款"],
                 "actions": [
                     {"name": "发货", "target": "发货单详情页", "kind": "primary"},
                     {"name": "备注", "target": "订单备注弹窗", "kind": "secondary"},
+                    {"name": "关闭", "target": "关闭订单确认弹窗", "kind": "danger"},
                 ],
                 "jump_targets": ["发货单详情页", "退款确认弹窗"],
                 "business_rules": ["仅待发货订单可发货", "退款完成后订单不可再次发货"],
@@ -205,11 +210,11 @@ def _detail_model() -> dict:
                 },
             }
         ],
-    }
+    })
 
 
 def _login_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-登录页",
         "module_key": "admin_login",
         "product_name": "渔易购后台管理系统",
@@ -232,11 +237,11 @@ def _login_model() -> dict:
                 "states": {"error": "验证码错误时保留账号并刷新验证码"},
             }
         ],
-    }
+    })
 
 
 def _marketing_list_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-会员运营",
         "module_key": "admin_marketing",
         "pages": [
@@ -252,22 +257,22 @@ def _marketing_list_model() -> dict:
                 "fields": [
                     {"name": "活动名称", "control": "input", "required": True, "validation": "2-30位"},
                     {"name": "活动类型", "control": "select", "required": True, "options": ["满减", "优惠券"], "validation": ""},
-                    {"name": "门槛金额", "control": "input", "required": True, "validation": "金额格式"},
-                    {"name": "优惠值", "control": "input", "required": True, "validation": "金额格式"},
-                    {"name": "生效时间", "control": "input", "required": True, "validation": "开始时间不能晚于结束时间"},
-                    {"name": "发布状态", "control": "select", "required": True, "options": ["草稿", "生效"], "validation": ""},
+                    {"name": "活动时间", "control": "input", "required": True, "validation": "开始时间不能晚于结束时间"},
+                    {"name": "关联商品", "control": "input", "required": True, "validation": "至少关联一个商品"},
+                    {"name": "活动说明", "control": "textarea", "required": False, "validation": "200字以内"},
+                    {"name": "活动状态", "control": "select", "required": True, "options": ["未开始", "进行中", "已结束"], "validation": ""},
                 ],
-                "table_columns": ["活动名称", "活动类型", "门槛金额", "优惠值", "发布状态", "更新时间"],
-                "status_values": ["草稿", "生效", "已结束"],
+                "table_columns": ["活动名称", "活动类型", "开始时间", "结束时间", "关联商品数", "活动状态"],
+                "status_values": ["未开始", "进行中", "已结束"],
                 "actions": [{"name": "编辑", "target": "新增/编辑营销活动弹窗", "kind": "primary"}],
                 "jump_targets": ["新增/编辑营销活动弹窗"],
             }
         ],
-    }
+    })
 
 
 def _shipping_modal_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-订单管理",
         "module_key": "admin_order_shipping",
         "pages": [
@@ -292,11 +297,11 @@ def _shipping_modal_model() -> dict:
                 "status_values": ["待发货", "已发货", "已签收"],
             }
         ],
-    }
+    })
 
 
 def _bad_shipping_modal_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-订单发货关闭",
         "module_key": "admin_order_ship_close",
         "pages": [
@@ -314,11 +319,11 @@ def _bad_shipping_modal_model() -> dict:
                 ],
             }
         ],
-    }
+    })
 
 
 def _bad_marketing_form_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-营销表单",
         "module_key": "admin_marketing_form",
         "pages": [
@@ -336,11 +341,11 @@ def _bad_marketing_form_model() -> dict:
                 ],
             }
         ],
-    }
+    })
 
 
 def _bad_resource_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-资源权限",
         "module_key": "admin_resource",
         "pages": [
@@ -358,11 +363,56 @@ def _bad_resource_model() -> dict:
                 "table_columns": ["关键词", "状态", "更新时间"],
             }
         ],
-    }
+    })
+
+
+def _bad_order_detail_model() -> dict:
+    return _terminalized({
+        "module_name": "后台-订单管理",
+        "module_key": "admin_order_detail",
+        "pages": [
+            {
+                "page_id": "order_detail",
+                "page_name": "订单详情页（后台）",
+                "page_type": "web_detail",
+                "page_archetype": "detail_kv",
+                "object_name": "订单",
+                "fields": [
+                    {"name": "订单编号", "control": "input", "required": True, "validation": ""},
+                    {"name": "用户信息", "control": "input", "required": True, "validation": ""},
+                    {"name": "收货地址", "control": "input", "required": True, "validation": ""},
+                    {"name": "商品明细", "control": "textarea", "required": True, "validation": ""},
+                    {"name": "金额明细", "control": "textarea", "required": True, "validation": ""},
+                ],
+                "actions": [{"name": "查看详情", "target": "订单详情页（后台）", "kind": "secondary"}],
+            }
+        ],
+    })
+
+
+def _bad_close_order_modal_model() -> dict:
+    return _terminalized({
+        "module_name": "后台-订单管理",
+        "module_key": "admin_order_close",
+        "pages": [
+            {
+                "page_id": "close_order_modal",
+                "page_name": "关闭订单确认弹窗",
+                "page_type": "web_form",
+                "page_archetype": "modal_form",
+                "object_name": "订单关闭",
+                "fields": [
+                    {"name": "提示文案", "control": "textarea", "required": False, "validation": ""},
+                ],
+                "business_rules": ["关闭前需提示退款风险"],
+                "actions": [{"name": "确认关闭", "target": "订单列表页", "kind": "danger"}],
+            }
+        ],
+    })
 
 
 def _employee_list_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-组织权限",
         "module_key": "admin_staff",
         "pages": [
@@ -381,7 +431,7 @@ def _employee_list_model() -> dict:
                 "business_rules": ["关键词：姓名/账号/手机号", "账号状态：启用 / 停用"],
             }
         ],
-    }
+    })
 
 
 def _employee_crud_model() -> dict:
@@ -423,7 +473,7 @@ def _employee_detail_page() -> dict:
 
 
 def _analysis_dashboard_model() -> dict:
-    return {
+    return _terminalized({
         "module_name": "后台-订单分析",
         "module_key": "admin_order_analytics",
         "pages": [
@@ -446,7 +496,144 @@ def _analysis_dashboard_model() -> dict:
                 "states": {"loading": "图表骨架屏", "error": "分析加载失败"},
             }
         ],
-    }
+    })
+
+
+def _app_profile_model() -> dict:
+    return _terminalized(
+        {
+            "module_name": "App-会员中心",
+            "module_key": "app_member_center",
+            "product_name": "渔易购会员App",
+            "pages": [
+                {
+                    "page_id": "member_profile",
+                    "page_name": "会员中心",
+                    "page_type": "profile",
+                    "page_archetype": "profile",
+                    "object_name": "会员",
+                    "role": "C端会员",
+                    "purpose": "查看会员资料、订单入口与服务入口",
+                    "fields": [
+                        {"name": "会员昵称", "control": "input", "required": True, "validation": ""},
+                        {"name": "手机号", "control": "input", "required": True, "validation": "手机号格式"},
+                    ],
+                    "jump_targets": ["订单列表页", "收货地址页", "售后记录页"],
+                    "states": {"empty": "暂无会员权益时展示升级引导"},
+                }
+            ],
+        },
+        terminal_type="app",
+        terminal_name="App",
+    )
+
+
+def _h5_home_model() -> dict:
+    return _terminalized(
+        {
+            "module_name": "H5-活动报名",
+            "module_key": "h5_campaign",
+            "product_name": "渔易购活动H5",
+            "pages": [
+                {
+                    "page_id": "campaign_home",
+                    "page_name": "活动报名H5首页",
+                    "page_type": "mobile_home",
+                    "page_archetype": "mobile_home",
+                    "object_name": "活动",
+                    "role": "渠道访客",
+                    "purpose": "浏览活动并发起报名",
+                    "jump_targets": ["活动详情页", "活动报名页", "在线咨询"],
+                    "business_rules": ["分享时保留渠道参数", "提交报名后跳转成功页"],
+                }
+            ],
+        },
+        terminal_type="h5",
+        terminal_name="H5",
+    )
+
+
+def _portal_home_model() -> dict:
+    return _terminalized(
+        {
+            "module_name": "官网门户-产品官网",
+            "module_key": "portal_site",
+            "product_name": "渔易购官网门户",
+            "pages": [
+                {
+                    "page_id": "official_site_home",
+                    "page_name": "产品官网首页",
+                    "page_type": "portal_home",
+                    "page_archetype": "portal_landing",
+                    "object_name": "官网门户",
+                    "role": "访客/潜在客户",
+                    "purpose": "展示品牌价值、方案与联系入口",
+                    "jump_targets": ["方案中心", "客户案例", "立即咨询"],
+                    "sections": ["Hero主视觉", "方案能力", "客户案例", "联系顾问"],
+                }
+            ],
+        },
+        terminal_type="portal",
+        terminal_name="官网门户",
+    )
+
+
+def _bigscreen_dashboard_model() -> dict:
+    return _terminalized(
+        {
+            "module_name": "大屏-指挥中心",
+            "module_key": "bigscreen_command",
+            "product_name": "渔易购大屏",
+            "pages": [
+                {
+                    "page_id": "command_center",
+                    "page_name": "渔业指挥大屏",
+                    "page_type": "bigscreen_dashboard",
+                    "page_archetype": "bigscreen_board",
+                    "object_name": "指挥中心",
+                    "role": "值班长/运营总控",
+                    "purpose": "查看实时指标、态势和告警",
+                    "sections": ["全局总览", "生产态势", "告警中心", "地图态势"],
+                    "actions": [
+                        {"name": "切换场景", "target": "生产态势", "kind": "secondary"},
+                        {"name": "查看告警", "target": "告警中心", "kind": "secondary"},
+                    ],
+                }
+            ],
+        },
+        terminal_type="bigscreen",
+        terminal_name="大屏",
+    )
+
+
+def _industrial_console_model() -> dict:
+    return _terminalized(
+        {
+            "module_name": "工控机-产线监控",
+            "module_key": "industrial_line",
+            "product_name": "渔易购工控机",
+            "pages": [
+                {
+                    "page_id": "line_console",
+                    "page_name": "产线工控机控制台",
+                    "page_type": "industrial_console",
+                    "page_archetype": "industrial_hmi",
+                    "object_name": "产线",
+                    "role": "现场操作员",
+                    "purpose": "查看设备状态并执行控制动作",
+                    "status_values": ["正常", "预警", "告警", "维护中"],
+                    "actions": [
+                        {"name": "启动产线", "target": "产线运行中", "kind": "primary"},
+                        {"name": "暂停产线", "target": "产线暂停", "kind": "secondary"},
+                        {"name": "急停", "target": "紧急停机", "kind": "danger"},
+                    ],
+                    "business_rules": ["急停需要二次确认", "报警未清除前禁止再次启动"],
+                }
+            ],
+        },
+        terminal_type="industrial",
+        terminal_name="工控机",
+    )
 
 
 def _payment_log_page() -> dict:
@@ -717,6 +904,130 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             for snippet in required_snippets:
                 self.assertIn(snippet, text, path.as_posix())
 
+    def test_docs_cover_extended_terminal_types(self):
+        expectations = {
+            SKILL_DIR / "SKILL.md": [
+                "`admin` / `miniapp` / `app` / `h5` / `bigscreen` / `portal` / `industrial`",
+            ],
+            STEPS_DIR / "page-model-spec.md": [
+                "`portal_home`",
+                "`bigscreen_dashboard`",
+                "`industrial_console`",
+                "`官网门户`",
+                "`工控机`",
+            ],
+            STEPS_DIR / "step4-doc-format.md": [
+                "`h5`",
+                "`bigscreen`",
+                "`portal`",
+                "`industrial`",
+                "## 3.7 官网门户导航结构",
+                "## 3.8 大屏场景结构",
+                "## 3.9 工控机界面结构",
+            ],
+            STEPS_DIR / "step5-spec-agent-prompt.md": [
+                "portal_home",
+                "portal_hub",
+                "bigscreen_dashboard",
+                "industrial_console",
+            ],
+            STEPS_DIR / "drawio-spec.md": [
+                "`portal_landing`",
+                "`bigscreen_board`",
+                "`industrial_hmi`",
+            ],
+            STEPS_DIR / "html-spec.md": [
+                "`<body class=\"h5\">`",
+                "`.portal-shell`",
+                "`.bigscreen-shell`",
+                "`.industrial-shell`",
+            ],
+        }
+        for path, required_snippets in expectations.items():
+            text = path.read_text(encoding="utf-8")
+            for snippet in required_snippets:
+                self.assertIn(snippet, text, path.as_posix())
+
+    def test_skill_frontmatter_aligns_with_best_practices(self):
+        frontmatter = _read_frontmatter(SKILL_DIR / "SKILL.md")
+        self.assertIn("name: prototype-generator", frontmatter)
+        self.assertIn("compatibility:", frontmatter)
+        self.assertIn("metadata:", frontmatter)
+        description_match = re.search(r"description:\s*\|\n((?:\s{2}.+\n?)*)", frontmatter)
+        self.assertIsNotNone(description_match)
+        description = "".join(
+            line[2:] if line.startswith("  ") else line
+            for line in description_match.group(1).splitlines(True)
+        ).strip()
+        self.assertLess(len(description), 1024)
+        self.assertIn("生成 HTML 原型图", description)
+        self.assertIn("生成 draw.io/drawio", description)
+        self.assertIn("新增XX功能的原型", description)
+        self.assertIn("Do not use for纯视觉润色", description)
+        self.assertNotIn("界面设计", description)
+        self.assertNotIn("页面设计", description)
+        self.assertNotIn("产品界面", description)
+
+    def test_skill_references_are_populated_and_linked_from_skill_md(self):
+        references_dir = SKILL_DIR / "references"
+        expected_files = [
+            references_dir / "skill-positioning.md",
+            references_dir / "terminal-model.md",
+            references_dir / "output-modes.md",
+            references_dir / "quality-gates.md",
+        ]
+        skill_text = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
+        for path in expected_files:
+            self.assertTrue(path.exists(), path.as_posix())
+            self.assertGreater(len(path.read_text(encoding="utf-8").strip()), 20, path.as_posix())
+            self.assertIn(path.name, skill_text, path.as_posix())
+        self.assertFalse((SKILL_DIR / "README.md").exists())
+
+    def test_readme_positions_prototype_generator_by_outcome_and_sync_model(self):
+        expectations = {
+            REPO_ROOT / "README.md": [
+                "review-ready prototypes",
+                "source of truth for the skills",
+                "根据 PRD 出线框图",
+            ],
+            REPO_ROOT / "README.zh.md": [
+                "可评审、可交付的原型",
+                "标准源",
+                "根据 PRD 出线框图",
+            ],
+        }
+        for path, required_snippets in expectations.items():
+            text = path.read_text(encoding="utf-8")
+            for snippet in required_snippets:
+                self.assertIn(snippet, text, path.as_posix())
+
+    def test_evals_cover_positive_negative_and_extended_terminal_cases(self):
+        payload = json.loads((SKILL_DIR / "evals" / "evals.json").read_text(encoding="utf-8"))
+        self.assertEqual(payload["skill_name"], "prototype-generator")
+        evals = payload["evals"]
+        self.assertGreaterEqual(len(evals), 10)
+        positive = [item for item in evals if item.get("should_trigger") is True]
+        negative = [item for item in evals if item.get("should_trigger") is False]
+        self.assertGreaterEqual(len(positive), 5)
+        self.assertGreaterEqual(len(negative), 2)
+        serialized = json.dumps(evals, ensure_ascii=False)
+        for token in ("H5", "官网门户", "大屏", "工控机"):
+            self.assertIn(token, serialized)
+
+    def test_html_common_css_supports_extended_terminal_classes(self):
+        css = (SKILL_DIR / "templates" / "common.css").read_text(encoding="utf-8")
+        for snippet in (
+            "--w-bigscreen",
+            "--w-industrial",
+            "body.h5",
+            ".h5-browser-bar",
+            ".portal-shell",
+            ".bigscreen-shell",
+            ".industrial-shell",
+            ".industrial-action-bar",
+        ):
+            self.assertIn(snippet, css)
+
     def test_validate_c13_treats_analysis_pages_as_dashboard(self):
         markdown = _build_page_spec_markdown(_analysis_dashboard_model())
         with tempfile.TemporaryDirectory() as tmp:
@@ -744,16 +1055,16 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
                         "筛选条件：\n"
                         "- 活动名称\n"
                         "- 活动类型\n"
-                        "- 生效时间\n"
+                        "- 活动时间\n"
                         "列表展示列：\n"
                         "| 字段 | 说明 |\n"
                         "| --- | --- |\n"
                         "| 活动名称 | 活动名称 |\n"
                         "| 活动类型 | 活动类型 |\n"
-                        "| 门槛金额 | 满足门槛 |\n"
-                        "| 优惠值 | 优惠内容 |\n"
-                        "| 发布状态 | 当前状态 |\n"
-                        "| 更新时间 | 更新时间 |\n"
+                        "| 开始时间 | 活动开始时间 |\n"
+                        "| 结束时间 | 活动结束时间 |\n"
+                        "| 关联商品数 | 关联商品数 |\n"
+                        "| 活动状态 | 当前状态 |\n"
                     ),
                     "详细需求文档_后台-订单分析.md": (
                         "# 渔易购 — 后台-订单分析需求\n\n"
@@ -935,6 +1246,51 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "资源页面"):
             BUILD_PAGE_SPEC.validate_model(_bad_resource_model())
 
+    def test_validate_model_requires_terminal_fields(self):
+        model = _login_model()
+        model.pop("terminal_type")
+        with self.assertRaisesRegex(ValueError, "terminal_type"):
+            BUILD_PAGE_SPEC.validate_model(model)
+
+    def test_app_profile_defaults_to_app_navigation_context(self):
+        markdown = _build_page_spec_markdown(_app_profile_model())
+        self.assertIn("导航：App主导航", markdown)
+
+    def test_h5_home_defaults_to_h5_navigation_context_and_browser_shell(self):
+        markdown = _build_page_spec_markdown(_h5_home_model())
+        self.assertIn("导航：H5页面栈", markdown)
+        self.assertIn("浏览器地址栏 · 安全访问", markdown)
+
+    def test_portal_home_uses_portal_nav_context_and_hero(self):
+        markdown = _build_page_spec_markdown(_portal_home_model())
+        _, swimlanes, _ = _parse_spec(markdown)
+        self.assertEqual(swimlanes[0]["type"], "portal")
+        self.assertIn("导航：官网顶栏导航", markdown)
+        self.assertIn("Hero 主视觉", markdown)
+
+    def test_bigscreen_dashboard_uses_dedicated_swimlane_and_navigation(self):
+        markdown = _build_page_spec_markdown(_bigscreen_dashboard_model())
+        _, swimlanes, _ = _parse_spec(markdown)
+        self.assertEqual(swimlanes[0]["type"], "bigscreen")
+        self.assertEqual(int(swimlanes[0]["width"]), BUILD_PAGE_SPEC.BIGSCREEN_SWIMLANE_W)
+        self.assertIn("导航：大屏场景导航", markdown)
+        self.assertIn("地图 / 态势图", markdown)
+
+    def test_industrial_console_uses_dedicated_navigation_context_and_actions(self):
+        markdown = _build_page_spec_markdown(_industrial_console_model())
+        _, swimlanes, _ = _parse_spec(markdown)
+        self.assertEqual(swimlanes[0]["type"], "industrial")
+        self.assertIn("导航：工位操作导航", markdown)
+        self.assertIn("急停", markdown)
+
+    def test_validate_model_rejects_order_detail_missing_payment_after_sale_and_actions(self):
+        with self.assertRaisesRegex(ValueError, "订单详情页"):
+            BUILD_PAGE_SPEC.validate_model(_bad_order_detail_model())
+
+    def test_validate_model_rejects_close_order_modal_without_reason(self):
+        with self.assertRaisesRegex(ValueError, "关闭订单确认弹窗"):
+            BUILD_PAGE_SPEC.validate_model(_bad_close_order_modal_model())
+
     def test_edit_modal_keeps_footer_actions_below_last_field(self):
         markdown = _build_page_spec_markdown(_marketing_list_model())
         self.assertIn("新增/编辑营销活动", markdown)
@@ -943,7 +1299,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         modal_lane_id = modal_lane["swimlane_id"]
         modal_bg = _find_element(elements, parent=modal_lane_id, style_key="modal_bg")
         confirm_button = _find_element(elements, parent=modal_lane_id, value="确认")
-        last_field = _find_element(elements, parent=modal_lane_id, value="请选择发布状态")
+        last_field = _find_element(elements, parent=modal_lane_id, value="请选择活动状态")
         footer_divider = None
         for element in elements:
             if element.get("parent_swimlane") != modal_lane_id:
@@ -968,7 +1324,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertEqual(report["summary"]["fail"], 0, _report_message(report))
         self.assertEqual(_rule_result(report, "C16")["status"], "PASS")
 
-    def test_consistency_scope_ignores_miniapp_requirements_for_backend_bundle(self):
+    def test_consistency_scope_ignores_miniapp_requirements_for_admin_bundle(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             _write_requirements_split(
@@ -993,9 +1349,143 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            report = CONSISTENCY.check_consistency(str(workdir / "requirements"), str(page_specs_dir), 0.8, "backend")
-            self.assertEqual(report["scope"], "backend")
+            report = CONSISTENCY.check_consistency(str(workdir / "requirements"), str(page_specs_dir), 0.8, "admin")
+            self.assertEqual(report["scope"], "admin")
             self.assertNotIn("首页", report["missing_pages"])
+            self.assertEqual(report["summary"]["fail"], 0, json.dumps(report, ensure_ascii=False))
+
+    def test_consistency_alias_maps_order_management_and_shipping_modal(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            requirements_dir = workdir / "requirements"
+            requirements_dir.mkdir(parents=True, exist_ok=True)
+            (requirements_dir / "详细需求文档_后台-订单中心.md").write_text(
+                "# 渔易购 — 后台-订单中心需求\n\n"
+                "#### 功能点 1.1：订单管理\n"
+                "- **页面/界面：** 订单列表页、发货弹窗\n"
+                "列表展示列：\n"
+                "| 列名 | 字段说明 |\n"
+                "| --- | --- |\n"
+                "| 操作 | 查看详情/发货/关闭/备注 |\n",
+                encoding="utf-8",
+            )
+            page_specs_dir = workdir / ".prototype-generator" / "page_specs"
+            page_specs_dir.mkdir(parents=True, exist_ok=True)
+            (page_specs_dir / "page_spec_order.md").write_text(
+                "# 后台-订单管理\n\n"
+                "## swimlane 布局\n"
+                "| swimlane_id | swimlane_label | type | x | y | width | height | style_key |\n"
+                "|---|---|---|---|---|---|---|---|\n"
+                "| S1 | 订单管理页（后台） | web | 16 | 16 | 1680 | 960 | swimlane |\n"
+                "| S2 | 确认发货弹窗 | modal | 1736 | 16 | 520 | 400 | swimlane_modal |\n\n"
+                "## 元素列表\n"
+                "| id | parent_swimlane | component_type | value | x | y | width | height | style_key | tooltip |\n"
+                "|---|---|---|---|---|---|---|---|---|---|\n"
+                "| 2 | S1 | btn_sm | 详情 | 1296 | 312 | 40 | 32 | btn_sm | |\n"
+                "| 3 | S1 | btn_sm | 发货 | 1344 | 312 | 40 | 32 | btn_sm | |\n"
+                "| 4 | S1 | btn_sm_danger | 关闭 | 1392 | 312 | 40 | 32 | btn_sm_danger | |\n"
+                "| 5 | S1 | btn_sm | 备注 | 1440 | 312 | 40 | 32 | btn_sm | |\n"
+                "| 2 | S2 | label | 物流公司 | 48 | 120 | 88 | 40 | label | |\n"
+                "| 3 | S2 | select | 请选择物流公司 | 152 | 120 | 224 | 48 | select | |\n"
+                "| 4 | S2 | label | 物流单号 | 48 | 184 | 88 | 40 | label | |\n"
+                "| 5 | S2 | input | 请输入物流单号 | 152 | 184 | 224 | 48 | input | |\n"
+                "| 6 | S2 | label | 发货备注 | 48 | 248 | 88 | 40 | label | |\n"
+                "| 7 | S2 | textarea | 请输入发货备注 | 152 | 248 | 224 | 88 | textarea | |\n",
+                encoding="utf-8",
+            )
+
+            report = CONSISTENCY.check_consistency(str(requirements_dir), str(page_specs_dir), 0.8, "admin")
+            self.assertNotIn("订单列表页", report["missing_pages"])
+            self.assertNotIn("发货弹窗", report["missing_pages"])
+
+    def test_consistency_flags_layout_mismatch_for_resource_tree_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            requirements_dir = workdir / "requirements"
+            requirements_dir.mkdir(parents=True, exist_ok=True)
+            (requirements_dir / "详细需求文档_后台-组织与权限.md").write_text(
+                "# 渔易购 — 后台-组织与权限需求\n\n"
+                "#### 功能点 1.1：资源管理\n"
+                "- **页面/界面：** 资源管理页\n",
+                encoding="utf-8",
+            )
+            page_specs_dir = workdir / ".prototype-generator" / "page_specs"
+            page_specs_dir.mkdir(parents=True, exist_ok=True)
+            (page_specs_dir / "page_spec_resource.md").write_text(
+                "# 后台-资源管理\n\n"
+                "## swimlane 布局\n"
+                "| swimlane_id | swimlane_label | type | x | y | width | height | style_key |\n"
+                "|---|---|---|---|---|---|---|---|\n"
+                "| S1 | 资源管理页 | web | 16 | 16 | 1680 | 960 | swimlane |\n\n"
+                "## 元素列表\n"
+                "| id | parent_swimlane | component_type | value | x | y | width | height | style_key | tooltip |\n"
+                "|---|---|---|---|---|---|---|---|---|---|\n"
+                "| 2 | S1 | nav | 资源管理页 | 8 | 40 | 1440 | 56 | nav | |\n"
+                "| 3 | S1 | pagination | 共 128 条 第 1/6 页 | 24 | 568 | 344 | 40 | pagination | |\n",
+                encoding="utf-8",
+            )
+
+            report = CONSISTENCY.check_consistency(str(requirements_dir), str(page_specs_dir), 0.8, "admin")
+            self.assertEqual(report["layout_mismatch_pages"][0]["page"], "资源管理页")
+
+    def test_consistency_scope_detects_app_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_App-会员中心.md": (
+                        "# 渔易购 — App-会员中心需求\n\n"
+                        "#### 功能点 1.1：会员中心\n"
+                        "- **页面/界面：** 会员中心\n"
+                    ),
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                    ),
+                },
+            )
+            page_specs_dir = workdir / ".prototype-generator" / "page_specs"
+            page_specs_dir.mkdir(parents=True)
+            (page_specs_dir / "page_spec_app_profile.md").write_text(
+                _build_page_spec_markdown(_app_profile_model()),
+                encoding="utf-8",
+            )
+
+            report = CONSISTENCY.check_consistency(str(workdir / "requirements"), str(page_specs_dir), 0.8, "app")
+            self.assertEqual(report["scope"], "app")
+            self.assertNotIn("后台登录页", report["missing_pages"])
+            self.assertEqual(report["summary"]["fail"], 0, json.dumps(report, ensure_ascii=False))
+
+    def test_consistency_scope_detects_h5_bundle(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_H5-活动报名.md": (
+                        "# 渔易购 — H5-活动报名需求\n\n"
+                        "#### 功能点 1.1：活动报名\n"
+                        "- **页面/界面：** 活动报名H5首页\n"
+                    ),
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                    ),
+                },
+            )
+            page_specs_dir = workdir / ".prototype-generator" / "page_specs"
+            page_specs_dir.mkdir(parents=True)
+            (page_specs_dir / "page_spec_h5_campaign.md").write_text(
+                _build_page_spec_markdown(_h5_home_model()),
+                encoding="utf-8",
+            )
+
+            report = CONSISTENCY.check_consistency(str(workdir / "requirements"), str(page_specs_dir), 0.8, "h5")
+            self.assertEqual(report["scope"], "h5")
+            self.assertNotIn("后台登录页", report["missing_pages"])
             self.assertEqual(report["summary"]["fail"], 0, json.dumps(report, ensure_ascii=False))
 
     def test_module_brief_consistency_fails_when_pages_are_missing_from_brief(self):
@@ -1045,7 +1535,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             self.assertEqual(report["summary"]["fail"], 1, json.dumps(report, ensure_ascii=False))
             self.assertTrue(any("module_brief" in item for item in report["failures"]))
 
-    def test_run_drawio_pipeline_uses_backend_scope_when_product_name_mentions_admin(self):
+    def test_run_drawio_pipeline_uses_admin_scope_when_product_name_mentions_admin(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             _write_requirements_split(
@@ -1068,7 +1558,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
 
             self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
-            self.assertEqual(payload["consistency_scope"], "backend")
+            self.assertEqual(payload["consistency_scope"], "admin")
             self.assertNotIn("首页", payload["consistency"]["missing_pages"])
 
     def test_run_drawio_pipeline_fails_when_module_brief_drops_required_pages(self):

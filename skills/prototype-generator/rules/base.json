@@ -1,0 +1,21 @@
+{
+  "name": "base",
+  "module_aliases": {},
+  "page_aliases": {},
+  "action_aliases": {
+    "查看": "详情",
+    "查看详情": "详情",
+    "详情": "详情",
+    "创建": "新增",
+    "添加": "新增",
+    "修改": "编辑"
+  },
+  "merge_name_rules": {},
+  "semantic_profiles": {},
+  "action_expectations": [],
+  "detection_keywords": [],
+  "page_classification_rules": [],
+  "layout_constraints": [],
+  "forbidden_tokens": [],
+  "required_tokens": []
+}

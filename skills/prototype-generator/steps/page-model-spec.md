@@ -8,7 +8,9 @@ draw.io 模式下，子 agent 统一先输出 `page_model_[模块英文名].json
 
 ```json
 {
-  "module_name": "用户模块",
+  "terminal_type": "portal",
+  "terminal_name": "官网门户",
+  "module_name": "官网门户-产品官网",
   "module_key": "user",
   "product_name": "示例产品",
   "pages": []
@@ -17,7 +19,10 @@ draw.io 模式下，子 agent 统一先输出 `page_model_[模块英文名].json
 
 要求：
 - 必须是合法 JSON
+- `terminal_type` 必填，固定枚举：`admin` / `miniapp` / `app` / `h5` / `bigscreen` / `portal` / `industrial`
+- `terminal_name` 必填，必须与 `terminal_type` 对应：`后台` / `小程序` / `App` / `H5` / `大屏` / `官网门户` / `工控机`
 - `module_name` 必填
+- `module_name` 必须使用 `[terminal_name]-[业务模块]` 格式，如 `后台-订单管理`、`小程序-首页`、`App-会员中心`、`H5-活动报名`、`大屏-指挥中心`、`官网门户-产品官网`、`工控机-产线监控`
 - `module_key` 建议英文
 - `pages` 必须为非空数组
 
@@ -29,8 +34,11 @@ draw.io 模式下，子 agent 统一先输出 `page_model_[模块英文名].json
 |---|---|---|
 | `page_id` | 是 | 模块内唯一英文 id |
 | `page_name` | 是 | 页面中文名 |
+| `canonical_page_name` | 否 | 推荐输出的标准页面名，用于别名归并 |
 | `page_type` | 是 | 固定枚举 |
 | `page_archetype` | 否 | draw.io 页面原型类型，建议显式输出 |
+| `page_kind` | 否 | 推荐输出：`list/detail/form_modal/confirm_modal/tree_list/login/dashboard/landing/content/hub/console` |
+| `layout_mode` | 否 | 推荐输出：`web/mobile/modal/tree/drawer/login/h5/portal/bigscreen/industrial` |
 | `object_name` | 否 | 业务对象名 |
 | `role` | 否 | 页面主要角色 |
 | `purpose` | 否 | 页面用途 |
@@ -61,6 +69,11 @@ draw.io 模式下，子 agent 统一先输出 `page_model_[模块英文名].json
 - `dashboard`
 - `mobile_home`
 - `profile`
+- `portal_home`
+- `portal_content`
+- `portal_hub`
+- `bigscreen_dashboard`
+- `industrial_console`
 
 禁止输出其他值。
 
@@ -79,6 +92,11 @@ draw.io 模式下，子 agent 统一先输出 `page_model_[模块英文名].json
 - `mobile_home`
 - `profile`
 - `login`
+- `portal_landing`
+- `portal_content`
+- `portal_hub`
+- `bigscreen_board`
+- `industrial_hmi`
 
 建议显式输出，避免脚本按页面名兜底猜测。
 
@@ -156,3 +174,11 @@ draw.io 模式下，子 agent 统一先输出 `page_model_[模块英文名].json
 8. 营销活动页只能提取活动配置字段；除非页面明确是分析/报表，否则禁止写入 `新增会员数`、`核销率`、`销售额`、`TOP活动列表` 等分析指标
 9. 资源管理页必须覆盖 `资源名称`、`资源类型`、`资源标识`；分类/品类页必须覆盖 `分类名称/品类名称`、`父级分类`、`排序值`
 10. 页面名含“弹窗/确认/拒绝”时，`page_archetype` 只能是 `modal_form`、`detail_kv` 或 `drawer_permission`；不得把确认弹窗标成 `dispatch_board`
+11. 订单列表页必须覆盖 `订单编号`、`用户信息`、`商品摘要`、`实付金额`、`订单状态`、`售后状态`、`下单时间`，并显式体现 `详情/发货/关闭/备注`
+12. 订单详情页必须覆盖 `支付信息`、`售后信息`、`操作区`，且动作必须体现 `发货/关闭/备注/确认收货/查看售后` 中的适用项
+13. 关闭订单确认弹窗必须包含 `关闭原因` 和风险提示；若只有确认文案没有关闭原因，视为不合格
+14. 资源管理页优先使用树形资源结构；若出现 `时间范围`、`更新时间`、`创建人`、分页等通用列表字段，视为语义漂移
+15. `terminal_type=admin` 时，`terminal_name` 必须为 `后台`；`miniapp` 时必须为 `小程序`；`app` 时必须为 `App`；`h5` 时必须为 `H5`；`bigscreen` 时必须为 `大屏`；`portal` 时必须为 `官网门户`；`industrial` 时必须为 `工控机`
+16. `module_name` 必须和终端前缀一致，禁止 `terminal_type=portal` 却输出 `后台-产品官网`
+17. `H5` 继续复用移动端 page_type，但导航语义必须是 `H5页面栈`，不得写成 `小程序主导航`
+18. `portal_home / portal_content / portal_hub` 只能用于官网门户终端；`bigscreen_dashboard` 只能用于大屏；`industrial_console` 只能用于工控机

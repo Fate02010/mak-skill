@@ -74,6 +74,11 @@ draw.io 模式下，子 agent 先输出 `page_model`，再由脚本生成 `page_
 | `tree_manage` | 分类、组织架构、部门岗位 | 树/层级列 + 操作栏 + 编辑弹窗 | 通用平铺列表 |
 | `content_manage` | 轮播、公告、评论 | 内容列表 + 状态/类型 + 发布/上下线操作 | 通用商品列表 |
 | `audit_log` | 登录日志、操作日志、反馈记录 | 筛选栏 + 时间/人/动作列 + 明细入口 | 通用内容页 |
+| `portal_landing` | 官网首页、落地页、品牌首页 | 顶栏导航 + Hero + 方案/案例区 + CTA + 页脚 | `dashboard` / `list_table` |
+| `portal_content` | 官网文章、案例详情、方案详情 | 顶栏导航 + 正文区 + 侧栏推荐/CTA | 通用详情卡片 |
+| `portal_hub` | 业务门户首页、入口聚合页 | 顶栏导航 + 快捷入口区 + 待办区 + 通知区 | `dashboard` / `list_table` |
+| `bigscreen_board` | 驾驶舱、指挥中心、数据大屏 | 场景切换 + 6 个以上 KPI + 态势/地图区 + 告警区 | `list_table` |
+| `industrial_hmi` | 工控机、HMI、产线控制台 | 状态条 + 流程区 + 报警区 + 大按钮操作区 | `dashboard` / `form_page` |
 
 ### 判型规则
 
@@ -83,6 +88,10 @@ draw.io 模式下，子 agent 先输出 `page_model`，再由脚本生成 `page_
 4. 页面名中含“发货 / 调度 / 路线 / 司机派单”优先判为 `dispatch_board`
 5. 页面名中含“分类 / 树 / 部门岗位 / 组织架构”优先判为 `tree_manage`
 6. 仅当页面确实以筛选+表格为主时，才允许使用 `list_table`
+7. 页面名中含“官网首页 / 落地页 / 品牌官网”优先判为 `portal_landing`
+8. 页面名中含“业务门户 / 门户首页 / 门户工作台”优先判为 `portal_hub`
+9. 页面名中含“驾驶舱 / 指挥中心 / 大屏”优先判为 `bigscreen_board`
+10. 页面名中含“工控机 / HMI / 中控台 / 产线控制台”优先判为 `industrial_hmi`
 
 ---
 
@@ -422,7 +431,7 @@ draw.io 模式**整个系统只输出一个文件**：`[产品名称].drawio`（
 
 **补充命名规则：**
 - `diagram name` 必须是最终交付名称，禁止带 `page_spec:` / `page_spec：` / `spec-` / `tmp-` 等中间前缀
-- 推荐带终端维度时使用：`后台-订单管理`、`后台-员工管理`、`小程序-首页`
+- 推荐带终端维度时使用：`后台-订单管理`、`后台-员工管理`、`小程序-首页`、`App-会员中心`
 - 禁止：`后台-人员与权限`、`后台-商品与内容`、`小程序-账号与首页` 这类并列聚合命名；应先拆分再生成
 
 **subagent 输出约定：** 每个 subagent 负责一个模块，将该模块的**整个 `<diagram>`**（含所有页面 swimlane）写入临时文件 `WORK_DIR/.prototype-generator/tmp/drawio_[模块英文名]_tmp.xml`（仅含 `<diagram>` 元素，无 `<mxfile>` 包裹）。主流程等所有 subagent 完成后，将全部 `<diagram>` 合并写入 `WORK_DIR/prototypes/[产品名称].drawio`。

@@ -3,20 +3,82 @@
   "evals": [
     {
       "id": 1,
+      "category": "trigger-positive",
       "prompt": "我在 /tmp/test-product/ 有一个产品的资料文件夹，里面有 PRD 文档和设计稿说明。请帮我：1. 生成资料导航索引 RountMap.md，2. 生成需求文档草稿，3. 生成 HTML 原型图。",
       "expected_output": "生成 RountMap.md、需求文档草稿.md、原型任务清单.md，以及 prototypes/ 目录下的多个 HTML 文件（包含 index.html 导航页）",
+      "should_trigger": true,
       "files": []
     },
     {
       "id": 2,
+      "category": "trigger-positive",
       "prompt": "帮我根据这个电商产品的资料文件夹 /tmp/ecommerce-app/ 生成原型图。产品是一个生鲜电商 APP，面向 C 端用户，功能包括商品浏览、购物车、下单支付。",
       "expected_output": "生成完整的 HTML 原型图，包括商品列表页、商品详情页、购物车页、订单确认页等核心页面",
+      "should_trigger": true,
       "files": []
     },
     {
       "id": 3,
+      "category": "trigger-positive",
       "prompt": "我有个 SaaS 后台管理系统的需求，资料在 /tmp/saas-admin/ 里。先帮我分析资料生成 RountMap，然后生成需求文档草稿，最后生成管理后台的 HTML 原型。",
       "expected_output": "按工作流四步执行：RountMap.md → PM prompt → 需求文档草稿.md → 并行生成多个后台管理页面原型",
+      "should_trigger": true,
+      "files": []
+    },
+    {
+      "id": 4,
+      "category": "trigger-positive",
+      "prompt": "根据 /tmp/campaign-h5/ 的活动资料生成 H5 原型，先整理需求，再输出 draw.io 线框图。",
+      "expected_output": "触发 prototype-generator，识别 H5 终端，生成需求、page specs 和 draw.io 原型产物",
+      "should_trigger": true,
+      "files": []
+    },
+    {
+      "id": 5,
+      "category": "trigger-positive",
+      "prompt": "把 /tmp/portal-site/ 的品牌官网资料生成官网门户原型，首页、案例页和联系页都要有。",
+      "expected_output": "触发 prototype-generator，按官网门户场景生成 requirements 和原型任务清单，并输出对应原型",
+      "should_trigger": true,
+      "files": []
+    },
+    {
+      "id": 6,
+      "category": "trigger-positive",
+      "prompt": "我有一个指挥中心大屏需求文档在 /tmp/datav-center/，帮我生成原型。",
+      "expected_output": "触发 prototype-generator，并将终端识别为大屏，产出大屏原型",
+      "should_trigger": true,
+      "files": []
+    },
+    {
+      "id": 7,
+      "category": "trigger-positive",
+      "prompt": "在现有原型基础上新增一个工控机产线监控页面，资料在 /tmp/hmi-line/。",
+      "expected_output": "触发 prototype-generator 增量模式，生成工控机场景页面规格和原型",
+      "should_trigger": true,
+      "files": []
+    },
+    {
+      "id": 8,
+      "category": "trigger-negative",
+      "prompt": "帮我想几个更高级的后台配色方案，偏高级灰，不需要做原型。",
+      "expected_output": "不应触发 prototype-generator；这是视觉讨论，不是原型流水线请求。",
+      "should_trigger": false,
+      "files": []
+    },
+    {
+      "id": 9,
+      "category": "trigger-negative",
+      "prompt": "帮我写一个 React 表格组件，带分页和筛选。",
+      "expected_output": "不应触发 prototype-generator；这是编码任务，不是根据资料生成原型。",
+      "should_trigger": false,
+      "files": []
+    },
+    {
+      "id": 10,
+      "category": "trigger-negative",
+      "prompt": "给我一些官网首页的创意方向和文案灵感。",
+      "expected_output": "不应触发 prototype-generator；这是创意和文案讨论，不是原型生成请求。",
+      "should_trigger": false,
       "files": []
     }
   ]

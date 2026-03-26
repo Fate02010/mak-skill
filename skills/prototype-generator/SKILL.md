@@ -1,30 +1,43 @@
 ---
 name: prototype-generator
 description: |
-  从产品资料自动生成原型图的完整工作流（支持 HTML 交互原型 或 draw.io 线框图），也支持在已有原型基础上增量新增功能。当用户想要：
-  - 根据产品文档/PRD/需求资料生成原型图
-  - 把产品文件夹里的资料转化成 HTML 原型或 draw.io 线框图
-  - 生成需求文档并配套生成交互原型
-  - 为产品功能快速制作线框图/原型图/交互稿
-  - 说"帮我生成原型"、"根据资料做原型"、"生成 HTML 原型图"时
-  - 说"生成 draw.io"、"生成 drawio"、"生成线框图"、"drawio 原型"时
-  - 说"做线框图"、"做交互稿"、"界面设计"、"页面设计"、"产品界面"时
-  - 在已有原型上新增功能，说"新增XX功能的原型"、"帮我补充XX模块"、"加一个XX页面"时
-  请务必使用此 skill。即使用户没有明确说"原型图"，只要提到要把产品资料/需求文档转化为可视化界面、线框图、交互稿，或在现有原型上新增功能，也应触发此 skill。
+  从产品资料、PRD、需求文档或产品文件夹生成 HTML 交互原型或 draw.io 线框图，也支持在已有原型上增量补充页面/模块。Use when user asks to "生成原型", "生成 HTML 原型图", "生成 draw.io/drawio", "根据资料做原型", "根据 PRD 出线框图", or "新增XX功能的原型". Best for end-to-end prototype workflows with real product materials, requirements parsing, page specs, rendering, and validation. Do not use for纯视觉润色、泛 UI 灵感讨论或与原型无关的编码任务。
+compatibility: Claude Code / Codex skill with local filesystem access and Python 3. Draw.io mode uses bundled scripts; competitor-analysis steps may require network when the runtime allows it.
+metadata:
+  author: mak-skill
+  version: 1.1.0
+  category: prototype-workflow
+  outputs: html, drawio
+  repo_source: skills/prototype-generator
 ---
 
 # Prototype Generator
 
-这是一个给产品经理提供“一键上传资料并生成原型”体验的门面 Skill。
-对 Codex 内部，必须拆成可门禁、可回退的流水线，禁止 `原始资料 -> 直接画图`。
+这是一个面向“产品资料 -> 可交付原型”的流水线 skill。
+对 Codex 内部，必须拆成可门禁、可回退的阶段，禁止 `原始资料 -> 直接画图`。
 
 ## 触发条件
 
 当用户要求以下任一任务时使用本 Skill：
 - 根据资料生成 HTML 原型
 - 根据资料生成 draw.io 原型
-- 生成线框图、交互稿、产品界面
+- 根据 PRD / 需求文档 / 产品文件夹生成线框图、交互稿
 - 在现有原型上增量新增页面或功能
+
+以下情况默认**不**使用本 Skill：
+- 只想讨论界面风格、视觉趋势、品牌调性
+- 只要单个页面的创意文案或营销图
+- 与产品原型无关的编码、测试、运维任务
+
+## 先读哪些文件
+
+优先只加载当前阶段需要的内容，遵守渐进式披露：
+- 入口与门禁：本文件
+- 终端边界与命名：`references/terminal-model.md`
+- 输出模式差异：`references/output-modes.md`
+- 适用场景与非适用场景：`references/skill-positioning.md`
+- 质量门禁与回退策略：`references/quality-gates.md`
+- 具体执行步骤：按需读取 `steps/`
 
 ## 阶段顺序
 
@@ -91,6 +104,7 @@ description: |
 - 产品资料目录
 - 输出格式：`html` 或 `drawio`
 - 工作目录 `WORK_DIR`
+- 终端类型统一使用：`admin` / `miniapp` / `app` / `h5` / `bigscreen` / `portal` / `industrial`
 
 ### 输出
 
@@ -157,8 +171,10 @@ description: |
 
 ## 详细规则位置
 
-只在需要时按阶段读取：
+只在需要时按阶段读取；不要一次性把全部步骤文件塞进上下文：
 
+- 定位与终端：`references/skill-positioning.md`、`references/terminal-model.md`
+- 输出模式与门禁：`references/output-modes.md`、`references/quality-gates.md`
 - 运行环境规则：`steps/codex-rules.md` / `steps/claude-rules.md`
 - Step 1：`steps/step1-scan.md`
 - Step 4：`steps/step4-requirements.md`

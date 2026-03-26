@@ -1,0 +1,48 @@
+{
+  "name": "iot",
+  "module_aliases": {},
+  "page_aliases": {},
+  "action_aliases": {},
+  "merge_name_rules": {},
+  "semantic_profiles": {
+    "device_list": {
+      "text_contains_any": ["设备管理", "设备列表", "设备中心"],
+      "page_type_any": ["web_list"],
+      "required_fields_any": ["设备名称", "设备编号", "产品", "在线状态", "最后上报时间"],
+      "required_fields_any_min": 3,
+      "required_actions": ["详情", "启用", "停用"],
+      "required_actions_min": 2,
+      "messages": {
+        "required_any": "设备管理页缺少设备名称/编号/产品/在线状态等核心字段",
+        "required_actions": "设备管理页缺少详情/启用/停用等核心动作"
+      }
+    },
+    "device_detail": {
+      "page_name_contains_any": ["设备详情"],
+      "page_type_any": ["web_detail"],
+      "required_fields_any": ["设备名称", "设备编号", "产品", "设备状态", "最后上报时间", "物模型", "事件日志"],
+      "required_fields_any_min": 4,
+      "messages": {
+        "required_any": "设备详情页缺少设备身份/状态/物模型/事件日志等核心字段"
+      }
+    }
+  },
+  "action_expectations": [
+    {"page_name": "设备管理页", "actions": ["新增", "编辑", "停用"]},
+    {"page_name": "产品管理页", "actions": ["新增", "编辑", "发布"]}
+  ],
+  "detection_keywords": [
+    "设备",
+    "产品模型",
+    "物模型",
+    "告警",
+    "规则引擎",
+    "消息",
+    "网关",
+    "设备影子"
+  ],
+  "page_classification_rules": [],
+  "layout_constraints": [],
+  "forbidden_tokens": [],
+  "required_tokens": []
+}

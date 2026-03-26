@@ -45,9 +45,9 @@ Reads your product docs and generates complete, consistent API specs with reques
 
 ### 🖼️ prototype-generator
 
-**Interactive HTML prototypes or draw.io wireframes from product requirements.**
+**Turn product materials into review-ready prototypes, not just loose mockups.**
 
-The most comprehensive skill. Reads product materials, runs competitor analysis, generates detailed requirements, then produces click-through HTML prototypes or draw.io diagrams — in parallel across modules.
+Reads PRDs, requirement folders, and product materials, then drives them through a gated workflow that produces requirements, task lists, page specs, and final HTML prototypes or draw.io wireframes.
 
 | What it does | Output |
 |---|---|
@@ -55,13 +55,13 @@ The most comprehensive skill. Reads product materials, runs competitor analysis,
 | Web-searches 3–5 competitors, extracts insights | `竞品分析报告.md` |
 | Generates detailed requirements with field specs | `requirements/` |
 | Splits work across parallel subagents | `prototypes/*.html` or `[product].drawio` |
-| Self-reviews (7-dimension audit) and iterates | Final polished prototype |
+| Validates, audits, and iterates upstream | Review-ready final prototype |
 
 **Supports:**
 - **HTML mode** — browser-ready interactive prototype with click-through navigation
 - **draw.io mode** — two-phase architecture (Spec Agent → Render Agent), outputs a single `.drawio` file
 
-**Trigger phrases:** "生成原型", "做线框图", "生成HTML原型图", "生成drawio", "界面设计", "新增XX功能的原型"
+**Trigger phrases:** "生成原型", "根据资料做原型", "生成HTML原型图", "生成drawio", "根据 PRD 出线框图", "新增XX功能的原型"
 
 ---
 
@@ -95,6 +95,8 @@ Analyzes your visual intent, recommends style combinations, and generates a stru
 ## Installation
 
 Skills run inside **Claude Code** (default) or **Codex**. Each skill auto-detects its runtime environment.
+
+This repository is the source of truth for the skills. After changing a skill here, sync the corresponding folder into `~/.claude/skills/` or `~/.codex/skills/`.
 
 ### Claude Code
 

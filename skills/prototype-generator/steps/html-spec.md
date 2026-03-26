@@ -20,7 +20,7 @@
 </head>
 ```
 
-> `common.css` 已包含：`:root` 设计 Token、全局重置、页面动效、布局（移动端/Web/登录页）、
+> `common.css` 已包含：`:root` 设计 Token、全局重置、页面动效、布局（移动端/Web/登录页/H5/官网门户/大屏/工控机）、
 > 导航栏、按钮、输入框、卡片、Tag、表格、分页、标签栏、弹窗、面包屑、空态、表单组。
 > 所有变量名和 class 名参见 `SKILL_DIR/templates/common.css`。
 
@@ -35,13 +35,13 @@
 - 字号：`--text-xs`(11) `--text-sm`(13) `--text-base`(15) `--text-md`(16) `--text-lg`(18) `--text-xl`(20) `--text-2xl`(24)
 - 高度：`--h-nav` `--h-tabbar` `--h-input` `--h-btn-primary` `--h-btn-sm` `--h-btn-xs` `--h-table-header` `--h-table-row` `--h-tag` `--h-pagination`
 - 圆角：`--radius-sm`(4) `--radius-md`(8) `--radius-lg`(12) `--radius-full`(100)
-- 宽度：`--w-mobile`(375) `--w-content-mobile`(327) `--w-web`(1440) `--w-content-web`(1200) `--w-sidebar`(240)
+- 宽度：`--w-mobile`(375) `--w-content-mobile`(327) `--w-web`(1440) `--w-content-web`(1200) `--w-sidebar`(240) `--w-bigscreen`(1920) `--w-industrial`(1368)
 
 **可用的 CSS class**（直接在 HTML 中使用）：
 
 | 类别 | class 名 |
 |------|---------|
-| 布局 | `mobile`(body) `layout` `sidebar` `main-content` `login-page` `login-card` |
+| 布局 | `mobile`(body) `h5`(body) `layout` `sidebar` `main-content` `login-page` `login-card` `portal-shell` `portal-hero` `portal-grid` `bigscreen-shell` `bigscreen-grid` `industrial-shell` `industrial-grid` `industrial-action-bar` |
 | 导航 | `nav-bar` `nav-item` `nav-item.active` |
 | 按钮 | `btn-primary` `btn-secondary` `btn-danger` `btn-sm` `btn-xs` |
 | 输入 | `input` |
@@ -49,7 +49,7 @@
 | 标签 | `tag` `tag-success` `tag-warning` `tag-danger` `tag-default` |
 | 表格 | `table` |
 | 分页 | `pagination` `pagination-btn` `pagination-btn.active` |
-| 移动端 | `tab-bar` `tab-bar-item` `tab-bar-item.active` |
+| 移动端 | `tab-bar` `tab-bar-item` `tab-bar-item.active` `h5-browser-bar` |
 | 弹窗 | `modal-overlay` `modal-overlay.show` `modal` |
 | 面包屑 | `breadcrumb` |
 | 空态 | `empty-state` |
@@ -62,7 +62,11 @@
 ### 固定宽度（UI 参照一致性）
 
 - **移动端页面**：`<body class="mobile">`，宽度固定 375px，居中显示
+- **H5 页面**：`<body class="h5">`，宽度固定 375px，顶部优先使用 `.h5-browser-bar`
 - **Web/后台页面**：使用 `.layout` > `.sidebar` + `.main-content` 结构
+- **官网门户**：使用 `.portal-shell`，公开官网首页优先组合 `.portal-hero` + `.portal-grid`
+- **大屏**：使用 `.bigscreen-shell` + `.bigscreen-grid`，默认 16:9 全屏展示
+- **工控机**：使用 `.industrial-shell` + `.industrial-grid`，操作区优先使用 `.industrial-action-bar`
 - **后台登录页**：属于未登录独立页，使用 `.login-page` > `.login-card` 结构，禁止带左侧菜单、顶部业务导航
 
 ### 登录页专用规则
@@ -84,6 +88,13 @@
 ## 页面骨架隔离规则（禁止跨类型复用导航）
 
 > 骨架由**页面类型**决定，不由**系统类型**决定。同一个后台系统的登录页与列表页是不同类型，必须用不同骨架。
+
+**终端专属骨架要求：**
+
+- `H5`：默认是浏览器页栈，不得直接复用小程序 TabBar 首页；营销落地页和报名页应优先出现分享/咨询/吸底 CTA。
+- `官网门户`：公开官网不得出现后台侧边栏；业务门户不得伪装成品牌官网 Hero 页。
+- `大屏`：不得使用后台表格页骨架代替指挥大屏；必须具备 KPI 区和场景区。
+- `工控机`：不得使用官网或后台信息流布局代替 HMI；必须有状态区、报警区和大按钮操作区。
 
 **独立页面**（以下类型是全屏独立页面，严禁出现侧边栏/顶部业务导航/面包屑）：
 

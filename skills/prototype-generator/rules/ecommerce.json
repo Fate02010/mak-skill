@@ -1,0 +1,172 @@
+{
+  "name": "ecommerce",
+  "module_aliases": {
+    "后台-通用与看板": "后台-工作台",
+    "后台-人员与权限": "后台-组织权限",
+    "后台-商品与内容": "后台-商品管理",
+    "后台-会员与营销": "后台-会员运营",
+    "后台-订单与履约": "后台-订单管理",
+    "后台-物联与溯源基础数据": "后台-溯源基础数据",
+    "小程序-账号与首页": "小程序-首页",
+    "小程序-商品与交易": "小程序-商品交易",
+    "小程序-订单与会员": "小程序-订单中心"
+  },
+  "page_aliases": {
+    "订单管理页（后台）": "订单列表页",
+    "订单管理": "订单列表页",
+    "确认发货弹窗": "发货弹窗"
+  },
+  "action_aliases": {
+    "确认发货": "发货",
+    "确认关闭": "关闭",
+    "关闭订单": "关闭"
+  },
+  "merge_name_rules": {
+    "商品列表页（后台）": "商品管理-商品列表",
+    "新增/编辑商品弹窗": "商品管理-添加编辑商品",
+    "删除商品确认弹窗": "商品管理-删除商品确认",
+    "分类管理页": "商品管理-分类管理",
+    "新增/编辑分类弹窗": "商品管理-添加编辑分类",
+    "轮播图管理页": "商品管理-轮播图管理",
+    "公告管理页": "商品管理-公告管理",
+    "评论管理页": "商品管理-评论管理",
+    "新增/编辑通用弹窗": "商品管理-通用编辑弹窗",
+    "删除确认弹窗": "商品管理-删除确认",
+    "订单管理页（后台）": "订单管理-订单列表",
+    "订单详情页（后台）": "订单管理-订单详情",
+    "发货单列表页": "发货单管理",
+    "发货单详情页": "发货单详情",
+    "确认发货弹窗": "订单管理-确认发货",
+    "退款处理弹窗": "订单管理-退款处理",
+    "工作台Dashboard": "工作台-Dashboard",
+    "工作台（后台）": "工作台-Dashboard",
+    "后台首页": "工作台-Dashboard",
+    "会员管理页": "会员管理",
+    "鱼塘管理页": "鱼塘管理",
+    "运输桶管理页": "运输桶管理",
+    "员工管理页": "员工管理",
+    "角色管理页": "权限管理-角色列表",
+    "登录页（后台）": "登录页"
+  },
+  "semantic_profiles": {
+    "shipping_modal": {
+      "page_name_contains_all": ["发货"],
+      "page_name_contains_any": ["弹窗", "确认"],
+      "required_fields_any": ["物流公司", "物流单号", "发货备注", "司机", "路线"],
+      "required_fields_any_min": 2,
+      "required_fields_core": ["物流公司", "物流单号", "发货备注"],
+      "required_fields_core_min": 2,
+      "forbidden_fields": ["售后状态", "商品明细", "支付状态", "收货地址"],
+      "forbidden_fields_min": 3,
+      "forbidden_when_required_below": 3,
+      "messages": {
+        "required_any": "发货弹窗缺少物流公司/物流单号/发货备注/司机/路线等关键字段",
+        "required_core": "发货弹窗缺少物流公司/物流单号/发货备注等核心字段",
+        "forbidden": "发货弹窗字段被订单详情字段污染"
+      }
+    },
+    "close_order_modal": {
+      "page_name_contains_all": ["关闭订单"],
+      "page_name_contains_any": ["弹窗", "确认"],
+      "required_fields_core": ["关闭原因"],
+      "required_fields_core_min": 1,
+      "required_rules_any": ["风险", "提示"],
+      "required_rules_any_min": 1,
+      "messages": {
+        "required_core": "关闭订单确认弹窗缺少关闭原因",
+        "required_rules": "关闭订单确认弹窗缺少风险提示"
+      }
+    },
+    "marketing_activity": {
+      "text_contains_any": ["营销", "活动"],
+      "text_excludes_any": ["分析", "报表", "统计"],
+      "required_fields_any": ["活动名称", "活动类型", "活动时间", "开始时间", "结束时间", "关联商品", "活动说明", "活动状态"],
+      "required_fields_any_min": 4,
+      "forbidden_fields": ["新增会员数", "核销率", "销售额", "TOP活动"],
+      "forbidden_fields_min": 2,
+      "alt_forbidden_group": ["使用门槛", "优惠值"],
+      "alt_forbidden_group_min": 2,
+      "alt_required_group": ["活动时间", "开始时间", "结束时间", "活动说明"],
+      "alt_required_group_min": 2,
+      "messages": {
+        "required_any": "营销活动页面缺少活动名称/类型/时间/关联商品等核心字段",
+        "forbidden": "营销活动页面混入分析指标字段",
+        "alt_forbidden": "营销活动页面被满减/优惠券字段替代"
+      }
+    },
+    "resource_page": {
+      "text_contains_any": ["资源"],
+      "required_fields_any": ["资源名称", "资源类型", "资源标识"],
+      "required_fields_any_min": 2,
+      "forbidden_fields": ["时间范围", "更新时间", "创建人"],
+      "forbidden_fields_min": 2,
+      "allowed_context_fields": ["路由/接口标识", "上级资源", "排序值"],
+      "allowed_context_fields_min": 2,
+      "page_name_contains_any": ["资源管理"],
+      "required_archetypes": ["tree_manage", ""],
+      "messages": {
+        "required_any": "资源页面缺少资源名称/资源类型/资源标识等核心字段",
+        "forbidden": "资源页面混入通用列表字段",
+        "archetype": "资源管理页必须使用 tree_manage 骨架"
+      }
+    },
+    "order_list": {
+      "text_contains_any": ["订单管理", "订单列表", "订单中心"],
+      "page_type_any": ["web_list"],
+      "required_fields_any": ["订单编号", "用户信息", "商品摘要", "实付金额", "订单状态", "售后状态", "下单时间"],
+      "required_fields_any_min": 5,
+      "required_actions": ["详情", "发货", "关闭", "备注"],
+      "required_actions_min": 3,
+      "messages": {
+        "required_any": "订单列表页缺少订单编号/用户信息/商品摘要/实付金额/售后状态/下单时间等核心字段",
+        "required_actions": "订单列表页缺少详情/发货/关闭/备注等核心动作"
+      }
+    },
+    "order_detail": {
+      "page_name_contains_any": ["订单详情"],
+      "page_type_any": ["web_detail"],
+      "required_fields_core": ["支付信息", "售后信息", "操作区"],
+      "required_fields_core_min": 3,
+      "required_fields_any": ["订单编号", "订单状态", "用户信息", "收货地址", "商品明细", "金额明细", "备注记录", "溯源摘要"],
+      "required_fields_any_min": 6,
+      "required_actions": ["发货", "关闭", "备注", "确认收货", "查看售后"],
+      "required_actions_min": 2,
+      "messages": {
+        "required_core": "订单详情页缺少支付信息/售后信息/操作区",
+        "required_any": "订单详情页缺少订单基础信息",
+        "required_actions": "订单详情页缺少按状态变化的核心操作"
+      }
+    }
+  },
+  "action_expectations": [
+    {"page_name": "员工管理页", "actions": ["新增", "编辑", "停用"]},
+    {"page_name": "司机管理页", "actions": ["新增", "编辑", "停用"]},
+    {"page_name": "管理员管理页", "actions": ["新增", "编辑", "停用"]},
+    {"page_name": "分销会员管理页", "actions": ["审核", "改等级"]},
+    {"page_name": "分销等级管理页", "actions": ["新增", "编辑"]},
+    {"page_name": "轮播图管理页", "actions": ["新增", "编辑", "下线"]},
+    {"page_name": "公告管理页", "actions": ["查看", "编辑"]},
+    {"page_name": "评论管理页", "actions": ["详情", "审核"]},
+    {"page_name": "会员管理页", "actions": ["查看", "编辑"]},
+    {"page_name": "会员等级管理页", "actions": ["新增", "编辑"]},
+    {"page_name": "满额优惠管理页", "actions": ["新增", "编辑", "删除"]},
+    {"page_name": "优惠券管理页", "actions": ["新增", "编辑", "删除"]},
+    {"page_name": "订单管理页（后台）", "actions": ["详情", "发货", "关闭"]}
+  ],
+  "detection_keywords": [
+    "商品",
+    "sku",
+    "订单",
+    "营销",
+    "会员",
+    "发货",
+    "售后",
+    "优惠券",
+    "支付",
+    "购物车"
+  ],
+  "page_classification_rules": [],
+  "layout_constraints": [],
+  "forbidden_tokens": [],
+  "required_tokens": []
+}

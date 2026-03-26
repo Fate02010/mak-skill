@@ -1,0 +1,50 @@
+{
+  "name": "erp",
+  "module_aliases": {},
+  "page_aliases": {},
+  "action_aliases": {},
+  "merge_name_rules": {},
+  "semantic_profiles": {
+    "document_list": {
+      "text_contains_any": ["采购单", "销售单", "出库单", "入库单", "库存台账"],
+      "page_type_any": ["web_list"],
+      "required_fields_any": ["单据编号", "单据状态", "仓库", "客户", "供应商", "创建时间"],
+      "required_fields_any_min": 3,
+      "required_actions": ["详情", "审核", "作废"],
+      "required_actions_min": 2,
+      "messages": {
+        "required_any": "ERP 单据列表缺少单据编号/状态/仓库/客户供应商等核心字段",
+        "required_actions": "ERP 单据列表缺少详情/审核/作废等核心动作"
+      }
+    },
+    "document_detail": {
+      "page_name_contains_any": ["详情"],
+      "text_contains_any": ["采购单", "销售单", "出库单", "入库单"],
+      "page_type_any": ["web_detail"],
+      "required_fields_any": ["单据编号", "单据状态", "明细行", "审批记录", "金额合计"],
+      "required_fields_any_min": 3,
+      "messages": {
+        "required_any": "ERP 单据详情缺少单据头、明细行、审批记录或金额信息"
+      }
+    }
+  },
+  "action_expectations": [
+    {"page_name": "采购单管理页", "actions": ["新增", "详情", "审核"]},
+    {"page_name": "销售单管理页", "actions": ["新增", "详情", "审核"]},
+    {"page_name": "库存台账页", "actions": ["详情", "导出"]}
+  ],
+  "detection_keywords": [
+    "采购",
+    "销售",
+    "库存",
+    "仓库",
+    "供应商",
+    "客户",
+    "出入库",
+    "财务单据"
+  ],
+  "page_classification_rules": [],
+  "layout_constraints": [],
+  "forbidden_tokens": [],
+  "required_tokens": []
+}
