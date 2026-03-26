@@ -39,7 +39,18 @@ Claude Code 环境以实际可用工具为准，默认使用 `Agent`、文件读
 
 1. 主进程先生成 `requirements/详细需求文档_overview.md`
 2. 再按模块用 `Agent` 分批并行生成各模块文档，每批最多 3 个
-3. 全部完成后由主进程汇总并写入 `requirements/index.md`
+3. 每个模块文档完成后，必须继续生成 `requirements/module_briefs/模块摘要_[模块中文名].md`
+4. 全部完成后由主进程汇总并写入 `requirements/index.md`
+
+**默认强制压缩模式触发条件：**
+- 原始资料总内容 `> 3000` 行
+- 模块数 `> 3`
+- 功能点数 `> 12`
+- 预计页面 / swimlane 数 `> 8`
+- 终端数 `> 1`
+- 关键角色数 `> 3`
+
+一旦命中任一项，Step 4 不得继续生成单一合并大 PRD，必须改走 `overview + module_brief + 模块详细文档 + index`。
 
 **Claude 示例：**
 
@@ -60,6 +71,8 @@ Agent(prompt="负责 订单模块 需求文档 ...", run_in_background=True)
 2. 用 `Agent` 按模块分批并行生成 HTML 页面，每批最多 3 个子 agent
 3. 全部完成后，主进程执行冒烟检查和缺失修复
 
+分拆模式下，HTML 子任务默认先读 `index.md`，再读 `overview`，再读 `module_brief`，只有必要时才回读模块详细文档。
+
 **建议容量：**
 - 单个 Agent 负责 ≤ 4 页
 - 单模块超过 6 页时拆分为多个 Agent
@@ -73,6 +86,7 @@ Agent(prompt="负责 订单模块 需求文档 ...", run_in_background=True)
 - 用 `Agent` 按模块分批并行生成 `.prototype-generator/page_models/page_model_[模块英文名].json`，每批最多 3 个子 agent
 - 每个 Agent 负责 ≤ 2 个真实页面时最稳定；超过则拆分
 - 子任务只负责页面类型、字段、列表列、状态枚举、跳转、CRUD 标记
+- 分拆模式下，page_model 子任务必须先按 `index.md -> overview -> module_brief -> 模块详细文档` 的顺序读取；优先依赖模块摘要完成语义建模
 
 ### 阶段 B：渲染
 

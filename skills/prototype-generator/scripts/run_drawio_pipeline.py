@@ -186,11 +186,60 @@ def main():
     validate_script = skill_dir / "scripts" / "validate.py"
     merge_script = skill_dir / "scripts" / "merge.py"
     consistency_script = skill_dir / "scripts" / "check_prototype_consistency.py"
+    brief_consistency_script = skill_dir / "scripts" / "check_module_brief_consistency.py"
+    context_budget_script = skill_dir / "scripts" / "check_context_budget.py"
     styles_md = skill_dir / "steps" / "step5-component-styles.md"
 
     page_models = sorted(page_models_dir.glob("page_model_*.json"))
     if not page_models:
         raise SystemExit(f"未找到 page_model_*.json: {page_models_dir}")
+
+    context_budget_result = _run_command([sys.executable, str(context_budget_script), str(work_dir), "--json"])
+    context_budget_report = _parse_json_stdout(context_budget_result)
+    if context_budget_result["returncode"] != 0:
+        report = {
+            "work_dir": str(work_dir),
+            "product_name": args.product_name,
+            "page_model_count": len(page_models),
+            "final_drawio": str(final_drawio),
+            "context_budget": context_budget_report,
+            "summary": {"fail": 1, "warn": context_budget_report.get("summary", {}).get("warn", 0), "pass": 0},
+            "failure_routing": [{"layer": "requirements", "reason": "上下文预算预检失败", "pages": context_budget_report.get("failures", [])}],
+        }
+        if args.json_output:
+            print(json.dumps(report, ensure_ascii=False, indent=2))
+        else:
+            _print_human_summary(report)
+        raise SystemExit(1)
+
+    brief_consistency_report = {
+        "summary": {"fail": 0, "warn": 0, "pass": 1},
+        "skipped": True,
+    }
+    if (requirements_dir / "index.md").exists():
+        brief_consistency_result = _run_command([sys.executable, str(brief_consistency_script), str(requirements_dir), "--json"])
+        brief_consistency_report = _parse_json_stdout(brief_consistency_result)
+        if brief_consistency_result["returncode"] != 0:
+            brief_fail_items = list(brief_consistency_report.get("missing_briefs", []))
+            for item in brief_consistency_report.get("missing_pages", []):
+                brief_fail_items.extend(item.get("pages", []))
+            for item in brief_consistency_report.get("low_coverage_modules", []):
+                brief_fail_items.append(item.get("module", ""))
+            report = {
+                "work_dir": str(work_dir),
+                "product_name": args.product_name,
+                "page_model_count": len(page_models),
+                "final_drawio": str(final_drawio),
+                "context_budget": context_budget_report,
+                "module_brief_consistency": brief_consistency_report,
+                "summary": {"fail": 1, "warn": context_budget_report.get("summary", {}).get("warn", 0), "pass": 0},
+                "failure_routing": [{"layer": "requirements", "reason": "module_brief 覆盖率校验失败", "pages": [item for item in brief_fail_items if item]}],
+            }
+            if args.json_output:
+                print(json.dumps(report, ensure_ascii=False, indent=2))
+            else:
+                _print_human_summary(report)
+            raise SystemExit(1)
 
     def build_task(model_path: Path) -> dict:
         suffix = _module_suffix(model_path)
@@ -318,6 +367,8 @@ def main():
         "tmp_xml_count": len(tmp_xmls),
         "max_parallel": max_parallel,
         "final_drawio": str(final_drawio),
+        "context_budget": context_budget_report,
+        "module_brief_consistency": brief_consistency_report,
         "consistency": consistency_report,
         "consistency_scope": consistency_scope,
         "tmp_validations": {tmp_xml.name: payload for tmp_xml, payload in tmp_reports},

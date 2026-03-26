@@ -8,6 +8,14 @@
 
 当前 Codex 环境以实际可用工具为准，不再使用历史文档中的 `Task` / `TaskOutput` / `Read` / `Glob` / `Edit` / `Bash` 术语。
 
+### Codex 5.4 Medium 上下文预算
+
+默认按 `Codex 5.4 Medium / 200K` 设计：
+- 不按 200K 满额拼 prompt；主流程必须保留 `30%~40%` 余量给链式推理、工具输出和修复回合
+- 单个子任务的默认读取上限是：`requirements/index.md + overview 关键章节 + 1 个 module_brief + 1 个模块详细文档 + 当前 page_spec`
+- 若一个 prompt 需要第二个模块详细文档，先停止并把跨模块依赖压缩回 `overview` 或 `module_brief`，再继续
+- 禁止把“整份 requirements 目录逐文件读一遍”当常规做法；读取必须基于当前模块和当前阶段最小化
+
 | 能力 | Codex 当前做法 |
 |------|----------------|
 | 文件读取 | 用 `exec_command` 执行 `sed` / `rg` / `ls` / `find` 等命令读取文件与目录 |
@@ -31,6 +39,7 @@
 5. **shell 并行只用于互不写同一文件的命令**：例如多个 `render.py` 渲染命令可以并行；同一文件的连续修改不可并行。
 6. **熔断规则**：并行子任务失败数超过 50% 时暂停，并提示用户选择重试或中止。
 7. **模块粒度预检**：创建子任务前，先按 `step5-common.md` 的业务域限制拆好模块，避免单个子任务承担过多页面。
+8. **上下文预算预检**：发起子任务前先判断该 prompt 是否已经包含 `overview + module_brief + detail` 的必要最小集合；若还能再删文件或删章节，必须先删再发。
 
 ---
 
@@ -40,7 +49,19 @@
 
 1. 主进程先生成 `requirements/详细需求文档_overview.md`
 2. 再按模块用 `spawn_agent` 分批并行生成各模块文档，每批最多 3 个
-3. 所有 agent 完成后，由主进程汇总并写入 `requirements/index.md`
+3. 每个模块文档完成后，必须继续生成 `requirements/module_briefs/模块摘要_[模块中文名].md`
+4. 所有 agent 完成后，由主进程汇总并写入 `requirements/index.md`
+
+**默认强制压缩模式触发条件：**
+- 原始资料总内容 `> 3000` 行
+- 模块数 `> 3`
+- 功能点数 `> 12`
+- 预计页面 / swimlane 数 `> 8`
+- 终端数 `> 1`
+- 关键角色数 `> 3`
+
+一旦命中任一项，Step 4 不得继续生成单一合并大 PRD，必须改走 `overview + module_brief + 模块详细文档 + index`。
+对 `Codex 5.4 Medium / 200K`，即便未明显命中阈值，只要判断单文件 PRD 会压缩掉后续推理空间，也必须提前走分拆模式。
 
 **Codex 示例：**
 
@@ -65,6 +86,13 @@ HTML 模式按模块拆分为独立子任务：
 3. 再从 `page_spec` 渲染 HTML 页面，render 阶段不得回读原始资料或需求文档原文
 4. 全部完成后，主进程执行 `check_prototype_consistency.py`、冒烟检查和缺失修复
 
+分拆模式下，HTML 子任务的读取顺序必须是：
+- 先读 `requirements/index.md`
+- 再读 `requirements/详细需求文档_overview.md`
+- 再读 `requirements/module_briefs/模块摘要_[模块中文名].md`
+- 仅在需要字段明细、复杂校验、状态流转或失败处理时再读模块详细文档
+- 单个 HTML 子任务禁止同时读两个模块详细文档；跨模块跳转信息优先从 `overview` 和 `module_brief` 提取
+
 **建议容量：**
 - 单个子任务负责 ≤ 4 页
 - 单模块超过 6 页时拆分为多个子任务
@@ -88,6 +116,8 @@ draw.io 统一走强约束链路：
 - 每个子任务负责 ≤ 2 个真实页面；超过则强制拆分
 - 子任务只负责页面类型、字段、列表列、状态枚举、跳转、CRUD 标记
 - 子任务输出必须直接写入 `WORK_DIR/.prototype-generator/page_models/page_model_[模块英文名].json`
+- 分拆模式下，page_model 子任务必须先按 `requirements/index.md -> requirements/详细需求文档_overview.md -> requirements/module_briefs/模块摘要_[模块中文名].md -> 模块详细文档` 的顺序读取；优先依赖模块摘要完成语义建模
+- 对 `200K` 预算，page_model 子任务应优先依赖 `module_brief` 完成 80% 以上判断；模块详细文档只补字段明细和复杂状态，不得整篇通读
 
 ### 阶段 B：构建与渲染
 

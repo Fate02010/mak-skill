@@ -51,6 +51,39 @@ description: |
 5. 渲染与校验
 6. 更新最终原型
 
+## 上下文压缩模式
+
+本 Skill 默认将“上下文压缩”视为正式门禁，不允许依赖长上下文持续记住全部原始资料。
+
+### Codex 5.4 Medium 上下文预算
+
+本 Skill 现在默认按 **Codex 5.4 Medium / 200K 上下文窗口** 设计。
+
+硬规则：
+- 不把 `200K` 视为可用满额；主流程必须保留 `30%~40%` 余量给推理、工具输出、修复指令和回归结果
+- 任何 Step 5 / Step 6 子任务的默认输入只能是：`index.md -> overview -> module_brief -> 1 个模块详细文档 -> page_spec`
+- 单个子任务禁止同时加载多个模块详细文档；跨模块信息优先从 `overview` 和 `module_brief` 提取
+- 一旦某轮需要回读的详细文档章节超过 2 段，必须先把关键信息压缩回 `module_brief` 或 `page_spec`，再继续
+- 若需求资料、需求文档或原型清单已经接近 200K 可用预算，必须在 Step 4 进入分拆模式，不得继续走单文件大 PRD
+
+满足以下任一条件时，**必须进入压缩模式**：
+- 原始资料总内容 `> 3000` 行
+- 原始资料或需求文档累计内容已接近 `200K` 上下文预算
+- 模块数 `> 3`
+- 功能点数 `> 12`
+- 预计原型页面 / swimlane 数 `> 8`
+- 终端数 `> 1`（如小程序 + 后台、App + Web）
+- 关键用户角色数 `> 3`
+
+压缩模式下：
+- Step 4 必须生成 `requirements/详细需求文档_overview.md`
+- Step 4 必须生成 `requirements/module_briefs/模块摘要_[模块中文名].md`
+- Step 4 必须生成 `requirements/index.md`
+- Step 4 可继续生成 `requirements/详细需求文档_[模块中文名].md`，但**不再合并回单一大文档**
+- Step 5 / Step 6 必须按 `index.md -> overview -> module_brief -> 模块详细文档 -> page_spec` 的顺序读取
+- Step 5 / Step 6 每个子任务默认只允许回读 **一个** 模块详细文档；若一个模块文档仍过大，必须先压缩到对应 `module_brief`
+- render 阶段与审视阶段禁止把最终原型或原始资料当作主记忆源；若发现问题，必须回退到 `requirements/` 或 `.prototype-generator/page_specs/`
+
 ## 输入与输出
 
 ### 输入
@@ -64,6 +97,7 @@ description: |
 - `WORK_DIR/.prototype-generator/RountMap.md`
 - `WORK_DIR/.prototype-generator/竞品分析报告.md`
 - `WORK_DIR/requirements/`
+- `WORK_DIR/requirements/module_briefs/模块摘要_*.md`
 - `WORK_DIR/.prototype-generator/原型任务清单.md`
 - `WORK_DIR/.prototype-generator/原型DoD.md`
 - `WORK_DIR/.prototype-generator/page_models/page_model_*.json`
@@ -93,9 +127,11 @@ description: |
 
 - 没有 `.prototype-generator/RountMap.md`，禁止进入需求文档阶段
 - 没有 `requirements/`，禁止进入原型阶段
+- 若已触发上下文压缩模式，缺少 `requirements/详细需求文档_overview.md`、`requirements/module_briefs/` 或 `requirements/index.md` 任一项，禁止进入原型阶段
 - 没有 `.prototype-generator/原型任务清单.md`，禁止进入渲染阶段
 - 没有 `.prototype-generator/page_specs/`，禁止进入任何渲染阶段
 - 渲染阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、样式规范、任务清单、导航映射
+- Step 5 / Step 6 子任务若处于分拆模式，必须先读取 `requirements/index.md`、`requirements/详细需求文档_overview.md` 和 `requirements/module_briefs/模块摘要_[模块中文名].md`，再按需读取模块详细文档
 - 最终输出前，必须通过 `validate.py` 与 `check_prototype_consistency.py`
 - 若本轮为修复原型质量而修改了 skill 自身脚本、模板或提示词，必须同步补充回归测试并执行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；测试不通过时必须继续修复，禁止直接宣布完成
 
@@ -132,4 +168,4 @@ description: |
 - 页面规格冻结契约：`steps/page-spec-freeze.md`
 - draw.io 规范：`steps/drawio-spec.md`
 - 页面模型契约：`steps/page-model-spec.md`
-- 校验脚本：`scripts/validate.py`、`scripts/check_prototype_consistency.py`
+- 校验脚本：`scripts/validate.py`、`scripts/check_prototype_consistency.py`、`scripts/check_module_brief_consistency.py`、`scripts/check_context_budget.py`

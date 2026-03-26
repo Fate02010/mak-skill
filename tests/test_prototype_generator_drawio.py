@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import re
 import subprocess
 import sys
 import tempfile
@@ -28,6 +29,8 @@ RENDER = _load_module("render_test", SCRIPTS_DIR / "render.py")
 VALIDATE = _load_module("validate_test", SCRIPTS_DIR / "validate.py")
 MERGE = _load_module("merge_test", SCRIPTS_DIR / "merge.py")
 CONSISTENCY = _load_module("consistency_test", SCRIPTS_DIR / "check_prototype_consistency.py")
+BRIEF_CONSISTENCY = _load_module("brief_consistency_test", SCRIPTS_DIR / "check_module_brief_consistency.py")
+CONTEXT_BUDGET = _load_module("context_budget_test", SCRIPTS_DIR / "check_context_budget.py")
 RUN_PIPELINE = SCRIPTS_DIR / "run_drawio_pipeline.py"
 
 
@@ -482,19 +485,97 @@ def _write_json(path: Path, payload: dict):
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
+def _extract_pages_from_doc(content: str) -> list[str]:
+    pages = []
+    for line in content.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- **页面/界面：**"):
+            raw = stripped.split("**页面/界面：**", 1)[1].strip()
+            for page in re.split(r"[、，,；;]\s*", raw):
+                page = page.strip()
+                if page and page not in pages:
+                    pages.append(page)
+    return pages
+
+
+def _extract_fields_from_doc(content: str) -> list[str]:
+    fields = []
+    lines = content.splitlines()
+    idx = 0
+    while idx < len(lines):
+        line = lines[idx]
+        stripped = line.strip()
+        if stripped.startswith("- ") and not stripped.startswith("- **"):
+            value = stripped[2:].strip()
+            value = value.split("（", 1)[0].split("(", 1)[0].strip()
+            if value and value not in fields and len(value) <= 40:
+                fields.append(value)
+            idx += 1
+            continue
+        if "列表展示列：" in stripped or "新增/编辑表单字段规格" in stripped:
+            idx += 1
+            while idx < len(lines):
+                row = lines[idx].strip()
+                if not row.startswith("|"):
+                    break
+                if not re.match(r"^\|[\s\-:|]+\|$", row):
+                    cells = [cell.strip() for cell in row.strip("|").split("|")]
+                    if cells and cells[0] not in {"列名", "字段名", "字段", "--------", "------"} and cells[0] not in fields:
+                        fields.append(cells[0])
+                idx += 1
+            continue
+        if "展示字段：" in stripped:
+            raw = stripped.split("展示字段：", 1)[1].strip()
+            for field in re.split(r"[、，,；;]\s*", raw):
+                field = field.strip()
+                if field and field not in fields:
+                    fields.append(field)
+        idx += 1
+    return fields[:12]
+
+
+def _make_module_brief(module_name: str, content: str) -> str:
+    pages = _extract_pages_from_doc(content)
+    fields = _extract_fields_from_doc(content)
+    page_lines = "\n".join(f"- {page}" for page in pages) or "- 无页面"
+    field_lines = "\n".join(f"- {field}" for field in fields) or "- 无字段"
+    return (
+        f"# {module_name} 模块摘要\n\n"
+        "## 1. 模块目标与边界\n"
+        f"- 模块：{module_name}\n\n"
+        "## 2. 页面清单与页面 archetype\n"
+        f"{page_lines}\n\n"
+        "## 3. 关键字段索引\n"
+        f"{field_lines}\n"
+    )
+
+
 def _write_requirements_split(workdir: Path, module_docs: dict[str, str]):
     requirements_dir = workdir / "requirements"
     requirements_dir.mkdir(parents=True, exist_ok=True)
+    module_briefs_dir = requirements_dir / "module_briefs"
+    module_briefs_dir.mkdir(parents=True, exist_ok=True)
     (requirements_dir / "详细需求文档_overview.md").write_text(
         "# 渔易购详细需求文档 — Overview\n\n## 7. 原型图清单\n- 测试用 overview\n",
         encoding="utf-8",
     )
-    (requirements_dir / "index.md").write_text(
-        "# 需求文档索引\n\n## 共用文件\n- requirements/详细需求文档_overview.md\n",
-        encoding="utf-8",
-    )
+    index_lines = [
+        "# 需求文档索引",
+        "",
+        "## 共用文件",
+        "- requirements/详细需求文档_overview.md",
+        "",
+        "## 模块文件",
+    ]
     for filename, content in module_docs.items():
         (requirements_dir / filename).write_text(content, encoding="utf-8")
+        module_name = filename.replace("详细需求文档_", "").replace(".md", "")
+        brief_name = f"模块摘要_{module_name}.md"
+        (module_briefs_dir / brief_name).write_text(_make_module_brief(module_name, content), encoding="utf-8")
+        index_lines.append(
+            f"- {module_name}: requirements/{filename} | requirements/module_briefs/{brief_name}"
+        )
+    (requirements_dir / "index.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
 
 
 def _run_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
@@ -572,6 +653,8 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         expectations = {
             SKILL_DIR / "SKILL.md": [
                 "本 Skill 默认将“上下文压缩”视为正式门禁",
+                "Codex 5.4 Medium / 200K 上下文窗口",
+                "保留 `30%~40%` 余量",
                 "功能点数 `> 12`",
                 "预计原型页面 / swimlane 数 `> 8`",
                 "requirements/module_briefs/模块摘要_*.md",
@@ -579,12 +662,15 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             ],
             SKILL_DIR / "AGENTS.md": [
                 "默认强制压缩模式",
+                "Codex 5.4 Medium / 200K",
+                "禁止按 200K 满额拼接输入",
                 "requirements/module_briefs/模块摘要_[模块中文名].md",
                 "`index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`",
                 "Step 6 审视优先对照 `module_brief + page_spec + 任务清单`",
             ],
             STEPS_DIR / "step4-requirements.md": [
                 "判断是否进入默认强制压缩模式",
+                "200K 预算规则",
                 "功能点数 `> 12`",
                 "关键用户角色数 `> 3`",
                 "必须生成：",
@@ -598,23 +684,30 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             ],
             STEPS_DIR / "step5-common.md": [
                 "分拆模式下，子 agent 的默认读取顺序必须是 `index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`",
+                "面向 `Codex 5.4 Medium / 200K`",
                 "缺少 `module_brief` 时，禁止启动 Step 5 子 agent",
             ],
             STEPS_DIR / "step5-agent-prompt.md": [
                 "先读取模块摘要，提取页面清单、页面 archetype、关键字段索引、状态摘要、CRUD 闭环和跨模块跳转",
+                "面向 `Codex 5.4 Medium / 200K`",
             ],
             STEPS_DIR / "step5-html.md": [
+                "200K 预算规则",
                 "再读取 [WORK_DIR]/requirements/module_briefs/模块摘要_[模块中文名].md 作为最小执行上下文",
             ],
             STEPS_DIR / "step5-drawio.md": [
+                "200K 预算规则",
                 "缺少 `module_brief`，禁止启动生成",
                 "按 `index.md -> overview -> module_brief -> 模块详细文档` 顺序读取",
             ],
             STEPS_DIR / "step6-iteration.md": [
+                "Codex 5.4 Medium / 200K",
                 "分拆模式下优先对照 `module_brief + page_spec + 原型任务清单`",
                 "优先用 `module_brief + page_spec + 原型任务清单` 做结构化字段 diff",
             ],
             STEPS_DIR / "codex-rules.md": [
+                "Codex 5.4 Medium / 200K",
+                "保留 `30%~40%` 余量",
                 "每个模块文档完成后，必须继续生成 `requirements/module_briefs/模块摘要_[模块中文名].md`",
                 "一旦命中任一项，Step 4 不得继续生成单一合并大 PRD",
             ],
@@ -905,6 +998,53 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             self.assertNotIn("首页", report["missing_pages"])
             self.assertEqual(report["summary"]["fail"], 0, json.dumps(report, ensure_ascii=False))
 
+    def test_module_brief_consistency_fails_when_pages_are_missing_from_brief(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-订单中心.md": (
+                        "# 渔易购 — 后台-订单中心需求\n\n"
+                        "#### 功能点 1.1：订单管理\n"
+                        "- **页面/界面：** 订单列表页、订单详情页、发货弹窗\n"
+                        "筛选条件：\n"
+                        "- 订单编号\n"
+                        "- 订单状态\n"
+                    ),
+                },
+            )
+            brief_path = workdir / "requirements" / "module_briefs" / "模块摘要_后台-订单中心.md"
+            brief_path.write_text(
+                "# 后台-订单中心 模块摘要\n\n## 2. 页面清单与页面 archetype\n- 订单列表页\n",
+                encoding="utf-8",
+            )
+
+            report = BRIEF_CONSISTENCY.check_requirements(str(workdir / "requirements"), 0.6)
+            self.assertEqual(report["summary"]["fail"], 1, json.dumps(report, ensure_ascii=False))
+            self.assertEqual(report["missing_pages"][0]["module"], "后台-订单中心")
+            self.assertIn("订单详情页", report["missing_pages"][0]["pages"])
+
+    def test_context_budget_precheck_flags_oversized_module_brief(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-订单中心.md": (
+                        "# 渔易购 — 后台-订单中心需求\n\n"
+                        "#### 功能点 1.1：订单管理\n"
+                        "- **页面/界面：** 订单列表页\n"
+                    ),
+                },
+            )
+            brief_path = workdir / "requirements" / "module_briefs" / "模块摘要_后台-订单中心.md"
+            brief_path.write_text("# 超长摘要\n\n" + ("字段摘要\n" * 12000), encoding="utf-8")
+
+            report = CONTEXT_BUDGET.assess_work_dir(str(workdir))
+            self.assertEqual(report["summary"]["fail"], 1, json.dumps(report, ensure_ascii=False))
+            self.assertTrue(any("module_brief" in item for item in report["failures"]))
+
     def test_run_drawio_pipeline_uses_backend_scope_when_product_name_mentions_admin(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -930,6 +1070,55 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
             self.assertEqual(payload["consistency_scope"], "backend")
             self.assertNotIn("首页", payload["consistency"]["missing_pages"])
+
+    def test_run_drawio_pipeline_fails_when_module_brief_drops_required_pages(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页、修改密码页\n"
+                    ),
+                },
+            )
+            brief_path = workdir / "requirements" / "module_briefs" / "模块摘要_后台-登录页.md"
+            brief_path.write_text(
+                "# 后台-登录页 模块摘要\n\n## 2. 页面清单与页面 archetype\n- 后台登录页\n",
+                encoding="utf-8",
+            )
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json", _login_model())
+
+            returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["module_brief_consistency"]["summary"]["fail"], 1)
+            self.assertEqual(payload["failure_routing"][0]["layer"], "requirements")
+
+    def test_run_drawio_pipeline_fails_when_context_budget_is_unsafe(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                    ),
+                },
+            )
+            brief_path = workdir / "requirements" / "module_briefs" / "模块摘要_后台-登录页.md"
+            brief_path.write_text("# 超长摘要\n\n" + ("字段摘要\n" * 12000), encoding="utf-8")
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json", _login_model())
+
+            returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["context_budget"]["summary"]["fail"], 1)
+            self.assertEqual(payload["failure_routing"][0]["layer"], "requirements")
 
     def test_employee_management_infers_add_edit_disable_actions(self):
         markdown = _build_page_spec_markdown(_employee_list_model())

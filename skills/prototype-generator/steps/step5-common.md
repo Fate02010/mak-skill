@@ -13,8 +13,11 @@
 
 - Step 5 的中间产物统一写入 `WORK_DIR/.prototype-generator/`
 - Step 5 的“页面规格冻结”产物统一写入 `WORK_DIR/.prototype-generator/page_specs/`
+- 若 Step 4 已触发默认强制压缩模式，则 `requirements/详细需求文档_overview.md`、`requirements/module_briefs/`、`requirements/index.md` 缺一不可
 - 没有 `.prototype-generator/page_specs/page_spec_*.md`，禁止进入任何 render 阶段
 - render 阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、任务清单、样式规范、跳转映射
+- 分拆模式下，子 agent 的默认读取顺序必须是 `index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`
+- 面向 `Codex 5.4 Medium / 200K`，单个子任务默认只允许持有 `overview + 1 个 module_brief + 1 个模块详细文档 + 当前 page_spec`；超出则必须先压缩后再继续
 - 若本轮为修复 skill 本身而改动了 `SKILL_DIR/scripts/`、`SKILL_DIR/steps/` 或 `SKILL_DIR/templates/`，必须同步新增/更新仓库回归测试，并执行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；测试失败时必须继续回修
 
 ---
@@ -77,21 +80,26 @@
 检查 WORK_DIR/requirements/index.md 是否存在：
   存在 → 分拆模式（DOC_MODE = split）：
     - 读取 WORK_DIR/requirements/index.md，获取所有模块文件路径列表
+    - 读取 WORK_DIR/requirements/module_briefs/模块摘要_[模块中文名].md，作为当前模块的最小执行上下文
     - 原型图清单来自：requirements/详细需求文档_overview.md §7
     - 全局上下文来自：requirements/详细需求文档_overview.md §2 / §2.5 / §2.8 / §3.5 / §3.6 / §4.5 / §5.5 / §5.8
-    - 各模块功能细节来自：index.md 中对应模块的文件路径
+    - 各模块功能细节来自：index.md 中对应模块的文件路径；仅在字段明细、复杂校验、状态流转或外部依赖失败处理时按需读取
   不存在 → 单文件模式（DOC_MODE = single）：
     - 所有信息来自：requirements/详细需求文档.md
 ```
 
-> **分拆模式下，启动每个 subagent 前，从 index.md 查找该模块的文件路径，填入 `[需求文档读取指令]` 占位符；不得硬编码猜测文件名。**
+> **分拆模式下，启动每个 subagent 前，从 index.md 查找该模块的 `module_brief` 和详细文档路径，填入 `[需求文档读取指令]` 占位符；不得硬编码猜测文件名。**
+> **缺少 `module_brief` 时，禁止启动 Step 5 子 agent。**
+> **200K 预算规则：** 启动前先判断本轮是否真的需要回读模块详细文档；若 `module_brief + overview + 原型任务清单` 已足够，禁止为了“保险起见”再把整份模块文档塞进 prompt。
 
 1. 读取原型图清单（分拆模式：`requirements/详细需求文档_overview.md` §7；单文件模式：`requirements/详细需求文档.md` §7）
 2. 读取全局上下文：用户角色、系统边界、模块职责、导航结构、关键业务事件、枚举值字典、权限与数据口径总则
-3. 基于原型图清单和全局上下文，将页面按**业务域**功能模块分组，估算每页复杂度（简单/中等/复杂）
-4. 为每个后台模块建立菜单归属和导航激活规则；为每个移动端模块建立 TabBar 归属和内页返回规则
-5. **绘制页面跳转地图**：梳理所有页面间跳转关系，确保每条路径都有目标页面。发现断头路立即补充到任务清单。
-6. **CRUD 完整性检查**：对任务清单中每个"列表页/管理页"，检查是否已包含以下四个关联元素。缺少任何一项立即补充到任务清单：
+3. 分拆模式下，优先读取本模块 `module_brief`，先完成页面清单、核心实体、关键字段、状态、CRUD 闭环和跨模块跳转的最小建模
+4. 仅在 `module_brief` 无法支撑字段明细、复杂校验、状态流转或失败处理时，再回读模块详细文档对应章节
+5. 基于原型图清单和全局上下文，将页面按**业务域**功能模块分组，估算每页复杂度（简单/中等/复杂）
+6. 为每个后台模块建立菜单归属和导航激活规则；为每个移动端模块建立 TabBar 归属和内页返回规则
+7. **绘制页面跳转地图**：梳理所有页面间跳转关系，确保每条路径都有目标页面。发现断头路立即补充到任务清单。
+8. **CRUD 完整性检查**：对任务清单中每个"列表页/管理页"，检查是否已包含以下四个关联元素。缺少任何一项立即补充到任务清单：
 
    | 必须存在的元素 | 说明 |
    |--------------|------|
@@ -102,7 +110,7 @@
 
    > 若需求文档明确说明使用弹窗（Modal）方式，则新增/编辑弹窗在列表页 swimlane 内绘制；若为独立页面，则单独列为任务项。
 
-7. 读取 `SKILL_DIR/steps/step5-tasklist-format.md` 获取格式规范，输出 `原型任务清单.md` 到 `WORK_DIR/.prototype-generator/`
+9. 读取 `SKILL_DIR/steps/step5-tasklist-format.md` 获取格式规范，输出 `原型任务清单.md` 到 `WORK_DIR/.prototype-generator/`
 
 ## 阶段 5-2：拆分生成任务
 

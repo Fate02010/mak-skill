@@ -8,6 +8,8 @@ draw.io 统一改为四段链路：
 
 目标是压缩模型自由度，缩小 Claude 与 Codex 的结构差异。
 
+> **200K 预算规则：** 面向 `Codex 5.4 Medium / 200K`，draw.io 阶段默认只允许把 `overview` 关键章节、当前模块 `module_brief`、当前模块详细文档必要章节放进同一个子任务。若 prompt 还想附带第二个模块文档，必须拆任务。
+
 ---
 
 ## 启动前完成标准确认（不可跳过）
@@ -16,6 +18,7 @@ draw.io 统一改为四段链路：
 
 1. 读取 `WORK_DIR/.prototype-generator/原型DoD.md`
 2. 读取 `WORK_DIR/.prototype-generator/drawio-完成标准.md`
+3. 若处于分拆模式，读取 `WORK_DIR/requirements/index.md`、`WORK_DIR/requirements/详细需求文档_overview.md` 与 `WORK_DIR/requirements/module_briefs/模块摘要_[模块中文名].md`
 3. 用简洁摘要向用户确认本次 draw.io 任务的完成定义：
    - 最终交付物路径
    - 模块数 / 预计 swimlane 数
@@ -24,6 +27,7 @@ draw.io 统一改为四段链路：
    - “发现问题即修复并重新验收”这一条是否已纳入完成标准
 
 **如果以上任一项还没定义清楚，禁止启动生成。**
+**如果已触发默认强制压缩模式但缺少 `module_brief`，禁止启动生成。**
 
 若用户已授权自治模式：
 - 无需在本阶段再次等待确认
@@ -39,6 +43,7 @@ draw.io 统一改为四段链路：
 读取：
 - `SKILL_DIR/steps/page-model-spec.md`
 - `SKILL_DIR/steps/step5-spec-agent-prompt.md`
+- 分拆模式下按 `index.md -> overview -> module_brief -> 模块详细文档` 顺序读取；优先用 `module_brief` 完成页面语义建模，仅在需要字段明细、复杂校验或状态流转时再回读模块详细文档
 
 ### 子任务输出
 
@@ -75,6 +80,7 @@ draw.io 统一改为四段链路：
 - 顶层包含 `module_name`、`module_key`、`pages`
 - `pages` 数组非空
 - 页面类型全部合法
+- 子任务读取集合仍符合 `index -> overview -> module_brief -> 1 个模块详细文档` 的预算上限
 
 ---
 

@@ -44,7 +44,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 ### 准备工作
 
 1. 先判断需求文档模式：
-   - 若存在 `WORK_DIR/requirements/index.md`，按 split 模式读取 `index.md`、`详细需求文档_overview.md` 和对应模块文件
+   - 若存在 `WORK_DIR/requirements/index.md`，按 split 模式读取 `index.md`、`详细需求文档_overview.md`、`requirements/module_briefs/模块摘要_[模块中文名].md` 和对应模块文件
    - 否则按单文件模式读取 `WORK_DIR/requirements/详细需求文档.md`
 2. 提取"原型图清单"和每个页面的功能描述、字段列表
 3. 读取 `WORK_DIR/.prototype-generator/原型任务清单.md`，获取已生成的页面列表
@@ -53,7 +53,8 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
    - **HTML 模式**：用当前会话可用的文件列表命令列出 `WORK_DIR/prototypes/*.html`
    - **draw.io 模式**：读取 `WORK_DIR/prototypes/[产品名称].drawio`，列出所有 `<diagram name>` 和 swimlane
 
-> 审视阶段默认只对照结构化中间产物，不回读原始资料。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `.prototype-generator/page_specs/`，再重跑渲染。禁止把最终 `.drawio` 当作主修复面。
+> 审视阶段默认只对照结构化中间产物，不回读原始资料。分拆模式下优先对照 `module_brief + page_spec + 原型任务清单`；只有这些结构化产物无法判定时才回读模块详细文档。若发现上游结构化产物本身矛盾，先修正 `requirements/` 或 `.prototype-generator/page_specs/`，再重跑渲染。禁止把最终 `.drawio` 当作主修复面。
+> 面向 `Codex 5.4 Medium / 200K`，Step 6 默认不得同时加载多个模块详细文档做“全局人工 review”；先按模块摘要和 page_spec 分批审视，确有必要时再对单模块补读详细章节。
 
 ### 自治模式轮次规则
 
@@ -232,7 +233,7 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 > 2. 字段 coverage < 60% 的页面（严重缺失，需交叉验证）
 > 3. 用户主动要求对比的页面
 >
-> **快捷路径（优先使用）：** 如果存在 `page_specs/page_spec_*.md`（两阶段模式），优先用 page_spec vs 需求文档做结构化字段 diff，只有 diff 无法确认的差异才生成 HTML 对比稿。
+> **快捷路径（优先使用）：** 如果存在 `page_specs/page_spec_*.md`（两阶段模式），优先用 `module_brief + page_spec + 原型任务清单` 做结构化字段 diff；只有 diff 无法确认的差异才回读模块详细文档或生成 HTML 对比稿。
 >
 > 七维度审视完成后，对触发条件命中的页面执行 HTML 对比。
 
