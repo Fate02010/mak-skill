@@ -37,6 +37,7 @@ if str(SCRIPT_DIR) not in sys.path:
 
 import rulepack as RULEPACK
 from review_finding import make_finding, severity_from_status
+from requirements_compression import ensure_compressed_requirements
 
 
 RULE_TO_LAYER = {
@@ -340,6 +341,11 @@ def main():
 
     context_budget_result = _run_command([sys.executable, str(context_budget_script), str(work_dir), "--json"])
     context_budget_report = _parse_json_stdout(context_budget_result)
+    compression_report = {"status": "skipped", "artifacts": {}}
+    if context_budget_result["returncode"] != 0:
+        compression_report = ensure_compressed_requirements(work_dir, force=True)
+        context_budget_result = _run_command([sys.executable, str(context_budget_script), str(work_dir), "--json"])
+        context_budget_report = _parse_json_stdout(context_budget_result)
     if context_budget_result["returncode"] != 0:
         report = {
             "work_dir": str(work_dir),
@@ -347,6 +353,7 @@ def main():
             "page_model_count": len(page_models),
             "final_drawio": str(final_drawio),
             "context_budget": context_budget_report,
+            "requirements_compression": compression_report,
             "summary": {"fail": 1, "warn": context_budget_report.get("summary", {}).get("warn", 0), "pass": 0},
             "failure_routing": [{"layer": "requirements", "reason": "上下文预算预检失败", "pages": context_budget_report.get("failures", [])}],
             "review_findings": [
@@ -368,6 +375,10 @@ def main():
         brief_consistency_result = _run_command([sys.executable, str(brief_consistency_script), str(requirements_dir), "--json"])
         brief_consistency_report = _parse_json_stdout(brief_consistency_result)
         if brief_consistency_result["returncode"] != 0:
+            compression_report = ensure_compressed_requirements(work_dir, force=True)
+            brief_consistency_result = _run_command([sys.executable, str(brief_consistency_script), str(requirements_dir), "--json"])
+            brief_consistency_report = _parse_json_stdout(brief_consistency_result)
+        if brief_consistency_result["returncode"] != 0:
             brief_fail_items = list(brief_consistency_report.get("missing_briefs", []))
             for item in brief_consistency_report.get("missing_pages", []):
                 brief_fail_items.extend(item.get("pages", []))
@@ -379,6 +390,7 @@ def main():
                 "page_model_count": len(page_models),
                 "final_drawio": str(final_drawio),
                 "context_budget": context_budget_report,
+                "requirements_compression": compression_report,
                 "module_brief_consistency": brief_consistency_report,
                 "summary": {"fail": 1, "warn": context_budget_report.get("summary", {}).get("warn", 0), "pass": 0},
                 "failure_routing": [{"layer": "requirements", "reason": "module_brief 覆盖率校验失败", "pages": [item for item in brief_fail_items if item]}],
@@ -563,6 +575,7 @@ def main():
         "active_rulepack": active_rulepack_payload,
         "active_rulepack_path": str(active_rulepack_path),
         "context_budget": context_budget_report,
+        "requirements_compression": compression_report,
         "module_brief_consistency": brief_consistency_report,
         "consistency": consistency_report,
         "consistency_scope": consistency_scope,

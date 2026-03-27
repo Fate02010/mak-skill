@@ -20,18 +20,21 @@
 > - 若模块文档中存在 `开发关注点`、`权限与可见范围`、`数据影响`，必须一并提取，用于决定按钮可见性、异常态、规则提示和交互闭环
 > - 面向 `Codex 5.4 Medium / 200K`：`[需求文档读取指令]` 必须保持最小化，默认禁止出现“再读取其他模块详细文档”；跨模块依赖优先从 overview 或 module_brief 摘要提取
 第二步补充：读取 [WORK_DIR的绝对路径]/.prototype-generator/竞品亮点摘要.md，了解竞品亮点和行业共识功能（如文件不存在则跳过此步）。
+第二步补充 2：若当前模块缺少截图、历史页面或明确参照物，先检查 `[WORK_DIR]/.prototype-generator/reference_pack/` 是否已有当前模块摘要；若没有，则允许补充检索竞品和行业案例，并将结果落盘到 `[WORK_DIR]/.prototype-generator/reference_pack/` 后再继续。
 第三步：先冻结页面规格，写入：
 [PAGE_SPEC_PATH]
 
 冻结要求：
 - 必须覆盖本模块全部页面
 - 每个页面至少写清：页面名称、页面类型、输出文件、字段、列表列、关键操作、跳转、状态
+- 每个页面必须补充：`page_archetype`、`reference_basis`、`reference_summary`、`layout_directives`、`visual_cues`、`interaction_patterns`
 - 禁止只写概念说明，不写结构化字段
 
 第四步：页面规格冻结完成后，进入 render 阶段。
 从现在开始，禁止再回读原始资料、PRD、竞品文档和需求文档章节。
 render 阶段只允许读取：
 - [PAGE_SPEC_PATH]
+- [WORK_DIR的绝对路径]/.prototype-generator/reference_pack/references_[模块英文名].md
 - [WORK_DIR的绝对路径]/.prototype-generator/原型任务清单.md
 - [SKILL_DIR的实际绝对路径]/steps/html-spec.md
 - [WORK_DIR的绝对路径]/prototypes/common.css
@@ -77,6 +80,9 @@ render 阶段只允许读取：
 - 每个 HTML 文件用 `<link rel="stylesheet" href="common.css">` 引用共享样式
 - `common.css` 已包含 `:root` 变量、全局重置、布局、导航、按钮、输入框、卡片、Tag、表格、分页、弹窗、面包屑、空态、表单组
 - `<style>` 标签中**只写页面特有样式**，禁止重复定义 `:root` 变量和 common.css 已有的 class
+- 禁止在页面内自定义 `font-family`，所有按钮/输入框/正文都继承 `common.css` 字体栈
+- 禁止对按钮、输入框、文字容器写 `transform: scale(...)` 或 `zoom`，避免页面元素变形
+- 只允许生成 body slot 内容区，不允许输出完整 `<html>/<head>/<body>`、sidebar、nav、breadcrumb、`data-prototype-shell`
 
 HTML 骨架：
 ```html

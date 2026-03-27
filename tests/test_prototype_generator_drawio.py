@@ -1,5 +1,6 @@
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
@@ -40,8 +41,13 @@ BUILD_PAGE_SPEC = _load_module("build_page_spec_test", SCRIPTS_DIR / "build_page
 RENDER = _load_module("render_test", SCRIPTS_DIR / "render.py")
 VALIDATE = _load_module("validate_test", SCRIPTS_DIR / "validate.py")
 HTML_UTILS = _load_module("html_utils_test", SCRIPTS_DIR / "html_utils.py")
+RENDER_HTML = _load_module("render_html_test", SCRIPTS_DIR / "render_html.py")
+REFERENCE_UTILS = _load_module("reference_utils_test", SCRIPTS_DIR / "reference_utils.py")
+AUTOFIX = _load_module("autofix_test", SCRIPTS_DIR / "autofix.py")
+REQ_COMPRESS = _load_module("requirements_compression_test", SCRIPTS_DIR / "requirements_compression.py")
 VALIDATE_HTML = _load_module("validate_html_test", SCRIPTS_DIR / "validate_html.py")
 HTML_CONSISTENCY = _load_module("html_consistency_test", SCRIPTS_DIR / "check_html_consistency.py")
+RUN_HTML_PIPELINE_MODULE = _load_module("run_html_pipeline_test", SCRIPTS_DIR / "run_html_pipeline.py")
 MERGE = _load_module("merge_test", SCRIPTS_DIR / "merge.py")
 CONSISTENCY = _load_module("consistency_test", SCRIPTS_DIR / "check_prototype_consistency.py")
 BRIEF_CONSISTENCY = _load_module("brief_consistency_test", SCRIPTS_DIR / "check_module_brief_consistency.py")
@@ -773,6 +779,13 @@ def _write_requirements_split(workdir: Path, module_docs: dict[str, str]):
     (requirements_dir / "index.md").write_text("\n".join(index_lines) + "\n", encoding="utf-8")
 
 
+def _write_requirements_detail_only(workdir: Path, module_docs: dict[str, str]):
+    requirements_dir = workdir / "requirements"
+    requirements_dir.mkdir(parents=True, exist_ok=True)
+    for filename, content in module_docs.items():
+        (requirements_dir / filename).write_text(content, encoding="utf-8")
+
+
 def _run_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
     completed = subprocess.run(
         [sys.executable, str(RUN_PIPELINE), str(workdir), product_name, "--json"],
@@ -784,30 +797,44 @@ def _run_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
     return completed.returncode, payload
 
 
-def _run_html_pipeline_cli(workdir: Path, product_name: str) -> tuple[int, dict]:
+def _run_html_pipeline_cli(workdir: Path, product_name: str, env: Optional[dict] = None) -> tuple[int, dict]:
     completed = subprocess.run(
         [sys.executable, str(RUN_HTML_PIPELINE), str(workdir), product_name, "--json"],
         capture_output=True,
         text=True,
         check=False,
+        env=env,
     )
     payload = json.loads(completed.stdout) if completed.stdout.strip() else {}
     return completed.returncode, payload
 
 
-def _run_autoloop_cli(workdir: Path, product_name: str, format_name: str, *, max_rounds: int = 5) -> tuple[int, dict]:
+def _run_autoloop_cli(
+    workdir: Path,
+    product_name: str,
+    format_name: str,
+    *,
+    max_rounds: int = 5,
+    resume: bool = False,
+    vision_review: str = "auto",
+) -> tuple[int, dict]:
+    cmd = [
+        sys.executable,
+        str(RUN_AUTO_PIPELINE),
+        str(workdir),
+        product_name,
+        "--format",
+        format_name,
+        "--max-rounds",
+        str(max_rounds),
+        "--vision-review",
+        vision_review,
+        "--json",
+    ]
+    if resume:
+        cmd.append("--resume")
     completed = subprocess.run(
-        [
-            sys.executable,
-            str(RUN_AUTO_PIPELINE),
-            str(workdir),
-            product_name,
-            "--format",
-            format_name,
-            "--max-rounds",
-            str(max_rounds),
-            "--json",
-        ],
+        cmd,
         capture_output=True,
         text=True,
         check=False,
@@ -825,6 +852,58 @@ def _write_html_page_spec(path: Path, module_name: str, module_key: str, pages: 
     }
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(HTML_UTILS.to_markdown(payload), encoding="utf-8")
+
+
+def _write_autoloop_state(
+    workdir: Path,
+    *,
+    product_name: str,
+    format_name: str,
+    status: str,
+    phase: str,
+    current_round: int,
+    next_round: int,
+    rounds: list[dict],
+    latest_findings: list[dict],
+    max_rounds: int = 5,
+    max_parallel: int = 3,
+    vision_review: str = "auto",
+    streaks: Optional[dict] = None,
+    blocked_findings: Optional[list[dict]] = None,
+    final_artifact: str = "",
+    failure_summary: Optional[dict] = None,
+    attempted_fix_scopes: Optional[list[str]] = None,
+    repeated_failures: Optional[list[dict]] = None,
+    last_unconverged_reason: str = "",
+    stop_recommendation: str = "",
+):
+    _write_json(
+        workdir / ".prototype-generator" / "autoloop_state.json",
+        {
+            "schema_version": 3,
+            "work_dir": str(workdir.resolve()),
+            "product_name": product_name,
+            "format": format_name,
+            "max_rounds": max_rounds,
+            "max_parallel": max_parallel,
+            "vision_review": vision_review,
+            "status": status,
+            "phase": phase,
+            "current_round": current_round,
+            "next_round": next_round,
+            "rounds": rounds,
+            "streaks": streaks or {},
+            "latest_findings": latest_findings,
+            "blocked_findings": blocked_findings or [],
+            "failure_summary": failure_summary or {"by_rule": {}, "by_stop_category": {}},
+            "attempted_fix_scopes": attempted_fix_scopes or [],
+            "repeated_failures": repeated_failures or [],
+            "last_unconverged_reason": last_unconverged_reason,
+            "stop_recommendation": stop_recommendation,
+            "final_artifact": final_artifact,
+            "updated_at": "2026-03-26T00:00:00Z",
+        },
+    )
 
 
 class PrototypeGeneratorDrawioTests(unittest.TestCase):
@@ -1088,6 +1167,23 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             ".industrial-action-bar",
         ):
             self.assertIn(snippet, css)
+
+    def test_html_common_css_stabilizes_font_stack_and_anchor_buttons(self):
+        css = (SKILL_DIR / "templates" / "common.css").read_text(encoding="utf-8")
+        for snippet in (
+            "--font-ui:",
+            "PingFang SC",
+            "-webkit-text-size-adjust: 100%",
+            "text-size-adjust: 100%",
+            ".btn-primary,",
+            ".pagination-btn {",
+            "display: inline-flex;",
+            "text-decoration: none;",
+            "font-family: var(--font-ui);",
+        ):
+            self.assertIn(snippet, css)
+        self.assertNotIn("transform: scale(0.97)", css)
+        self.assertNotIn("transition: transform", css)
 
     def test_validate_c13_treats_analysis_pages_as_dashboard(self):
         markdown = _build_page_spec_markdown(_analysis_dashboard_model())
@@ -1622,7 +1718,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             self.assertEqual(payload["consistency_scope"], "admin")
             self.assertNotIn("首页", payload["consistency"]["missing_pages"])
 
-    def test_run_drawio_pipeline_fails_when_module_brief_drops_required_pages(self):
+    def test_run_drawio_pipeline_auto_repairs_module_brief_when_pages_are_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             _write_requirements_split(
@@ -1645,10 +1741,12 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
 
             self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
-            self.assertEqual(payload["module_brief_consistency"]["summary"]["fail"], 1)
-            self.assertEqual(payload["failure_routing"][0]["layer"], "requirements")
+            self.assertEqual(payload["module_brief_consistency"]["summary"]["fail"], 0)
+            self.assertEqual(payload["requirements_compression"]["status"], "rewritten")
+            self.assertIn("修改密码页", brief_path.read_text(encoding="utf-8"))
+            self.assertEqual(payload["failure_routing"][0]["layer"], "page_model")
 
-    def test_run_drawio_pipeline_fails_when_context_budget_is_unsafe(self):
+    def test_run_drawio_pipeline_auto_repairs_oversized_module_brief(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
             _write_requirements_split(
@@ -1667,9 +1765,13 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
 
             returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
 
-            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
-            self.assertEqual(payload["context_budget"]["summary"]["fail"], 1)
-            self.assertEqual(payload["failure_routing"][0]["layer"], "requirements")
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["context_budget"]["summary"]["fail"], 0)
+            self.assertEqual(payload["requirements_compression"]["status"], "rewritten")
+            self.assertLess(
+                CONTEXT_BUDGET.read_tokens(workdir / "requirements" / "module_briefs" / "模块摘要_后台-登录页.md"),
+                10000,
+            )
 
     def test_employee_management_infers_add_edit_disable_actions(self):
         markdown = _build_page_spec_markdown(_employee_list_model())
@@ -1922,6 +2024,684 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertEqual(next(item for item in report["results"] if item["rule"] == "H2")["status"], "FAIL")
         self.assertEqual(next(item for item in report["results"] if item["rule"] == "H4")["status"], "FAIL")
 
+    def test_reference_pack_prefers_local_visual_references_and_enriches_page_spec(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "用户列表页参考.png").write_bytes(b"fake")
+            spec_path = workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md"
+            _write_html_page_spec(
+                spec_path,
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "停用"],
+                    }
+                ],
+            )
+
+            manifest = REFERENCE_UTILS.ensure_reference_pack(workdir)
+            enriched = REFERENCE_UTILS.enrich_page_spec_file(spec_path, manifest)
+
+            self.assertEqual(manifest["pages"][0]["reference_basis"], "internal")
+            self.assertIn("用户列表页参考.png", "".join(manifest["pages"][0]["reference_sources"]))
+            self.assertEqual(enriched["pages"][0]["page_archetype"], "list_table")
+            serialized = spec_path.read_text(encoding="utf-8")
+            self.assertIn("### 参考依据", serialized)
+            self.assertIn("### 布局指令", serialized)
+
+    def test_requirements_compression_generates_overview_briefs_and_index_from_detail_docs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_detail_only(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "### 后台-用户管理\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页、用户详情页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    )
+                },
+            )
+
+            report = REQ_COMPRESS.ensure_compressed_requirements(workdir, force=True)
+
+            self.assertEqual(report["mode"], "split")
+            self.assertTrue((workdir / "requirements" / "详细需求文档_overview.md").is_file())
+            self.assertTrue((workdir / "requirements" / "module_briefs" / "模块摘要_后台-用户管理.md").is_file())
+            self.assertTrue((workdir / "requirements" / "index.md").is_file())
+            overview = (workdir / "requirements" / "详细需求文档_overview.md").read_text(encoding="utf-8")
+            self.assertIn("原型图清单", overview)
+            self.assertIn("用户列表页", overview)
+
+    def test_html_pipeline_auto_generates_compressed_requirements_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_detail_only(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "### 后台-用户管理\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    )
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "page_archetype": "list_table",
+                        "output_file": "user-list.html",
+                        "fields": [
+                            {"name": "用户名", "control": "input", "required": "否", "note": ""},
+                            {"name": "手机号", "control": "input", "required": "否", "note": ""},
+                            {"name": "状态", "control": "select", "required": "否", "note": ""},
+                        ],
+                        "table_columns": [
+                            {"name": "用户名", "note": ""},
+                            {"name": "手机号", "note": ""},
+                            {"name": "状态", "note": ""},
+                        ],
+                        "actions": ["新增用户", "编辑"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "停用"],
+                    }
+                ],
+            )
+
+            returncode, payload = _run_html_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["requirements_compression"]["mode"], "split")
+            self.assertTrue((workdir / "requirements" / "index.md").is_file())
+            self.assertTrue((workdir / "requirements" / "module_briefs" / "模块摘要_后台-用户管理.md").is_file())
+
+    def test_drawio_pipeline_auto_generates_compressed_requirements_artifacts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_detail_only(
+                workdir,
+                {
+                    "详细需求文档_后台-登录页.md": (
+                        "# 渔易购 — 后台-登录页需求\n\n"
+                        "### 后台-登录页\n\n"
+                        "#### 功能点 1.1：后台登录\n"
+                        "- **页面/界面：** 后台登录页\n"
+                        "- 账号\n"
+                        "- 密码\n"
+                        "- 图形验证码\n"
+                    )
+                },
+            )
+            _write_json(workdir / ".prototype-generator" / "page_models" / "page_model_admin_login.json", _login_model())
+
+            returncode, payload = _run_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["requirements_compression"]["mode"], "split")
+            self.assertTrue((workdir / "requirements" / "详细需求文档_overview.md").is_file())
+            self.assertTrue((workdir / "requirements" / "index.md").is_file())
+
+    def test_reference_pack_uses_search_hook_when_local_reference_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            hook_path = workdir / "search_hook.py"
+            hook_path.write_text(
+                "import json, sys\n"
+                "payload = json.loads(sys.stdin.read())\n"
+                "print(json.dumps({'references': [{'title': payload['page_name'] + ' 竞品案例', 'url': 'https://example.com/case', 'summary': '参考行业案例'}]}, ensure_ascii=False))\n",
+                encoding="utf-8",
+            )
+            spec_path = workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md"
+            _write_html_page_spec(
+                spec_path,
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "停用"],
+                    }
+                ],
+            )
+
+            previous = os.environ.get("PROTOTYPE_GENERATOR_REFERENCE_SEARCH_CMD")
+            os.environ["PROTOTYPE_GENERATOR_REFERENCE_SEARCH_CMD"] = f"{sys.executable} {hook_path}"
+            try:
+                manifest = REFERENCE_UTILS.ensure_reference_pack(workdir)
+            finally:
+                if previous is None:
+                    os.environ.pop("PROTOTYPE_GENERATOR_REFERENCE_SEARCH_CMD", None)
+                else:
+                    os.environ["PROTOTYPE_GENERATOR_REFERENCE_SEARCH_CMD"] = previous
+
+            self.assertEqual(manifest["pages"][0]["reference_basis"], "external")
+            self.assertIn("https://example.com/case", "".join(manifest["pages"][0]["reference_sources"]))
+
+    def test_html_pipeline_writes_reference_pack_and_reference_metadata(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "用户列表页参考.png").write_bytes(b"fake")
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "fields": [
+                            {"name": "用户名", "control": "input", "required": "否", "note": ""},
+                            {"name": "手机号", "control": "input", "required": "否", "note": ""},
+                            {"name": "状态", "control": "select", "required": "否", "note": ""},
+                        ],
+                        "table_columns": [
+                            {"name": "用户名", "note": ""},
+                            {"name": "手机号", "note": ""},
+                            {"name": "状态", "note": ""},
+                        ],
+                        "actions": ["新增用户", "编辑", "删除"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "审核中", "停用"],
+                    }
+                ],
+            )
+
+            returncode, payload = _run_html_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            reference_manifest = workdir / ".prototype-generator" / "reference_pack" / "manifest.json"
+            self.assertTrue(reference_manifest.is_file())
+            self.assertEqual(Path(payload["artifacts"]["reference_pack"]).resolve(), (workdir / ".prototype-generator" / "reference_pack").resolve())
+            html_text = (workdir / "prototypes" / "user-list.html").read_text(encoding="utf-8")
+            self.assertIn('data-page-archetype="list_table"', html_text)
+            self.assertIn('data-reference-basis="internal"', html_text)
+
+    def test_validate_html_flags_missing_reference_metadata_and_weak_list_skeleton(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "weak.html").write_text(
+                "<!DOCTYPE html><html><head><title>Weak</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='弱列表' data-page-type='web_list'>"
+                "<main><table><tr><td>一行</td></tr></table><a class='btn-primary' href='#'>新增</a>"
+                "<div data-state='empty'></div><div data-state='error'></div></main></div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H7")["status"], "FAIL")
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H8")["status"], "FAIL")
+
+    def test_validate_html_flags_unstable_font_and_scale_styles(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "unstable.html").write_text(
+                "<!DOCTYPE html><html><head><title>Unstable</title><link rel='stylesheet' href='common.css'>"
+                "<style>.bad-button{font-family:'Times New Roman';transform:scale(0.9);}</style></head><body>"
+                "<div data-prototype-shell='1' data-page-name='不稳定页面' data-page-type='web_form' "
+                "data-page-archetype='modal_form' data-reference-basis='internal'>"
+                "<main><section class='prototype-card'><div class='form-group'><label>名称</label>"
+                "<input class='input' placeholder='名称'></div><div class='form-group'><label>备注</label>"
+                "<textarea class='input prototype-textarea' placeholder='备注'></textarea></div></section>"
+                "<section class='prototype-card sticky-action-card'><a class='btn-primary bad-button' href='#'>提交</a>"
+                "<a class='btn-secondary' href='#'>取消</a></section>"
+                "<div data-state='processing'></div><div data-state='empty'></div><div data-state='error'></div></main>"
+                "</div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H10")["status"], "FAIL")
+
+    def test_html_renderer_login_page_excludes_admin_navigation(self):
+        spec = {"module_name": "后台-登录页"}
+        page = {
+            "page_name": "后台登录页",
+            "page_type": "login",
+            "page_archetype": "login",
+            "reference_basis": "internal",
+            "reference_summary": "登录页参考摘要",
+            "fields": [
+                {"name": "账号", "control": "input", "required": "是", "note": ""},
+                {"name": "密码", "control": "input", "required": "是", "note": ""},
+                {"name": "图形验证码", "control": "input", "required": "是", "note": ""},
+            ],
+            "actions": ["登录", "联系管理员"],
+            "jumps": [],
+            "states": ["默认", "验证码错误"],
+        }
+        html_text = HTML_UTILS.render_page_html(spec, page, {})
+
+        self.assertIn("prototype-login-card", html_text)
+        self.assertNotIn("prototype-sidebar", html_text)
+        self.assertNotIn("nav-item", html_text)
+
+    def test_html_renderer_list_page_contains_filter_table_and_pagination(self):
+        spec = {"module_name": "后台-用户管理"}
+        page = {
+            "page_name": "用户列表页",
+            "page_type": "web_list",
+            "page_archetype": "list_table",
+            "reference_basis": "internal",
+            "reference_summary": "列表页参考摘要",
+            "fields": [
+                {"name": "用户名", "control": "input", "required": "否", "note": ""},
+                {"name": "手机号", "control": "input", "required": "否", "note": ""},
+                {"name": "状态", "control": "select", "required": "否", "note": ""},
+            ],
+            "table_columns": [{"name": "用户名", "note": ""}, {"name": "手机号", "note": ""}, {"name": "状态", "note": ""}],
+            "actions": ["新增用户", "导出", "查看详情"],
+            "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+            "states": ["启用", "停用"],
+        }
+        html_text = HTML_UTILS.render_page_html(spec, page, {"用户列表页": "user-list.html"})
+
+        self.assertIn("filter-grid", html_text)
+        self.assertIn("<table", html_text)
+        self.assertIn("prototype-pagination", html_text)
+
+    def test_html_renderer_detail_page_keeps_detail_skeleton_for_h8(self):
+        spec = {"module_name": "后台-订单管理"}
+        page = {
+            "page_name": "订单详情页",
+            "page_type": "web_detail",
+            "page_archetype": "detail_kv",
+            "reference_basis": "internal",
+            "reference_summary": "详情页参考摘要",
+            "fields": [
+                {"name": "订单编号", "control": "input", "required": "是", "note": ""},
+                {"name": "订单状态", "control": "input", "required": "是", "note": ""},
+                {"name": "用户信息", "control": "input", "required": "是", "note": ""},
+            ],
+            "actions": ["返回", "编辑"],
+            "jumps": [],
+            "states": ["待处理", "已完成"],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "common.css").write_text("/* ok */", encoding="utf-8")
+            (root / "detail.html").write_text(HTML_UTILS.render_page_html(spec, page, {}), encoding="utf-8")
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H8")["status"], "PASS")
+
+    def test_html_renderer_confirm_page_distinguishes_primary_and_secondary_actions_for_h9(self):
+        spec = {"module_name": "后台-订单管理"}
+        page = {
+            "page_name": "关闭订单确认弹窗",
+            "page_type": "web_form",
+            "page_archetype": "modal_form",
+            "reference_basis": "internal",
+            "reference_summary": "确认页参考摘要",
+            "fields": [{"name": "关闭原因", "control": "textarea", "required": "是", "note": ""}],
+            "actions": ["确认", "取消"],
+            "jumps": [],
+            "states": ["处理中", "失败"],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "common.css").write_text("/* ok */", encoding="utf-8")
+            (root / "confirm.html").write_text(HTML_UTILS.render_page_html(spec, page, {}), encoding="utf-8")
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H9")["status"], "PASS")
+
+    def test_html_renderer_outputs_consistency_markers(self):
+        spec = {"module_name": "后台-用户管理"}
+        page = {
+            "page_name": "用户列表页",
+            "page_type": "web_list",
+            "page_archetype": "list_table",
+            "reference_basis": "external",
+            "reference_summary": "列表页参考摘要",
+            "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+            "table_columns": [{"name": "用户名", "note": ""}],
+            "actions": ["新增用户", "编辑"],
+            "jumps": [],
+            "states": ["启用", "停用"],
+        }
+        html_text = HTML_UTILS.render_page_html(spec, page, {})
+
+        self.assertIn('data-page-type="web_list"', html_text)
+        self.assertIn('data-page-archetype="list_table"', html_text)
+        self.assertIn('data-reference-basis="external"', html_text)
+        self.assertIn('data-prototype-shell="1"', html_text)
+        self.assertIn('data-body-slot="1"', html_text)
+        self.assertIn("BODY_SLOT_START", html_text)
+        self.assertIn("BODY_SLOT_END", html_text)
+
+    def test_render_html_writes_body_slot_artifacts(self):
+        spec = {"module_name": "后台-用户管理", "module_key": "admin_user"}
+        page = {
+            "page_name": "用户列表页",
+            "page_type": "web_list",
+            "page_archetype": "list_table",
+            "output_file": "user-list.html",
+            "reference_basis": "internal",
+            "reference_summary": "列表页参考摘要",
+            "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+            "table_columns": [{"name": "用户名", "note": ""}],
+            "actions": ["新增用户", "编辑"],
+            "jumps": [],
+            "states": ["启用", "停用"],
+        }
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            page_spec_path = root / "page_spec_user.md"
+            page_spec_path.write_text(HTML_UTILS.to_markdown({"module_name": "后台-用户管理", "module_key": "admin_user", "output_format": "html", "pages": [page]}), encoding="utf-8")
+            report = RENDER_HTML.render_spec(page_spec_path, root / "prototypes", body_slots_dir=root / "body_slots")
+
+            artifacts = report["rendered_pages"][0]["body_slot_artifacts"]
+            self.assertTrue(Path(artifacts["body_spec"]).is_file())
+            self.assertTrue(Path(artifacts["body_prompt"]).is_file())
+            self.assertTrue(Path(artifacts["body_html"]).is_file())
+            self.assertIn('"slot_mode": "controlled_body"', Path(artifacts["body_spec"]).read_text(encoding="utf-8"))
+            self.assertIn("只输出 body slot 片段", Path(artifacts["body_prompt"]).read_text(encoding="utf-8"))
+            self.assertIn("filter-grid", Path(artifacts["body_html"]).read_text(encoding="utf-8"))
+
+    def test_html_pipeline_routes_layout_mismatch_to_module_brief(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_detail",
+                        "page_archetype": "detail_kv",
+                        "output_file": "user-list.html",
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "actions": ["返回", "编辑"],
+                        "jumps": [],
+                        "states": ["正常", "异常"],
+                    }
+                ],
+            )
+
+            returncode, payload = _run_html_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            finding = next(item for item in payload["review_findings"] if item["rule"] == "LAYOUT_MISMATCH")
+            self.assertEqual(finding["repair_target"], "module_brief")
+            self.assertEqual(finding["repair_action"], "rewrite_module_brief")
+
+    def test_html_pipeline_routes_h8_to_patch_renderer_when_archetype_matches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                    ),
+                },
+            )
+            root = workdir / "prototypes"
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "user-list.html").write_text(
+                "<!DOCTYPE html><html><head><title>Weak</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='用户列表页' data-page-type='web_list' data-page-archetype='list_table' data-reference-basis='internal'>"
+                "<main><table><tr><td>一行</td></tr></table><a class='btn-primary' href='#'>新增</a>"
+                "<div data-state='empty'></div><div data-state='error'></div></main></div></body></html>",
+                encoding="utf-8",
+            )
+            generated_meta = RUN_HTML_PIPELINE_MODULE._load_generated_page_meta(root)
+            findings = RUN_HTML_PIPELINE_MODULE._collect_review_findings(
+                scope="admin",
+                consistency={"missing_pages": [], "missing_field_pages": [], "low_coverage_pages": [], "layout_mismatch_pages": []},
+                html_validation={
+                    "results": [
+                        {"rule": "H8", "status": "FAIL", "details": ["user-list.html: 列表页缺少真实表格或数据行不足"]},
+                    ]
+                },
+                requirements_dir=workdir / "requirements",
+                generated_meta=generated_meta,
+            )
+
+        self.assertEqual(findings[0]["repair_target"], "html_render")
+        self.assertEqual(findings[0]["repair_action"], "patch_renderer")
+
+    def test_html_pipeline_routes_h10_to_patch_renderer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户表单页\n"
+                        "- 用户名\n"
+                    ),
+                },
+            )
+            root = workdir / "prototypes"
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "user-form.html").write_text(
+                "<!DOCTYPE html><html><head><title>Unstable</title><link rel='stylesheet' href='common.css'>"
+                "<style>.bad-button{font-family:'Times New Roman';transform:scale(0.9);}</style></head><body>"
+                "<div data-prototype-shell='1' data-page-name='用户表单页' data-page-type='web_form' "
+                "data-page-archetype='modal_form' data-reference-basis='internal'>"
+                "<main><section class='prototype-card'><div class='form-group'><label>用户名</label>"
+                "<input class='input' placeholder='用户名'></div><div class='form-group'><label>备注</label>"
+                "<textarea class='input prototype-textarea' placeholder='备注'></textarea></div></section>"
+                "<section class='prototype-card sticky-action-card'><a class='btn-primary bad-button' href='#'>提交</a>"
+                "<a class='btn-secondary' href='#'>取消</a></section>"
+                "<div data-state='processing'></div><div data-state='empty'></div><div data-state='error'></div></main>"
+                "</div></body></html>",
+                encoding="utf-8",
+            )
+            generated_meta = RUN_HTML_PIPELINE_MODULE._load_generated_page_meta(root)
+            findings = RUN_HTML_PIPELINE_MODULE._collect_review_findings(
+                scope="admin",
+                consistency={"missing_pages": [], "missing_field_pages": [], "low_coverage_pages": [], "layout_mismatch_pages": []},
+                html_validation={
+                    "results": [
+                        {"rule": "H10", "status": "FAIL", "details": ["user-form.html: 命中不稳定样式 `font-family\\s*:`"]},
+                    ]
+                },
+                requirements_dir=workdir / "requirements",
+                generated_meta=generated_meta,
+            )
+
+        self.assertEqual(findings[0]["repair_target"], "html_render")
+        self.assertEqual(findings[0]["repair_action"], "patch_renderer")
+
+    def test_validate_html_flags_missing_body_slot_contract(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "missing-slot.html").write_text(
+                "<!DOCTYPE html><html><head><title>Missing Slot</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='用户列表页' data-page-type='web_list' "
+                "data-page-archetype='list_table' data-reference-basis='internal'>"
+                "<main><div class='filter-grid'></div><table class='prototype-table'><tr></tr><tr></tr><tr></tr><tr></tr></table>"
+                "<div class='prototype-pagination'></div><div data-state='empty'></div><div data-state='error'></div></main>"
+                "</div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H11")["status"], "FAIL")
+
+    def test_html_pipeline_routes_h11_to_patch_renderer(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                    ),
+                },
+            )
+            root = workdir / "prototypes"
+            root.mkdir(parents=True, exist_ok=True)
+            (root / "user-list.html").write_text(
+                "<!DOCTYPE html><html><head><title>Weak</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='用户列表页' data-page-type='web_list' "
+                "data-page-archetype='list_table' data-reference-basis='internal'>"
+                "<main><div class='filter-grid'></div><table class='prototype-table'><tr></tr><tr></tr><tr></tr><tr></tr></table>"
+                "<div class='prototype-pagination'></div><div data-state='empty'></div><div data-state='error'></div></main>"
+                "</div></body></html>",
+                encoding="utf-8",
+            )
+            generated_meta = RUN_HTML_PIPELINE_MODULE._load_generated_page_meta(root)
+            findings = RUN_HTML_PIPELINE_MODULE._collect_review_findings(
+                scope="admin",
+                consistency={"missing_pages": [], "missing_field_pages": [], "low_coverage_pages": [], "layout_mismatch_pages": []},
+                html_validation={
+                    "results": [
+                        {"rule": "H11", "status": "FAIL", "details": ["user-list.html: 缺少 body slot 标记"]},
+                    ]
+                },
+                requirements_dir=workdir / "requirements",
+                generated_meta=generated_meta,
+            )
+
+        self.assertEqual(findings[0]["repair_target"], "html_render")
+        self.assertEqual(findings[0]["repair_action"], "patch_renderer")
+
+    def test_reference_pack_blocks_prototypes_html_sources(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            (workdir / "prototypes-html").mkdir(parents=True, exist_ok=True)
+            (workdir / "prototypes-html" / "用户列表页参考.html").write_text("<html></html>", encoding="utf-8")
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "page_archetype": "list_table",
+                        "output_file": "user-list.html",
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户", "编辑"],
+                        "jumps": [],
+                        "states": ["启用", "停用"],
+                    }
+                ],
+            )
+
+            manifest = REFERENCE_UTILS.ensure_reference_pack(workdir)
+            returncode, payload = _run_html_pipeline_cli(workdir, "渔易购-后台管理")
+
+            self.assertTrue(manifest["blocked_sources"])
+            self.assertTrue(manifest["policy_violations"])
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["review_findings"][0]["rule"], "REFERENCE_POLICY")
+
+    def test_repair_html_renderer_restores_baseline_files(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            skill_root = Path(tmp) / "prototype-generator"
+            (skill_root / "scripts").mkdir(parents=True, exist_ok=True)
+            (skill_root / "templates").mkdir(parents=True, exist_ok=True)
+            (skill_root / "templates" / "html_utils_renderer_baseline.py").write_text(
+                (SKILL_DIR / "templates" / "html_utils_renderer_baseline.py").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (skill_root / "templates" / "render_html_renderer_baseline.py").write_text(
+                (SKILL_DIR / "templates" / "render_html_renderer_baseline.py").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (skill_root / "templates" / "common_renderer_baseline.css").write_text(
+                (SKILL_DIR / "templates" / "common_renderer_baseline.css").read_text(encoding="utf-8"),
+                encoding="utf-8",
+            )
+            (skill_root / "scripts" / "html_utils.py").write_text("# broken renderer\n", encoding="utf-8")
+            (skill_root / "scripts" / "render_html.py").write_text("# broken render entry\n", encoding="utf-8")
+            (skill_root / "templates" / "common.css").write_text("/* broken */\n", encoding="utf-8")
+
+            changes = AUTOFIX.repair_html_renderer(skill_root, [{"repair_action": "patch_renderer"}])
+
+            self.assertTrue(changes)
+            self.assertEqual(
+                (skill_root / "scripts" / "html_utils.py").read_text(encoding="utf-8"),
+                (skill_root / "templates" / "html_utils_renderer_baseline.py").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                (skill_root / "scripts" / "render_html.py").read_text(encoding="utf-8"),
+                (skill_root / "templates" / "render_html_renderer_baseline.py").read_text(encoding="utf-8"),
+            )
+            self.assertEqual(
+                (skill_root / "templates" / "common.css").read_text(encoding="utf-8"),
+                (skill_root / "templates" / "common_renderer_baseline.css").read_text(encoding="utf-8"),
+            )
+
     def test_autonomous_html_pipeline_repairs_page_spec_and_converges(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -1996,6 +2776,272 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             self.assertIn("密码", repaired_fields)
             self.assertIn("图形验证码", repaired_fields)
 
+    def test_autonomous_pipeline_resume_from_review_completed_repairs_and_converges(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "is_nav_page": False,
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用"],
+                    }
+                ],
+            )
+
+            first_returncode, first_payload = _run_html_pipeline_cli(workdir, "渔易购-后台管理")
+            self.assertNotEqual(first_returncode, 0, json.dumps(first_payload, ensure_ascii=False))
+
+            round_dir = workdir / ".prototype-generator" / "rounds" / "round_01"
+            _write_json(round_dir / "pipeline_report.json", first_payload)
+            _write_json(
+                round_dir / "round_report.json",
+                {
+                    "round": 1,
+                    "pipeline_report": first_payload,
+                    "vision_review": {"status": "skipped", "mode": "auto", "findings": []},
+                    "finding_count": len(first_payload["review_findings"]),
+                    "escalations": [],
+                },
+            )
+            _write_autoloop_state(
+                workdir,
+                product_name="渔易购-后台管理",
+                format_name="html",
+                status="running",
+                phase="review_completed",
+                current_round=1,
+                next_round=2,
+                rounds=[{"round": 1, "finding_count": len(first_payload["review_findings"]), "escalations": [], "summary": first_payload["summary"]}],
+                latest_findings=first_payload["review_findings"],
+                final_artifact=first_payload["artifacts"]["index_html"],
+            )
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True)
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertTrue(payload["resumed"])
+            self.assertEqual(payload["resume_from_phase"], "review_completed")
+            self.assertEqual(payload["resume_from_round"], 1)
+            self.assertEqual([item["round"] for item in payload["rounds"]], [1, 2])
+            repaired_spec = (workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md").read_text(encoding="utf-8")
+            self.assertIn("手机号", repaired_spec)
+            self.assertIn("状态", repaired_spec)
+            execution_state = (workdir / ".prototype-generator" / "执行状态.md").read_text(encoding="utf-8")
+            self.assertIn("--resume from round 1 / review_completed", execution_state)
+
+    def test_autonomous_pipeline_resume_from_round_repaired_starts_next_round(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                        "- 手机号\n"
+                        "- 状态\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "is_nav_page": False,
+                        "fields": [
+                            {"name": "用户名", "control": "input", "required": "否", "note": ""},
+                            {"name": "手机号", "control": "input", "required": "否", "note": ""},
+                            {"name": "状态", "control": "select", "required": "否", "note": ""},
+                        ],
+                        "table_columns": [
+                            {"name": "用户名", "note": ""},
+                            {"name": "手机号", "note": ""},
+                            {"name": "状态", "note": ""},
+                        ],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "禁用"],
+                    }
+                ],
+            )
+            _write_autoloop_state(
+                workdir,
+                product_name="渔易购-后台管理",
+                format_name="html",
+                status="running",
+                phase="round_repaired",
+                current_round=1,
+                next_round=2,
+                rounds=[{"round": 1, "finding_count": 2, "escalations": [], "summary": {"fail": 1, "warn": 0, "pass": 0}}],
+                latest_findings=[{"severity": "error", "rule": "MISSING_FIELDS", "page_or_sheet": "用户列表页"}],
+                final_artifact=str(workdir / "prototypes" / "index.html"),
+            )
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True)
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["resume_from_phase"], "round_repaired")
+            self.assertEqual([item["round"] for item in payload["rounds"]], [1, 2])
+
+    def test_autonomous_pipeline_resume_returns_existing_pass_result(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            round_dir = workdir / ".prototype-generator" / "rounds" / "round_01"
+            pipeline_report = {
+                "summary": {"fail": 0, "warn": 0, "pass": 1},
+                "artifacts": {"index_html": str(workdir / "prototypes" / "index.html")},
+            }
+            _write_json(round_dir / "pipeline_report.json", pipeline_report)
+            _write_autoloop_state(
+                workdir,
+                product_name="渔易购-后台管理",
+                format_name="html",
+                status="passed",
+                phase="completed",
+                current_round=1,
+                next_round=2,
+                rounds=[{"round": 1, "finding_count": 0, "escalations": [], "summary": {"fail": 0, "warn": 0, "pass": 1}}],
+                latest_findings=[],
+                final_artifact=str(workdir / "prototypes" / "index.html"),
+            )
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True)
+
+            self.assertEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertEqual(payload["status"], "passed")
+            self.assertTrue(payload["resumed"])
+            self.assertEqual(payload["resume_from_phase"], "completed")
+            self.assertEqual(len(payload["rounds"]), 1)
+
+    def test_autonomous_pipeline_resume_fails_when_state_is_missing(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True)
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertIn("resume state not found", payload["error"])
+
+    def test_autonomous_pipeline_resume_fails_when_state_is_invalid_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            state_path = workdir / ".prototype-generator" / "autoloop_state.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text("{bad json", encoding="utf-8")
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True)
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertIn("resume state is not valid JSON", payload["error"])
+
+    def test_autonomous_pipeline_resume_fails_when_state_context_mismatches(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_autoloop_state(
+                workdir,
+                product_name="别的产品",
+                format_name="html",
+                status="running",
+                phase="round_started",
+                current_round=1,
+                next_round=1,
+                rounds=[],
+                latest_findings=[],
+            )
+
+            returncode, payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True)
+
+            self.assertNotEqual(returncode, 0, json.dumps(payload, ensure_ascii=False))
+            self.assertIn("resume state does not match", payload["error"])
+
+    def test_autonomous_pipeline_failed_state_requires_higher_max_rounds_to_continue(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_split(
+                workdir,
+                {
+                    "详细需求文档_后台-用户管理.md": (
+                        "# 渔易购 — 后台-用户管理需求\n\n"
+                        "#### 功能点 1.1：用户管理\n"
+                        "- **页面/界面：** 用户列表页\n"
+                        "- 用户名\n"
+                    ),
+                },
+            )
+            _write_html_page_spec(
+                workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md",
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "output_file": "user-list.html",
+                        "is_nav_page": False,
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用"],
+                    }
+                ],
+            )
+            _write_autoloop_state(
+                workdir,
+                product_name="渔易购-后台管理",
+                format_name="html",
+                status="failed",
+                phase="completed",
+                current_round=2,
+                next_round=3,
+                rounds=[
+                    {"round": 1, "finding_count": 1, "escalations": [], "summary": {"fail": 1, "warn": 0, "pass": 0}},
+                    {"round": 2, "finding_count": 1, "escalations": [], "summary": {"fail": 1, "warn": 0, "pass": 0}},
+                ],
+                latest_findings=[{"severity": "error", "rule": "VISION_BACKEND", "page_or_sheet": "index.html"}],
+                blocked_findings=[{"severity": "error", "rule": "VISION_BACKEND", "page_or_sheet": "index.html"}],
+                max_rounds=2,
+                vision_review="required",
+            )
+
+            fail_code, fail_payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True, max_rounds=2, vision_review="required")
+            self.assertNotEqual(fail_code, 0, json.dumps(fail_payload, ensure_ascii=False))
+            self.assertEqual(len(fail_payload["rounds"]), 2)
+
+            continue_code, continue_payload = _run_autoloop_cli(workdir, "渔易购-后台管理", "html", resume=True, max_rounds=3, vision_review="required")
+            self.assertNotEqual(continue_code, 0, json.dumps(continue_payload, ensure_ascii=False))
+            self.assertEqual([item["round"] for item in continue_payload["rounds"]], [1, 2, 3])
+
     def test_autonomous_pipeline_records_blockers_after_max_rounds(self):
         with tempfile.TemporaryDirectory() as tmp:
             workdir = Path(tmp)
@@ -2033,6 +3079,10 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             self.assertNotEqual(completed.returncode, 0, json.dumps(payload, ensure_ascii=False))
             self.assertEqual(payload["status"], "failed")
             self.assertTrue(payload["blocked_findings"])
+            state = json.loads((workdir / ".prototype-generator" / "autoloop_state.json").read_text(encoding="utf-8"))
+            self.assertIn("failure_summary", state)
+            self.assertIn("stop_recommendation", state)
+            self.assertTrue(state["last_unconverged_reason"])
 
 
 if __name__ == "__main__":

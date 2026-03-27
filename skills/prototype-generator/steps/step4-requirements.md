@@ -80,6 +80,7 @@
   - `requirements/module_briefs/模块摘要_[模块中文名].md`
   - `requirements/index.md`
   - `requirements/详细需求文档_[模块中文名].md`
+- 若进入 Step 5 / Step 6 时发现这些压缩产物缺失、覆盖不足或预算门禁失败，主控器必须自动重写这些文件，再继续后续阶段
 - Step 5 / Step 6 分拆模式的默认读取顺序必须是：`index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`
 - 未生成 `module_brief` 时，禁止启动 Step 5 子 agent
 - 面向 Codex 5.4 Medium 时，单个模块摘要应优先压缩到“一页内可读”；若某模块详细文档仍过长，必须继续拆章节索引，而不是要求后续子任务整篇通读

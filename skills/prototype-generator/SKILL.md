@@ -51,7 +51,7 @@ metadata:
 6. **页面规格冻结**：统一写入 `.prototype-generator/page_specs/page_spec_*.md`
 7. **原型渲染**：
    - draw.io：`page_model -> build_page_spec.py -> render.py -> validate.py -> merge.py`
-   - HTML：从 `.prototype-generator/page_specs/` 渲染页面文件
+   - HTML：`page_spec -> body_slots(body_spec/body_prompt/body_html) -> shell compose -> validate`
 8. **一致性校验**：覆盖率、一致性、缺页、缺字段检查
 9. **最终交付**：输出 `prototypes/` 下最终原型
 
@@ -93,6 +93,7 @@ metadata:
 - Step 4 必须生成 `requirements/module_briefs/模块摘要_[模块中文名].md`
 - Step 4 必须生成 `requirements/index.md`
 - Step 4 可继续生成 `requirements/详细需求文档_[模块中文名].md`，但**不再合并回单一大文档**
+- 若后续阶段发现缺少 `overview/module_briefs/index`、`module_brief` 覆盖不足，或上下文预算门禁失败，必须自动重写这些压缩产物，而不是只报错退出
 - Step 5 / Step 6 必须按 `index.md -> overview -> module_brief -> 模块详细文档 -> page_spec` 的顺序读取
 - Step 5 / Step 6 每个子任务默认只允许回读 **一个** 模块详细文档；若一个模块文档仍过大，必须先压缩到对应 `module_brief`
 - render 阶段与审视阶段禁止把最终原型或原始资料当作主记忆源；若发现问题，必须回退到 `requirements/` 或 `.prototype-generator/page_specs/`
@@ -114,8 +115,10 @@ metadata:
 - `WORK_DIR/requirements/module_briefs/模块摘要_*.md`
 - `WORK_DIR/.prototype-generator/原型任务清单.md`
 - `WORK_DIR/.prototype-generator/原型DoD.md`
+- `WORK_DIR/.prototype-generator/reference_pack/`
 - `WORK_DIR/.prototype-generator/page_models/page_model_*.json`
 - `WORK_DIR/.prototype-generator/page_specs/page_spec_*.md`
+- `WORK_DIR/.prototype-generator/body_slots/`
 - `WORK_DIR/.prototype-generator/tmp/drawio_*_tmp.xml`
 - `WORK_DIR/prototypes/`
 
@@ -130,6 +133,8 @@ metadata:
 自治模式下：
 - draw.io 主流程默认最多自迭代 5 轮；每轮都必须生成真实 `WORK_DIR/prototypes/[产品名称].drawio`
 - 自治主控器统一入口：`scripts/run_autonomous_pipeline.py <work_dir> <product_name> --format drawio|html`
+- 若 CLI / 网络中断后要继续，只能显式执行 `scripts/run_autonomous_pipeline.py <work_dir> <product_name> --format drawio|html --resume`
+- `--resume` 只恢复已落盘的 checkpoint、中间产物和轮次账本；不恢复已退出的 agent / subprocess / 网络会话
 - 任一时刻最多只允许 3 个并行 agent 或并行模块任务
 - 每轮都必须执行：`check_prototype_consistency.py` → 模块级 `validate.py` → `merge.py` → 最终 `validate.py`
 - 最终 `.drawio` 未通过前，禁止宣告完成
@@ -145,10 +150,16 @@ metadata:
 - 若已触发上下文压缩模式，缺少 `requirements/详细需求文档_overview.md`、`requirements/module_briefs/` 或 `requirements/index.md` 任一项，禁止进入原型阶段
 - 没有 `.prototype-generator/原型任务清单.md`，禁止进入渲染阶段
 - 没有 `.prototype-generator/page_specs/`，禁止进入任何渲染阶段
-- 渲染阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、样式规范、任务清单、导航映射
+- `OUTPUT_FORMAT=html` 时，渲染前必须先生成或刷新 `.prototype-generator/reference_pack/`；优先使用内部截图/原型/竞品图，缺参照物时允许外部检索补充行业案例
+- `reference_pack` 必须显式记录 `allowed_sources`、`blocked_sources`、`policy_violations`；命中 `prototypes-html/` 等禁用来源时，必须直接报错并重建参考包，禁止静默忽略
+- HTML 渲染阶段禁止回读原始资料；只允许读取冻结后的 `.prototype-generator/page_specs/`、`.prototype-generator/body_slots/`、样式规范、任务清单、导航映射
+- HTML 页面主体必须通过受控 `body slot` 生成；模型只生成 slot 片段，脚本负责 shell、导航、状态区和元数据拼装
 - Step 5 / Step 6 子任务若处于分拆模式，必须先读取 `requirements/index.md`、`requirements/详细需求文档_overview.md` 和 `requirements/module_briefs/模块摘要_[模块中文名].md`，再按需读取模块详细文档
 - 最终输出前，必须通过 `validate.py` 与 `check_prototype_consistency.py`
 - 若本轮为修复原型质量而修改了 skill 自身脚本、模板或提示词，必须同步补充回归测试并执行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；测试不通过时必须继续修复，禁止直接宣布完成
+- HTML 自治修复必须按 `repair_action` 分流：`MISSING_FIELDS/LOW_COVERAGE -> rewrite_page_spec`，`LAYOUT_MISMATCH -> rewrite_module_brief/rewrite_requirements`，`H1/H2/H4/H10/H11/RENDER/BODY_RENDER/BODY_CONTRACT -> patch_renderer`，`H7/参考污染 -> rebuild_reference_pack`
+- `rewrite_requirements` 不得只生成占位文件；必须生成真实可消费的 `overview + module_briefs + index`
+- `scripts/run_autonomous_pipeline.py` 写入的 `autoloop_state.json` 必须包含未收敛原因摘要：重复失败、已尝试修复层、最近未收敛原因、停机建议
 
 ### draw.io 专属门禁
 

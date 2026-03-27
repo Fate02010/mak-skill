@@ -8,7 +8,7 @@
 python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format html --json
 ```
 
-主控器内部会调用 `run_html_pipeline.py` 生成 HTML、执行一致性校验、结构校验，并把失败路由回 `page_spec`。
+主控器内部会调用 `run_html_pipeline.py` 生成 HTML、执行一致性校验、结构校验，并输出带 `repair_action/root_cause_hint/stop_category` 的 failure routing。
 
 ---
 
@@ -16,7 +16,7 @@ python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --f
 
 HTML 模式也必须走：
 
-`requirements -> .prototype-generator/page_specs/page_spec_*.md -> HTML render`
+`requirements -> .prototype-generator/reference_pack/ -> .prototype-generator/page_specs/page_spec_*.md -> .prototype-generator/body_slots/ -> HTML shell compose`
 
 禁止从需求文档直接生成最终 HTML。
 
@@ -33,6 +33,20 @@ cp SKILL_DIR/templates/common.css WORK_DIR/prototypes/common.css
 
 > 所有 HTML 页面通过 `<link rel="stylesheet" href="common.css">` 引用此文件。
 > subagent 生成的 HTML 中**禁止在 `<style>` 中重复定义 `:root` 变量和通用组件样式**。
+
+### 前置准备：构建参考包（高保真 HTML 强制要求）
+
+在冻结 `page_spec` 前，必须先生成：
+
+`WORK_DIR/.prototype-generator/reference_pack/`
+
+规则：
+- 优先读取用户资料中的截图、原型、历史页面、竞品图作为内部参考
+- 若当前页面/模块缺少可用参照物，允许外部检索竞品和行业案例补充参考
+- 外部检索结果必须落盘到 `reference_pack/`，禁止只停留在 prompt 里
+- render 阶段允许读取 `reference_pack/references_[模块英文名].md`，但禁止重新回读原始资料
+- `reference_pack/manifest.json` 必须记录 `allowed_sources`、`blocked_sources`、`policy_violations`
+- 禁止把 `prototypes-html/` 当作参考输入；一旦命中，当前 HTML pipeline 必须报 `REFERENCE_POLICY`
 
 同时读取：
 
@@ -54,9 +68,17 @@ cp SKILL_DIR/templates/common.css WORK_DIR/prototypes/common.css
 每个 HTML 子任务必须按顺序完成两件事：
 
 1. 读取需求文档并冻结本模块 `page_spec`
-2. 只基于 `page_spec` 渲染 HTML 页面
+2. 先基于 `page_spec` 生成 `body_spec/body_prompt/body_html`
+3. 再由脚本把 body slot 拼装为完整 HTML 页面
 
 第二阶段禁止再次回读原始资料、PRD、竞品文档或需求文档原文。
+第二阶段允许读取当前模块的 `reference_pack` 摘要文件，用于保持页面骨架、层级和主视觉与参考一致。
+第二阶段的模型输出只允许是 body slot 片段，禁止输出完整 HTML 文档、sidebar、nav、metadata 和 shared CSS。
+若门禁失败，修复面必须按以下规则分流，而不是统一补字段：
+- `MISSING_FIELDS`、`LOW_COVERAGE`：重写 `page_spec`
+- `LAYOUT_MISMATCH`：回退到 `module_brief` / `requirements` 重冻规格
+- `H1/H2/H4/H10/H11/RENDER/BODY_RENDER/BODY_CONTRACT/H8/H9`：进入 `patch_renderer`
+- `H7` 或参考源污染：重建 `reference_pack`
 
 ### 启动方式
 

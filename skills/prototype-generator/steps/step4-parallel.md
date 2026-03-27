@@ -24,6 +24,7 @@ WORK_DIR/
 ```
 
 > **注意：** 不生成合并版 `详细需求文档.md`。所有后续步骤（Step 5、Step 6）通过读取 `index.md + overview + module_brief + 对应模块文件` 获取完整信息。
+> **自动重写规则：** 若后续阶段发现 `overview/module_briefs/index` 缺失、过旧或覆盖不足，可由主控器自动重写这些压缩产物；重写目标是恢复“最小可执行上下文”，不是回退到单文件大 PRD。
 
 ---
 

@@ -11,7 +11,14 @@ python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --f
 python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format html --json
 ```
 
-主控器会把每轮报告落到 `WORK_DIR/.prototype-generator/rounds/round_XX/`，并持续更新 `autoloop_state.json` 与 `执行状态.md`。
+断网或 CLI 退出后，如需继续，必须显式执行：
+
+```bash
+python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format drawio --resume --json
+python3 SKILL_DIR/scripts/run_autonomous_pipeline.py WORK_DIR [产品名称] --format html --resume --json
+```
+
+主控器会把每轮报告落到 `WORK_DIR/.prototype-generator/rounds/round_XX/`，并持续更新 `autoloop_state.json` 与 `执行状态.md`。`--resume` 只恢复已落盘的轮次状态、findings 和中间产物，不恢复已经退出的子进程或网络会话。HTML 自治状态还必须记录未收敛原因摘要：重复失败、已尝试修复层、最近未收敛原因、停机建议。
 
 ---
 
@@ -58,7 +65,8 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 2. 提取"原型图清单"和每个页面的功能描述、字段列表
 3. 读取 `WORK_DIR/.prototype-generator/原型任务清单.md`，获取已生成的页面列表
 4. 读取 `WORK_DIR/.prototype-generator/page_specs/`，获取冻结后的页面结构、字段、跳转和状态定义
-5. 扫描已生成文件：
+5. 若存在 `WORK_DIR/.prototype-generator/reference_pack/manifest.json`，一并读取当前页面的参考摘要，用于核对 HTML 高保真骨架是否偏离参考
+6. 扫描已生成文件：
    - **HTML 模式**：用当前会话可用的文件列表命令列出 `WORK_DIR/prototypes/*.html`
    - **draw.io 模式**：读取 `WORK_DIR/prototypes/[产品名称].drawio`，列出所有 `<diagram name>` 和 swimlane
 
@@ -71,6 +79,8 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - 每轮都必须重新生成真实 `WORK_DIR/prototypes/[产品名称].drawio`
 - 每轮都必须重跑：`check_prototype_consistency.py`、模块级 `validate.py`、最终 `validate.py`
 - 同一问题连续两轮未收敛时，必须提升回退层级，不得继续原地微调
+- HTML findings 必须先分类：`auto_repairable / needs_refreeze / needs_skill_patch`
+- 命中 `needs_skill_patch` 时，立即进入 skill patch + regression test 分支；回归测试失败则直接停机，不再空转到熔断轮次
 
 ### 七维度审视
 
@@ -129,7 +139,10 @@ python3 SKILL_DIR/scripts/validate.py WORK_DIR/prototypes/[产品名称].drawio 
 - 列表页：筛选条件 + 列表展示列名
 - 表单页：表单字段名（含控件类型、是否必填）
 - 详情页：展示字段名
-输出 coverage 报告，< 80% 的页面必须修复。修复方式：统一先修改 `.prototype-generator/page_specs/page_spec_*.md`，再重跑对应模块渲染。
+输出 coverage 报告，< 80% 的页面必须修复。HTML 模式修复面不得一律回到 `page_spec`：
+- `MISSING_FIELDS/LOW_COVERAGE`：修改 `.prototype-generator/page_specs/page_spec_*.md`
+- `LAYOUT_MISMATCH`：优先重冻 `requirements/module_briefs/模块摘要_*.md`，必要时回退到 `requirements/`
+- `H1/H2/H4/RENDER/H8/H9`：修改 renderer / 模板并补跑 HTML 回归测试
 
 **维度三：排版合理性**
 

@@ -2,6 +2,28 @@
 
 生成的 HTML 原型必须**可直接作为 UI 临摹的布局参考**，设计师拿到后可直接对照还原。
 
+## 双层生成约束
+
+HTML 默认采用“双层生成”：
+
+1. 脚本生成页面 shell、导航、状态区、metadata
+2. 模型或受控 renderer 只生成 body slot 主体片段
+
+必须满足：
+- body slot 只输出内容区块，禁止输出 `<html>` / `<head>` / `<body>`
+- body slot 禁止输出 `.sidebar`、`.nav-bar`、breadcrumb、`data-prototype-shell`
+- 最终 HTML 必须带 `data-body-slot="1"`，并包含 `BODY_SLOT_START/END` 边界注释
+
+## 高保真参考优先级
+
+HTML 模式默认按以下优先级确定页面骨架和视觉层级：
+
+1. `WORK_DIR/.prototype-generator/reference_pack/` 中已落盘的内部截图/历史页面/竞品图摘要
+2. 若 `reference_pack` 缺少当前页面参考，则补充外部检索得到的竞品/行业案例摘要
+3. 若仍无参考，则按 `page_archetype` 的高保真默认骨架生成
+
+禁止只因“没有参照物”就退化为低保真占位页面；即使无参考，也必须输出可直接继续设计的高保真默认布局。
+
 ---
 
 ## 共享样式引用（禁止内联复制）
@@ -215,7 +237,8 @@ location.href = 'login.html';
 
 - 所有页面跳转用 `<a href="相对路径">` 或 `location.href` 实现，可真实点击
 - 页面进入淡入动效（已内置在 common.css）
-- 按钮点击缩放反馈（scale 0.97，100ms）— 已内置在 `.btn-primary:active`
+- 禁止对按钮、输入框、文字容器使用 `scale/zoom` 等会造成变形的样式
+- 禁止在页面内自定义 `font-family`；按钮、输入框、正文统一继承 `common.css` 的字体栈
 - 表单提交有加载态（按钮文字变"处理中..."，disabled）
 - 弹窗用 `.modal-overlay` + `.modal`，JS 控制 `.show` class
 - 未生成的目标页面用 `alert("跳转到[目标功能]")` 占位，不得留空

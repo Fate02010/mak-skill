@@ -12,10 +12,11 @@
 **统一原则：**
 
 - Step 5 的中间产物统一写入 `WORK_DIR/.prototype-generator/`
+- HTML 模式在 render 前必须先生成 `WORK_DIR/.prototype-generator/reference_pack/`，用于沉淀内部截图/外部案例的页面级参考依据
 - Step 5 的“页面规格冻结”产物统一写入 `WORK_DIR/.prototype-generator/page_specs/`
 - 若 Step 4 已触发默认强制压缩模式，则 `requirements/详细需求文档_overview.md`、`requirements/module_briefs/`、`requirements/index.md` 缺一不可
 - 没有 `.prototype-generator/page_specs/page_spec_*.md`，禁止进入任何 render 阶段
-- render 阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、任务清单、样式规范、跳转映射
+- render 阶段禁止回读原始资料，只允许读取冻结后的 `.prototype-generator/page_specs/`、`reference_pack/`、任务清单、样式规范、跳转映射
 - 分拆模式下，子 agent 的默认读取顺序必须是 `index.md -> overview -> module_brief -> 模块详细文档 -> page_spec`
 - 面向 `Codex 5.4 Medium / 200K`，单个子任务默认只允许持有 `overview + 1 个 module_brief + 1 个模块详细文档 + 当前 page_spec`；超出则必须先压缩后再继续
 - 若本轮为修复 skill 本身而改动了 `SKILL_DIR/scripts/`、`SKILL_DIR/steps/` 或 `SKILL_DIR/templates/`，必须同步新增/更新仓库回归测试，并执行 `python3 -m unittest discover -s tests -p 'test_*.py' -v`；测试失败时必须继续回修

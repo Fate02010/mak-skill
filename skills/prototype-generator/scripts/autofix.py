@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 from pathlib import Path
 
 from html_utils import parse_page_spec, to_markdown
+from requirements_compression import ensure_compressed_requirements
+from reference_utils import ensure_reference_pack
 from requirements_utils import (
     default_actions_for_page,
     default_states_for_page,
@@ -16,6 +20,21 @@ from requirements_utils import (
 )
 
 
+RENDERER_BASELINE_FILES = {
+    "scripts/html_utils.py": "templates/html_utils_renderer_baseline.py",
+    "scripts/render_html.py": "templates/render_html_renderer_baseline.py",
+    "templates/common.css": "templates/common_renderer_baseline.css",
+}
+HTML_RENDERER_REGRESSION_TESTS = [
+    "tests.test_prototype_generator_drawio.PrototypeGeneratorDrawioTests.test_html_renderer_login_page_excludes_admin_navigation",
+    "tests.test_prototype_generator_drawio.PrototypeGeneratorDrawioTests.test_html_renderer_list_page_contains_filter_table_and_pagination",
+    "tests.test_prototype_generator_drawio.PrototypeGeneratorDrawioTests.test_html_renderer_detail_page_keeps_detail_skeleton_for_h8",
+    "tests.test_prototype_generator_drawio.PrototypeGeneratorDrawioTests.test_html_renderer_confirm_page_distinguishes_primary_and_secondary_actions_for_h9",
+    "tests.test_prototype_generator_drawio.PrototypeGeneratorDrawioTests.test_html_renderer_outputs_consistency_markers",
+    "tests.test_prototype_generator_drawio.PrototypeGeneratorDrawioTests.test_render_html_writes_body_slot_artifacts",
+]
+
+
 def repair_drawio_page_models(
     requirements_dir: str | Path,
     page_models_dir: str | Path,
@@ -24,12 +43,7 @@ def repair_drawio_page_models(
     requirements = parse_requirement_modules(requirements_dir)
     page_models_root = Path(page_models_dir)
     changes: list[dict] = []
-    target_pages = {
-        value
-        for finding in findings
-        for value in [str(finding.get("page_or_sheet", "")).strip()]
-        if value and "/" not in value and not value.endswith((".json", ".md", ".drawio", ".html", ".xml"))
-    }
+    target_pages = _target_pages(findings)
     for model_path in sorted(page_models_root.glob("page_model_*.json")):
         model = json.loads(model_path.read_text(encoding="utf-8"))
         module_name = str(model.get("module_name", "")).strip()
@@ -77,10 +91,7 @@ def repair_drawio_page_models(
             if status_values:
                 page["status_values"] = status_values
             page.setdefault("states", {})
-            if "loading" not in page["states"]:
-                page["states"]["loading"] = "加载中显示骨架屏"
-                changed = True
-            elif "占位" in str(page["states"].get("loading", "")):
+            if "loading" not in page["states"] or "占位" in str(page["states"].get("loading", "")):
                 page["states"]["loading"] = "加载中显示骨架屏"
                 changed = True
             if "error" not in page["states"]:
@@ -115,21 +126,31 @@ def repair_html_page_specs(
     requirements_dir: str | Path,
     page_specs_dir: str | Path,
     findings: list[dict],
+    *,
+    force_rebuild_layout: bool = False,
 ) -> list[dict]:
     requirements = parse_requirement_modules(requirements_dir)
     page_specs_root = Path(page_specs_dir)
     changes: list[dict] = []
-    target_pages = {
-        value
-        for finding in findings
-        for value in [str(finding.get("page_or_sheet", "")).strip()]
-        if value and "/" not in value and not value.endswith((".json", ".md", ".drawio", ".html", ".xml"))
-    }
-    target_page_set = {item for item in target_pages if item}
+    target_pages = _target_pages(findings)
+    rebuild_pages = set()
+    if force_rebuild_layout:
+        rebuild_pages.update(target_pages)
+    for finding in findings:
+        if str(finding.get("repair_action", "")) in {"rewrite_module_brief", "rewrite_requirements"}:
+            page = str(finding.get("page_or_sheet", "")).strip()
+            if page and "/" not in page and not page.endswith((".md", ".html", ".json", ".xml")):
+                rebuild_pages.add(page)
+        if str(finding.get("rule", "")) == "LAYOUT_MISMATCH":
+            page = str(finding.get("page_or_sheet", "")).strip()
+            if page:
+                rebuild_pages.add(page)
+
     module_specs: dict[str, tuple[Path, dict]] = {}
     for spec_path in sorted(page_specs_root.glob("page_spec_*.md")):
         spec = parse_page_spec(spec_path)
         module_specs[spec.get("module_name", "")] = (spec_path, spec)
+
     for module_name, module_req in requirements.items():
         if module_name in module_specs:
             spec_path, spec = module_specs[module_name]
@@ -144,25 +165,34 @@ def repair_html_page_specs(
         changed = False
         existing = {page.get("page_name", ""): page for page in spec.get("pages", [])}
         for page_name, req in module_req["pages"].items():
-            if target_page_set and page_name not in target_page_set:
+            if target_pages and page_name not in target_pages and page_name not in rebuild_pages:
                 continue
             if page_name not in existing:
                 spec.setdefault("pages", []).append(_build_html_page_stub(req))
+                changed = True
+                continue
+            if page_name in rebuild_pages:
+                replacement = _build_html_page_stub(req)
+                original = existing[page_name]
+                replacement["output_file"] = original.get("output_file") or replacement["output_file"]
+                replacement["is_nav_page"] = bool(original.get("is_nav_page", replacement["is_nav_page"]))
+                spec["pages"] = [replacement if page.get("page_name", "") == page_name else page for page in spec.get("pages", [])]
+                existing[page_name] = replacement
                 changed = True
                 continue
             page = existing[page_name]
             field_names = [field.get("name", "") for field in page.get("fields", [])]
             for field in req.get("fields", []):
                 if field not in field_names:
-                    page.setdefault("fields", []).append(
-                        {"name": field, "control": "input", "required": "否", "note": ""}
-                    )
+                    page.setdefault("fields", []).append({"name": field, "control": "input", "required": "否", "note": ""})
+                    field_names.append(field)
                     changed = True
             column_names = [column.get("name", "") for column in page.get("table_columns", [])]
             if str(page.get("page_type", "")).strip() in {"web_list", "mobile_list"}:
                 for field in req.get("fields", []):
                     if field not in column_names and len(column_names) < 8:
                         page.setdefault("table_columns", []).append({"name": field, "note": ""})
+                        column_names.append(field)
                         changed = True
             for action in req.get("actions", []):
                 if action not in page.get("actions", []):
@@ -172,11 +202,173 @@ def repair_html_page_specs(
                 if state not in page.get("states", []):
                     page.setdefault("states", []).append(state)
                     changed = True
+            inferred_type, inferred_archetype = infer_page_shape(page_name)
+            if not page.get("page_archetype"):
+                page["page_archetype"] = inferred_archetype
+                changed = True
+            if not page.get("page_type"):
+                page["page_type"] = inferred_type
+                changed = True
         if changed:
             spec_path.parent.mkdir(parents=True, exist_ok=True)
             spec_path.write_text(to_markdown(spec), encoding="utf-8")
             changes.append({"path": str(spec_path), "module_name": module_name})
     return changes
+
+
+def repair_html_module_briefs(
+    requirements_dir: str | Path,
+    findings: list[dict],
+) -> list[dict]:
+    requirements_root = Path(requirements_dir)
+    briefs_dir = requirements_root / "module_briefs"
+    briefs_dir.mkdir(parents=True, exist_ok=True)
+    requirements = parse_requirement_modules(requirements_root)
+    target_modules = _target_modules(requirements, findings)
+    changes: list[dict] = []
+    for module_name, module_req in requirements.items():
+        if target_modules and module_name not in target_modules:
+            continue
+        brief_path = briefs_dir / f"模块摘要_{module_name}.md"
+        brief_text = _build_module_brief_markdown(module_name, module_req)
+        if not brief_path.exists() or brief_path.read_text(encoding="utf-8") != brief_text:
+            brief_path.write_text(brief_text, encoding="utf-8")
+            changes.append({"path": str(brief_path), "module_name": module_name})
+    return changes
+
+
+def repair_html_requirements(
+    requirements_dir: str | Path,
+    findings: list[dict],
+) -> list[dict]:
+    requirements_root = Path(requirements_dir)
+    report = ensure_compressed_requirements(requirements_root.parent, force=True)
+    changes: list[dict] = []
+    for path in report.get("changed_paths", []):
+        module_name = "requirements"
+        if "模块摘要_" in path:
+            module_name = Path(path).stem.replace("模块摘要_", "", 1)
+        elif path.endswith("详细需求文档_overview.md"):
+            module_name = "overview"
+        elif path.endswith("index.md"):
+            module_name = "index"
+        changes.append({"path": str(path), "module_name": module_name})
+    return changes
+
+
+def repair_html_reference_pack(
+    work_dir: str | Path,
+    findings: list[dict],
+) -> list[dict]:
+    manifest = ensure_reference_pack(work_dir)
+    changes = [{"path": str(Path(manifest["reference_pack_dir"]) / "manifest.json"), "module_name": "reference_pack"}]
+    for module in manifest.get("modules", []):
+        summary_file = module.get("summary_file")
+        if summary_file:
+            changes.append({"path": str(summary_file), "module_name": module.get("module_name", "")})
+    return changes
+
+
+def repair_html_renderer(
+    skill_dir: str | Path,
+    findings: list[dict],
+) -> list[dict]:
+    root = Path(skill_dir)
+    changes: list[dict] = []
+    for target_rel, baseline_rel in RENDERER_BASELINE_FILES.items():
+        target_path = root / target_rel
+        baseline_path = root / baseline_rel
+        if not baseline_path.exists():
+            continue
+        baseline_text = baseline_path.read_text(encoding="utf-8")
+        current_text = target_path.read_text(encoding="utf-8") if target_path.exists() else ""
+        if current_text != baseline_text:
+            target_path.write_text(baseline_text, encoding="utf-8")
+            changes.append({"path": str(target_path), "module_name": "html_renderer"})
+    return changes
+
+
+def run_html_renderer_regression_suite(skill_dir: str | Path) -> dict:
+    repo_root = Path(skill_dir).resolve().parents[2]
+    cmd = [sys.executable, "-m", "unittest", *HTML_RENDERER_REGRESSION_TESTS]
+    completed = subprocess.run(cmd, capture_output=True, text=True, cwd=repo_root, check=False)
+    return {
+        "status": "passed" if completed.returncode == 0 else "failed",
+        "cmd": cmd,
+        "returncode": completed.returncode,
+        "stdout": completed.stdout,
+        "stderr": completed.stderr,
+    }
+
+
+def apply_html_repairs(
+    work_dir: str | Path,
+    findings: list[dict],
+    *,
+    skill_dir: str | Path | None = None,
+) -> dict:
+    root = Path(work_dir)
+    requirements_dir = root / "requirements"
+    artifact_dir = root / ".prototype-generator"
+    page_specs_dir = artifact_dir / "page_specs"
+    grouped = _group_findings_by_action(findings)
+    changes: list[dict] = []
+    executed_actions: list[str] = []
+    attempted_fix_scopes: list[str] = []
+    skill_dir = Path(skill_dir) if skill_dir else Path(__file__).resolve().parents[1]
+    regression = {"status": "skipped", "cmd": [], "returncode": 0, "stdout": "", "stderr": ""}
+
+    if grouped.get("rebuild_reference_pack"):
+        changes.extend(repair_html_reference_pack(root, grouped["rebuild_reference_pack"]))
+        executed_actions.append("rebuild_reference_pack")
+        attempted_fix_scopes.append("reference_pack")
+
+    if grouped.get("rewrite_requirements"):
+        changes.extend(repair_html_requirements(requirements_dir, grouped["rewrite_requirements"]))
+        executed_actions.append("rewrite_requirements")
+        attempted_fix_scopes.append("requirements")
+
+    if grouped.get("rewrite_module_brief"):
+        changes.extend(repair_html_module_briefs(requirements_dir, grouped["rewrite_module_brief"]))
+        executed_actions.append("rewrite_module_brief")
+        attempted_fix_scopes.append("module_brief")
+
+    page_spec_findings = list(grouped.get("rewrite_page_spec", []))
+    force_rebuild_layout = bool(grouped.get("rewrite_module_brief") or grouped.get("rewrite_requirements"))
+    if force_rebuild_layout:
+        page_spec_findings.extend(grouped.get("rewrite_module_brief", []))
+        page_spec_findings.extend(grouped.get("rewrite_requirements", []))
+    if page_spec_findings:
+        changes.extend(
+            repair_html_page_specs(
+                requirements_dir,
+                page_specs_dir,
+                page_spec_findings,
+                force_rebuild_layout=force_rebuild_layout,
+            )
+        )
+        executed_actions.append("rewrite_page_spec")
+        attempted_fix_scopes.append("page_spec")
+
+    if grouped.get("patch_renderer"):
+        changes.extend(repair_html_renderer(skill_dir, grouped["patch_renderer"]))
+        executed_actions.append("patch_renderer")
+        attempted_fix_scopes.append("html_render")
+        regression = run_html_renderer_regression_suite(skill_dir)
+
+    blocked_findings = []
+    status = "ok"
+    if regression.get("status") == "failed":
+        status = "blocked"
+        blocked_findings = list(grouped.get("patch_renderer", []))
+    return {
+        "status": status,
+        "changes": changes,
+        "executed_actions": executed_actions,
+        "attempted_fix_scopes": attempted_fix_scopes,
+        "regression": regression,
+        "blocked_findings": blocked_findings,
+    }
 
 
 def _build_page_model_stub(model: dict, req: dict) -> dict:
@@ -218,15 +410,87 @@ def _build_page_model_stub(model: dict, req: dict) -> dict:
 
 def _build_html_page_stub(req: dict) -> dict:
     page_name = req.get("page_name", "")
-    page_type, _ = infer_page_shape(page_name)
+    page_type, page_archetype = infer_page_shape(page_name)
     return {
         "page_name": page_name,
         "page_type": page_type,
+        "page_archetype": page_archetype,
         "output_file": f"{safe_slug(page_name, 'page')}.html",
         "is_nav_page": False,
+        "reference_basis": "fallback",
+        "reference_pack_file": "",
+        "reference_summary": "",
+        "reference_sources": [],
+        "layout_directives": [],
+        "visual_cues": [],
+        "interaction_patterns": [],
         "fields": [{"name": field, "control": "input", "required": "否", "note": ""} for field in req.get("fields", [])],
         "table_columns": [{"name": field, "note": ""} for field in req.get("fields", [])[:8]],
         "actions": req.get("actions", []) or default_actions_for_page(page_name, infer_object_name(page_name)),
         "jumps": [{"action": action, "target": page_name} for action in (req.get("actions", [])[:1] or ["查看详情"])],
         "states": req.get("states", []) or default_states_for_page(page_name),
     }
+
+
+def _target_pages(findings: list[dict]) -> set[str]:
+    return {
+        value
+        for finding in findings
+        for value in [str(finding.get("page_or_sheet", "")).strip()]
+        if value and "/" not in value and not value.endswith((".json", ".md", ".drawio", ".html", ".xml"))
+    }
+
+
+def _target_modules(requirements: dict[str, dict], findings: list[dict]) -> set[str]:
+    target_pages = _target_pages(findings)
+    explicit_modules = {
+        value
+        for finding in findings
+        for value in [str(finding.get("module_name", "")).strip(), str(finding.get("page_or_sheet", "")).strip()]
+        if value in requirements
+    }
+    if explicit_modules:
+        return explicit_modules
+    modules = set()
+    for module_name, module_req in requirements.items():
+        if any(page_name in target_pages for page_name in module_req["pages"]):
+            modules.add(module_name)
+    return modules
+
+
+def _build_module_brief_markdown(module_name: str, module_req: dict) -> str:
+    page_lines = []
+    for page_name, page_req in module_req.get("pages", {}).items():
+        page_lines.append(f"- {page_name}（{page_req.get('page_archetype', infer_page_shape(page_name)[1])}）")
+    field_bucket = []
+    for page_req in module_req.get("pages", {}).values():
+        for field in page_req.get("fields", []):
+            if field not in field_bucket:
+                field_bucket.append(field)
+    field_lines = "\n".join(f"- {field}" for field in field_bucket[:12]) or "- 无字段"
+    return (
+        f"# {module_name} 模块摘要\n\n"
+        "## 1. 模块目标与边界\n"
+        f"- 模块：{module_name}\n\n"
+        "## 2. 页面清单与页面 archetype\n"
+        f"{chr(10).join(page_lines) if page_lines else '- 无页面'}\n\n"
+        "## 3. 关键字段索引\n"
+        f"{field_lines}\n"
+    )
+
+
+def _index_requires_refresh(index_path: Path, requirements: dict[str, dict]) -> bool:
+    if not index_path.exists():
+        return True
+    text = index_path.read_text(encoding="utf-8")
+    return any(module_name not in text for module_name in requirements)
+
+
+def _group_findings_by_action(findings: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for finding in findings:
+        if str(finding.get("severity", "error")) != "error":
+            continue
+        action = str(finding.get("repair_action", "")).strip() or "rewrite_page_spec"
+        grouped.setdefault(action, []).append(finding)
+    return grouped
