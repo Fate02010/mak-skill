@@ -21,9 +21,10 @@ def render_spec(page_spec_path: str | Path, prototypes_dir: str | Path, body_slo
     slots_dir = Path(body_slots_dir) if body_slots_dir else output_dir.parent / "body_slots"
     slots_dir.mkdir(parents=True, exist_ok=True)
     spec = parse_page_spec(spec_path)
+    spec["site_pages"] = _load_site_pages(spec_path.parent)
     page_file_map = {
         page.get("page_name", ""): page.get("output_file", "")
-        for page in spec.get("pages", [])
+        for page in spec.get("site_pages", spec.get("pages", []))
         if page.get("page_name") and page.get("output_file")
     }
     rendered = []
@@ -65,6 +66,18 @@ def render_spec(page_spec_path: str | Path, prototypes_dir: str | Path, body_slo
         "body_slots_dir": str(slots_dir),
         "rendered_pages": rendered,
     }
+
+
+def _load_site_pages(page_specs_dir: Path) -> list[dict]:
+    pages: list[dict] = []
+    if not page_specs_dir.is_dir():
+        return pages
+    for sibling in sorted(page_specs_dir.glob("page_spec_*.md")):
+        sibling_spec = parse_page_spec(sibling)
+        module_name = sibling_spec.get("module_name", "")
+        for page in sibling_spec.get("pages", []):
+            pages.append({**page, "module_name": module_name})
+    return pages
 
 
 def main():

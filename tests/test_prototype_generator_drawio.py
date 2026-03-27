@@ -2084,6 +2084,97 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
             overview = (workdir / "requirements" / "详细需求文档_overview.md").read_text(encoding="utf-8")
             self.assertIn("原型图清单", overview)
             self.assertIn("用户列表页", overview)
+            self.assertIn("一级菜单：组织权限", overview)
+            self.assertIn("用户列表（菜单）", overview)
+
+    def test_requirements_compression_normalizes_admin_home_and_resource_management_semantics(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            _write_requirements_detail_only(
+                workdir,
+                {
+                    "详细需求文档_后台-通用与看板.md": (
+                        "# 渔易购 — 后台-通用与看板需求\n\n"
+                        "### 后台-通用与看板\n\n"
+                        "#### 功能点 1.1：后台首页\n"
+                        "- **页面/界面：** 后台首页\n"
+                        "- 今日销售额\n"
+                        "- 订单数\n"
+                    ),
+                    "详细需求文档_后台-人员与权限.md": (
+                        "# 渔易购 — 后台-人员与权限需求\n\n"
+                        "### 后台-人员与权限\n\n"
+                        "#### 功能点 1.1：权限资源管理\n"
+                        "- **页面/界面：** 权限管理页\n"
+                        "- 资源名称\n"
+                        "- 资源类型\n"
+                        "- 资源标识\n"
+                        "- 上级资源\n"
+                        "- 排序值\n"
+                        "- 路由/接口标识\n"
+                    ),
+                },
+            )
+
+            REQ_COMPRESS.ensure_compressed_requirements(workdir, force=True)
+
+            overview = (workdir / "requirements" / "详细需求文档_overview.md").read_text(encoding="utf-8")
+            brief = (workdir / "requirements" / "module_briefs" / "模块摘要_后台-通用与看板.md").read_text(encoding="utf-8")
+            resource_brief = (workdir / "requirements" / "module_briefs" / "模块摘要_后台-人员与权限.md").read_text(encoding="utf-8")
+
+            self.assertIn("| 后台-通用与看板 | 后台首页 | dashboard | dashboard | 工作台 / 控制台 | 是 |", overview)
+            self.assertIn("资源管理页", overview)
+            self.assertIn("tree_manage", overview)
+            self.assertIn("后台首页（dashboard｜工作台 / 控制台）", brief)
+            self.assertIn("资源管理页（tree_manage｜组织权限 / 角色权限）", resource_brief)
+
+    def test_reference_pack_uses_builtin_admin_design_system_when_no_search_or_local_refs(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workdir = Path(tmp)
+            spec_path = workdir / ".prototype-generator" / "page_specs" / "page_spec_user.md"
+            _write_html_page_spec(
+                spec_path,
+                "后台-用户管理",
+                "user",
+                [
+                    {
+                        "page_name": "用户列表页",
+                        "page_type": "web_list",
+                        "page_archetype": "list_table",
+                        "output_file": "user-list.html",
+                        "fields": [{"name": "用户名", "control": "input", "required": "否", "note": ""}],
+                        "table_columns": [{"name": "用户名", "note": ""}],
+                        "actions": ["新增用户"],
+                        "jumps": [{"action": "新增用户", "target": "用户列表页"}],
+                        "states": ["启用", "停用"],
+                    }
+                ],
+            )
+
+            manifest = REFERENCE_UTILS.ensure_reference_pack(workdir)
+
+            self.assertEqual(manifest["pages"][0]["reference_basis"], "builtin_design_system")
+            self.assertEqual(manifest["pages"][0]["design_system"], "ant-pro")
+            self.assertIn("后台管理系统基线", manifest["pages"][0]["reference_summary"])
+
+    def test_requirements_compression_keeps_all_module_brief_fields_for_consistency(self):
+        module = {
+            "doc_path": "requirements/详细需求文档_后台-商品与内容.md",
+            "pages": {
+                "商品列表页（后台）": {
+                    "page_archetype": "list_table",
+                    "fields": [
+                        "商品名称", "商品编码", "商品分类", "销售价", "规格摘要", "可售库存",
+                        "绑定批次", "商品主图", "详情图文", "关键词", "商品状态", "批次绑定状态",
+                        "上级分类", "价格", "关联商品数", "关联对象", "更新时间", "标题/评论摘要", "负责人",
+                    ],
+                }
+            },
+        }
+        brief = REQ_COMPRESS._build_module_brief_markdown("后台-商品与内容", module)
+
+        for field in ("上级分类", "价格", "关联商品数", "关联对象", "更新时间", "标题/评论摘要", "负责人"):
+            self.assertIn(f"- {field}", brief)
 
     def test_html_pipeline_auto_generates_compressed_requirements_artifacts(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -2339,6 +2430,175 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertIn("filter-grid", html_text)
         self.assertIn("<table", html_text)
         self.assertIn("prototype-pagination", html_text)
+        self.assertIn("prototype-admin-header", html_text)
+        self.assertIn("prototype-sidebar", html_text)
+        self.assertIn("prototype-nav-parent", html_text)
+        self.assertIn("prototype-subnav-item", html_text)
+        self.assertIn('href="index.html"', html_text)
+        self.assertIn("返回功能导航", html_text)
+
+    def test_html_renderer_list_page_separates_toolbar_and_row_actions_and_infers_modal_targets(self):
+        spec = {
+            "module_name": "后台-角色权限",
+            "site_pages": [
+                {"module_name": "后台-角色权限", "page_name": "角色管理页", "page_type": "web_list", "page_archetype": "list_table", "output_file": "role-list.html"},
+                {"module_name": "后台-角色权限", "page_name": "新增/编辑角色弹窗", "page_type": "web_form", "page_archetype": "modal_form", "output_file": "role-form.html"},
+                {"module_name": "后台-角色权限", "page_name": "删除角色确认弹窗", "page_type": "web_form", "page_archetype": "modal_form", "output_file": "role-delete.html"},
+                {"module_name": "后台-角色权限", "page_name": "角色授权抽屉", "page_type": "web_detail", "page_archetype": "detail_kv", "output_file": "role-drawer.html"},
+            ],
+        }
+        page = {
+            "page_name": "角色管理页",
+            "page_type": "web_list",
+            "page_archetype": "list_table",
+            "reference_basis": "internal",
+            "reference_summary": "角色列表页参考摘要",
+            "fields": [
+                {"name": "关键词", "control": "input", "required": "否", "note": ""},
+                {"name": "角色状态", "control": "select", "required": "否", "note": ""},
+                {"name": "角色名称", "control": "input", "required": "否", "note": ""},
+            ],
+            "table_columns": [{"name": "角色名称", "note": ""}, {"name": "角色编码", "note": ""}, {"name": "状态", "note": ""}],
+            "actions": ["新增角色", "编辑", "删除", "查看详情"],
+            "jumps": [{"action": "新增角色", "target": "角色管理页"}],
+            "states": ["启用", "停用"],
+        }
+        html_text = HTML_UTILS.render_page_html(
+            spec,
+            page,
+            {
+                "角色管理页": "role-list.html",
+                "新增/编辑角色弹窗": "role-form.html",
+                "删除角色确认弹窗": "role-delete.html",
+                "角色授权抽屉": "role-drawer.html",
+            },
+        )
+
+        toolbar_section = html_text.split('<div class="toolbar-actions">', 1)[1].split("</div>", 1)[0]
+        self.assertIn(">新增角色<", toolbar_section)
+        self.assertNotIn(">编辑<", toolbar_section)
+        self.assertNotIn(">删除<", toolbar_section)
+        self.assertIn('btn-primary btn-sm', toolbar_section)
+        self.assertIn('href="role-form.html"', html_text)
+        self.assertIn('href="role-delete.html"', html_text)
+        self.assertIn('href="role-drawer.html"', html_text)
+
+    def test_html_renderer_list_page_infers_related_targets_for_backend_suffix_pages(self):
+        spec = {
+            "module_name": "后台-商品与内容",
+            "site_pages": [
+                {"module_name": "后台-商品与内容", "page_name": "商品列表页（后台）", "page_type": "web_list", "page_archetype": "list_table", "output_file": "goods-list.html"},
+                {"module_name": "后台-商品与内容", "page_name": "新增/编辑商品弹窗", "page_type": "web_form", "page_archetype": "modal_form", "output_file": "goods-form.html"},
+                {"module_name": "后台-商品与内容", "page_name": "删除商品确认弹窗", "page_type": "web_form", "page_archetype": "modal_form", "output_file": "goods-delete.html"},
+            ],
+        }
+        page = {
+            "page_name": "商品列表页（后台）",
+            "page_type": "web_list",
+            "page_archetype": "list_table",
+            "reference_basis": "internal",
+            "reference_summary": "商品列表页参考摘要",
+            "fields": [{"name": "关键词", "control": "input", "required": "否", "note": ""}],
+            "table_columns": [{"name": "商品名称", "note": ""}],
+            "actions": ["新增商品（后台）", "编辑", "删除"],
+            "jumps": [],
+            "states": ["启用"],
+        }
+        html_text = HTML_UTILS.render_page_html(
+            spec,
+            page,
+            {
+                "商品列表页（后台）": "goods-list.html",
+                "新增/编辑商品弹窗": "goods-form.html",
+                "删除商品确认弹窗": "goods-delete.html",
+            },
+        )
+
+        self.assertIn('href="goods-form.html"', html_text)
+        self.assertIn('href="goods-delete.html"', html_text)
+
+    def test_html_renderer_resource_management_uses_tree_manage_shell_and_modal_targets(self):
+        spec = {
+            "module_name": "后台-人员与权限",
+            "site_pages": [
+                {"module_name": "后台-通用与看板", "page_name": "后台首页", "page_type": "dashboard", "page_archetype": "dashboard", "output_file": "admin-dashboard.html"},
+                {"module_name": "后台-人员与权限", "page_name": "角色管理页", "page_type": "web_list", "page_archetype": "list_table", "output_file": "admin-role-list.html"},
+                {
+                    "module_name": "后台-人员与权限",
+                    "page_name": "权限管理页",
+                    "page_type": "web_list",
+                    "page_archetype": "list_table",
+                    "output_file": "admin-resource-list.html",
+                    "fields": [
+                        {"name": "资源名称"},
+                        {"name": "资源类型"},
+                        {"name": "资源标识"},
+                        {"name": "上级资源"},
+                        {"name": "排序值"},
+                    ],
+                },
+                {"module_name": "后台-人员与权限", "page_name": "新增/编辑资源弹窗", "page_type": "web_form", "page_archetype": "modal_form", "output_file": "admin-resource-form.html"},
+                {"module_name": "后台-人员与权限", "page_name": "删除资源确认弹窗", "page_type": "web_form", "page_archetype": "modal_form", "output_file": "admin-resource-delete.html"},
+            ],
+        }
+        page = {
+            "page_name": "权限管理页",
+            "page_type": "web_list",
+            "page_archetype": "list_table",
+            "reference_basis": "builtin_design_system",
+            "reference_summary": "资源树管理参考摘要",
+            "fields": [
+                {"name": "关键词", "control": "input", "required": "否", "note": ""},
+                {"name": "资源类型", "control": "select", "required": "否", "note": ""},
+                {"name": "状态", "control": "select", "required": "否", "note": ""},
+                {"name": "上级资源", "control": "input", "required": "否", "note": ""},
+            ],
+            "table_columns": [
+                {"name": "资源名称", "note": ""},
+                {"name": "资源类型", "note": ""},
+                {"name": "资源标识", "note": ""},
+                {"name": "上级资源", "note": ""},
+                {"name": "排序值", "note": ""},
+                {"name": "状态", "note": ""},
+            ],
+            "actions": ["新增", "编辑", "删除", "查看详情"],
+            "jumps": [{"action": "新增资源", "target": "新增/编辑资源弹窗"}],
+            "states": ["启用", "停用"],
+        }
+        html_text = HTML_UTILS.render_page_html(
+            spec,
+            page,
+            {
+                "后台首页": "admin-dashboard.html",
+                "角色管理页": "admin-role-list.html",
+                "权限管理页": "admin-resource-list.html",
+                "新增/编辑资源弹窗": "admin-resource-form.html",
+                "删除资源确认弹窗": "admin-resource-delete.html",
+            },
+        )
+
+        self.assertIn("data-tree-manage=\"1\"", html_text)
+        self.assertIn("prototype-resource-tree", html_text)
+        self.assertIn("prototype-tree-node", html_text)
+        self.assertIn(">资源管理页<", html_text)
+        self.assertIn('href="admin-resource-form.html"', html_text)
+        self.assertIn('href="admin-resource-delete.html"', html_text)
+
+    def test_render_index_html_groups_pages_as_admin_workbench(self):
+        html_text = HTML_UTILS.render_index_html(
+            "渔易购-后台管理",
+            [
+                {"module_name": "后台-通用与看板", "page_name": "后台首页", "page_type": "dashboard", "page_archetype": "dashboard", "output_file": "admin-dashboard.html"},
+                {"module_name": "后台-商品与内容", "page_name": "商品列表页（后台）", "page_type": "web_list", "page_archetype": "list_table", "output_file": "admin-goods-list.html"},
+                {"module_name": "后台-订单与履约", "page_name": "订单管理页（后台）", "page_type": "web_list", "page_archetype": "list_table", "output_file": "admin-order-list.html"},
+            ],
+        )
+
+        self.assertIn("prototype-index-admin-layout", html_text)
+        self.assertIn("prototype-nav-group", html_text)
+        self.assertIn("后台原型工作台", html_text)
+        self.assertIn("商品管理", html_text)
+        self.assertIn("订单履约", html_text)
 
     def test_html_renderer_detail_page_keeps_detail_skeleton_for_h8(self):
         spec = {"module_name": "后台-订单管理"}
@@ -2386,6 +2646,93 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
 
         self.assertEqual(next(item for item in report["results"] if item["rule"] == "H9")["status"], "PASS")
 
+    def test_validate_html_treats_danger_action_as_primary_for_confirm_page(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "common.css").write_text("/* ok */", encoding="utf-8")
+            (root / "confirm.html").write_text(
+                "<!DOCTYPE html><html><head><title>Confirm</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='删除商品确认弹窗' data-page-type='web_form' "
+                "data-page-archetype='modal_form' data-reference-basis='internal'>"
+                "<!-- BODY_SLOT_START --><section class='prototype-body-slot' data-body-slot='1'>"
+                "<section class='content-two-column'><div class='content-main-stack'>"
+                "<section class='prototype-card prototype-form-card'><div class='form-grid'>"
+                "<div class='form-group'><label>商品名称</label><input class='input'></div>"
+                "<div class='form-group'><label>商品编码</label><input class='input'></div>"
+                "</div></section>"
+                "<section class='prototype-card sticky-action-card'><a class='btn-danger' href='#'>确认删除</a>"
+                "<a class='btn-secondary' href='#'>取消</a></section></div>"
+                "<aside class='prototype-side-panel'><section class='prototype-card' data-state='empty'></section>"
+                "<section class='prototype-card' data-state='error'></section></aside></section>"
+                "<section class='prototype-state-strip'><span data-state='processing'></span></section>"
+                "</section><!-- BODY_SLOT_END --></div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H9")["status"], "PASS")
+
+    def test_validate_html_flags_missing_grouped_index_navigation(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "index.html").write_text(
+                "<!DOCTYPE html><html><head><title>Index</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='原型导航' data-page-type='index' "
+                "data-page-archetype='index' data-reference-basis='generated' data-shell-variant='admin_console'>"
+                "<!-- BODY_SLOT_START --><section class='prototype-body-slot' data-body-slot='1'>"
+                "<ul class='prototype-index-links'><li>用户列表页</li></ul></section><!-- BODY_SLOT_END -->"
+                "</div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H13")["status"], "FAIL")
+
+    def test_validate_html_flags_list_toolbar_mixed_with_row_actions(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "common.css").write_text("/* ok */", encoding="utf-8")
+            (root / "list.html").write_text(
+                "<!DOCTYPE html><html><head><title>List</title><link rel='stylesheet' href='common.css'></head><body>"
+                "<div data-prototype-shell='1' data-page-name='角色管理页' data-page-type='web_list' "
+                "data-page-archetype='list_table' data-reference-basis='internal' data-shell-variant='admin_console'>"
+                "<!-- BODY_SLOT_START --><section class='prototype-body-slot' data-body-slot='1'>"
+                "<header class='prototype-admin-header'></header><aside class='prototype-sidebar'>"
+                "<div class='prototype-nav-parent'><a class='prototype-subnav-item' href='index.html'>角色管理</a></div></aside>"
+                "<section class='prototype-workspace-intro'></section>"
+                "<section class='metric-grid'><div class='metric-card'></div><div class='metric-card'></div></section>"
+                "<section class='prototype-card prototype-toolbar-card'><div class='toolbar-actions'>"
+                "<a class='btn-primary btn-sm' href='#'>新增角色</a><a class='btn-secondary btn-sm' href='#'>编辑</a></div></section>"
+                "<section class='prototype-card prototype-table-card'><table><tr><th>列</th></tr><tr><td>A</td></tr><tr><td>B</td></tr><tr><td>C</td></tr></table></section>"
+                "<section class='prototype-card' data-state='empty'></section><section class='prototype-card' data-state='error'></section>"
+                "</section><!-- BODY_SLOT_END --></div></body></html>",
+                encoding="utf-8",
+            )
+            report = VALIDATE_HTML.run_checks(root)
+
+        self.assertEqual(next(item for item in report["results"] if item["rule"] == "H9")["status"], "FAIL")
+
+    def test_html_renderer_detail_page_adds_secondary_action_when_only_one_action_exists(self):
+        spec = {"module_name": "后台-订单与履约"}
+        page = {
+            "page_name": "支付日志页",
+            "page_type": "web_detail",
+            "page_archetype": "detail_kv",
+            "reference_basis": "internal",
+            "reference_summary": "日志页参考摘要",
+            "fields": [
+                {"name": "订单总数", "control": "input", "required": "否", "note": ""},
+                {"name": "支付成功率", "control": "input", "required": "否", "note": ""},
+            ],
+            "actions": ["查看详情"],
+            "jumps": [],
+            "states": ["空态", "加载态", "错误态"],
+        }
+        html_text = HTML_UTILS.render_page_html(spec, page, {})
+
+        self.assertIn('class="btn-primary"', html_text)
+        self.assertIn('class="btn-secondary"', html_text)
+
     def test_html_renderer_outputs_consistency_markers(self):
         spec = {"module_name": "后台-用户管理"}
         page = {
@@ -2409,6 +2756,7 @@ class PrototypeGeneratorDrawioTests(unittest.TestCase):
         self.assertIn('data-body-slot="1"', html_text)
         self.assertIn("BODY_SLOT_START", html_text)
         self.assertIn("BODY_SLOT_END", html_text)
+        self.assertIn("FIELD_TRACEABILITY", html_text)
 
     def test_render_html_writes_body_slot_artifacts(self):
         spec = {"module_name": "后台-用户管理", "module_key": "admin_user"}

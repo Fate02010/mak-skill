@@ -9,7 +9,14 @@ import shlex
 import subprocess
 from pathlib import Path
 
-from requirements_utils import infer_page_shape, infer_terminal_type_from_module, safe_slug
+from requirements_utils import (
+    field_names_from_page,
+    infer_page_semantics,
+    infer_page_shape,
+    infer_terminal_type_from_module,
+    safe_slug,
+    sort_admin_nav_groups,
+)
 
 
 BODY_RENDER_ENV = "PROTOTYPE_GENERATOR_BODY_RENDER_CMD"
@@ -53,7 +60,7 @@ def parse_page_spec_text(content: str) -> dict:
             spec["output_format"] = stripped.split("：", 1)[1].strip() or "html"
         elif stripped.startswith("## 页面规格："):
             if current:
-                spec["pages"].append(_normalize_page(current))
+                spec["pages"].append(_normalize_page(current, spec.get("module_name", "")))
             page_name = stripped.split("：", 1)[1].strip()
             inferred_type, inferred_archetype = infer_page_shape(page_name)
             current = {
@@ -62,6 +69,13 @@ def parse_page_spec_text(content: str) -> dict:
                 "page_archetype": inferred_archetype,
                 "output_file": f"{safe_slug(page_name, 'page')}.html",
                 "is_nav_page": False,
+                "is_entry_page": False,
+                "nav_group": "",
+                "nav_parent": "",
+                "nav_label": page_name,
+                "nav_context": "",
+                "shell_variant": "",
+                "design_system": "",
                 "reference_basis": "fallback",
                 "reference_pack_file": "",
                 "reference_summary": "",
@@ -86,6 +100,20 @@ def parse_page_spec_text(content: str) -> dict:
             current["output_file"] = stripped.split("：", 1)[1].strip()
         elif current and current_section == "页面元信息" and stripped.startswith("- 是否导航页："):
             current["is_nav_page"] = "是" in stripped.split("：", 1)[1]
+        elif current and current_section == "页面元信息" and stripped.startswith("- 是否入口页："):
+            current["is_entry_page"] = "是" in stripped.split("：", 1)[1]
+        elif current and current_section == "页面元信息" and stripped.startswith("- 导航分组："):
+            current["nav_group"] = stripped.split("：", 1)[1].strip()
+        elif current and current_section == "页面元信息" and stripped.startswith("- 导航父级："):
+            current["nav_parent"] = stripped.split("：", 1)[1].strip()
+        elif current and current_section == "页面元信息" and stripped.startswith("- 导航文案："):
+            current["nav_label"] = stripped.split("：", 1)[1].strip()
+        elif current and current_section == "页面元信息" and stripped.startswith("- 导航上下文："):
+            current["nav_context"] = stripped.split("：", 1)[1].strip()
+        elif current and current_section == "页面元信息" and stripped.startswith("- 壳层变体："):
+            current["shell_variant"] = stripped.split("：", 1)[1].strip()
+        elif current and current_section == "页面元信息" and stripped.startswith("- 设计系统："):
+            current["design_system"] = stripped.split("：", 1)[1].strip()
         elif current and current_section == "参考依据" and stripped.startswith("- 参考来源："):
             current["reference_basis"] = stripped.split("：", 1)[1].strip()
         elif current and current_section == "参考依据" and stripped.startswith("- 参考包文件："):
@@ -124,7 +152,7 @@ def parse_page_spec_text(content: str) -> dict:
                 current["jumps"].append({"action": value, "target": ""})
         idx += 1
     if current:
-        spec["pages"].append(_normalize_page(current))
+        spec["pages"].append(_normalize_page(current, spec.get("module_name", "")))
     return spec
 
 
@@ -139,7 +167,7 @@ def to_markdown(spec: dict) -> str:
         "",
     ]
     for page in spec.get("pages", []):
-        page = _normalize_page(page)
+        page = _normalize_page(page, spec.get("module_name", ""))
         default_output_file = f"{safe_slug(page.get('page_name', ''), 'page')}.html"
         lines.extend(
             [
@@ -149,6 +177,13 @@ def to_markdown(spec: dict) -> str:
                 f"- 页面原型：{page.get('page_archetype', infer_page_shape(page.get('page_name', ''))[1])}",
                 f"- 输出文件：{page.get('output_file', default_output_file)}",
                 f"- 是否导航页：{'是' if page.get('is_nav_page') else '否'}",
+                f"- 是否入口页：{'是' if page.get('is_entry_page') else '否'}",
+                f"- 导航分组：{page.get('nav_group', '')}",
+                f"- 导航父级：{page.get('nav_parent', '')}",
+                f"- 导航文案：{page.get('nav_label', page.get('page_name', ''))}",
+                f"- 导航上下文：{page.get('nav_context', '')}",
+                f"- 壳层变体：{page.get('shell_variant', '')}",
+                f"- 设计系统：{page.get('design_system', '')}",
                 "",
                 "### 参考依据",
                 f"- 参考来源：{page.get('reference_basis', 'fallback')}",
@@ -223,6 +258,8 @@ def terminal_css_class(module_name: str) -> str:
 def required_body_markers_for(page_type: str, page_archetype: str) -> list[str]:
     if page_type == "index" or page_archetype == "index":
         return ["prototype-index-links"]
+    if page_archetype == "tree_manage":
+        return ["data-tree-manage=\"1\"", "prototype-resource-tree", "prototype-table"]
     if page_type in {"web_list", "mobile_list"}:
         return ["filter-grid", "prototype-table", "prototype-pagination"]
     if page_type in {"web_form", "mobile_form"}:
@@ -245,14 +282,16 @@ def required_body_markers_for(page_type: str, page_archetype: str) -> list[str]:
 
 
 def forbidden_body_markers_for(page_type: str) -> list[str]:
-    base = ["<html", "<head", "<body", "prototype-sidebar", "nav-bar", "data-prototype-shell"]
+    base = ["<html", "<head>", "<body>", "prototype-sidebar", "nav-bar", "data-prototype-shell"]
+    if page_type == "index":
+        return ["<html", "<head>", "<body>", "data-prototype-shell"]
     if page_type == "login":
         return base + ["breadcrumb", "prototype-side-nav"]
     return base
 
 
 def build_body_spec(spec: dict, page: dict, page_file_map: dict[str, str]) -> dict:
-    normalized = _normalize_page(page)
+    normalized = _normalize_page(page, spec.get("module_name", ""))
     page_type = normalized.get("page_type", "web_detail")
     page_archetype = normalized.get("page_archetype", infer_page_shape(normalized.get("page_name", ""))[1])
     return {
@@ -267,7 +306,7 @@ def build_body_spec(spec: dict, page: dict, page_file_map: dict[str, str]) -> di
 
 
 def build_body_prompt(spec: dict, page: dict, body_spec: dict) -> str:
-    normalized = _normalize_page(page)
+    normalized = _normalize_page(page, spec.get("module_name", ""))
     section_lines = []
     for section in body_spec.get("sections", []):
         section_lines.extend(
@@ -307,7 +346,7 @@ def build_body_prompt(spec: dict, page: dict, body_spec: dict) -> str:
 
 
 def generate_body_html(spec: dict, page: dict, page_file_map: dict[str, str], body_spec: dict, body_prompt: str) -> str:
-    normalized = _normalize_page(page)
+    normalized = _normalize_page(page, spec.get("module_name", ""))
     body_html = _render_body_with_backend(spec, normalized, page_file_map, body_spec, body_prompt)
     if not body_html:
         body_html = _render_page_content(spec, normalized, page_file_map)
@@ -317,16 +356,18 @@ def generate_body_html(spec: dict, page: dict, page_file_map: dict[str, str], bo
 
 def compose_page_html(spec: dict, page: dict, page_file_map: dict[str, str], body_html: str) -> str:
     module_name = spec.get("module_name", "")
-    normalized = _normalize_page(page)
+    normalized = _normalize_page(page, spec.get("module_name", ""))
     page_name = normalized.get("page_name", "")
+    display_page_name = normalized.get("display_page_name", page_name)
     page_type = normalized.get("page_type", "web_detail")
     page_archetype = normalized.get("page_archetype", infer_page_shape(page_name)[1])
     terminal_class = terminal_css_class(module_name)
-    title = html.escape(page_name)
+    title = html.escape(display_page_name)
     body_class = _body_class(terminal_class, page_type)
     shell_class = _shell_class(terminal_class, page_type)
     content_html = _wrap_body_slot(body_html)
     shell = _wrap_terminal_shell(spec, normalized, terminal_class, content_html, page_file_map)
+    quick_access = _prototype_quick_access(normalized, page_file_map)
     reference_comment = "\n".join(
         [
             "<!-- REFERENCE_PACK",
@@ -338,6 +379,7 @@ def compose_page_html(spec: dict, page: dict, page_file_map: dict[str, str], bod
             "-->",
         ]
     )
+    field_trace_comment = _field_traceability_comment(normalized)
     return (
         "<!DOCTYPE html>\n"
         "<html lang=\"zh-CN\">\n"
@@ -349,9 +391,14 @@ def compose_page_html(spec: dict, page: dict, page_file_map: dict[str, str], bod
         "</head>\n"
         f"<body class=\"{html.escape(body_class)}\">\n"
         f"{reference_comment}\n"
+        f"{field_trace_comment}\n"
+        f"{quick_access}\n"
         f"  <div class=\"{html.escape(shell_class)}\" data-prototype-shell=\"1\" data-page-name=\"{html.escape(page_name)}\" "
         f"data-page-type=\"{html.escape(page_type)}\" data-page-archetype=\"{html.escape(page_archetype)}\" "
-        f"data-reference-basis=\"{html.escape(normalized.get('reference_basis', 'fallback'))}\">\n"
+        f"data-reference-basis=\"{html.escape(normalized.get('reference_basis', 'fallback'))}\" "
+        f"data-shell-variant=\"{html.escape(normalized.get('shell_variant', ''))}\" "
+        f"data-design-system=\"{html.escape(normalized.get('design_system', ''))}\" "
+        f"data-nav-group=\"{html.escape(normalized.get('nav_group', ''))}\">\n"
         f"{shell}\n"
         "  </div>\n"
         "</body>\n"
@@ -368,33 +415,77 @@ def render_page_html(spec: dict, page: dict, page_file_map: dict[str, str]) -> s
 
 
 def render_index_html(product_name: str, pages: list[dict]) -> str:
-    links = "\n".join(
-        (
-            "          <li class=\"prototype-index-item\">"
-            f"<a href=\"{html.escape(page['output_file'])}\"><span>{html.escape(page['page_name'])}</span>"
-            f"<small>{html.escape(page['output_file'])}</small></a></li>"
-        )
+    normalized_pages = [
+        _normalize_page(page, page.get("module_name", ""))
         for page in pages
-        if page.get("output_file") != "index.html"
+        if page.get("output_file") and page.get("output_file") != "index.html" and page.get("page_type") != "login"
+    ]
+    nav_groups = _group_navigation_pages(normalized_pages)
+    first_group = next(iter(nav_groups), "")
+    first_items = nav_groups.get(first_group, [])
+    spotlight_cards = "\n".join(
+        (
+            "              <a class=\"prototype-index-item\" "
+            f"href=\"{html.escape(item.get('output_file', '#'))}\"><span>{html.escape(item.get('nav_label', item.get('display_page_name', item.get('page_name', ''))))}</span>"
+            f"<small>{html.escape(item.get('nav_context', item.get('nav_group', '')))}</small></a>"
+        )
+        for item in first_items[:6]
+    ) or "              <div class=\"prototype-index-item disabled\"><span>暂无页面</span><small>等待页面生成</small></div>"
+    nav_html = _admin_nav_markup("原型导航", {page.get("page_name", ""): page.get("output_file", "") for page in normalized_pages}, normalized_pages, active_page_name="")
+    group_cards = "\n".join(
+        (
+            "            <section class=\"prototype-card prototype-index-group-card\">"
+            f"<div class=\"section-heading\"><h2>{html.escape(group)}</h2><p>{len(items)} 个页面入口</p></div>"
+            "<div class=\"prototype-index-links\">"
+            + "".join(
+                f"<a class=\"prototype-index-item\" href=\"{html.escape(item.get('output_file', '#'))}\"><span>{html.escape(item.get('nav_label', item.get('display_page_name', item.get('page_name', ''))))}</span><small>{html.escape(item.get('nav_parent', ''))}</small></a>"
+                for item in items[:8]
+            )
+            + "</div></section>"
+        )
+        for group, items in nav_groups.items()
     )
     slot_html = (
         "    <!-- BODY_SLOT_START -->\n"
         "    <section class=\"prototype-body-slot\" data-body-slot=\"1\">\n"
-        "    <section class=\"hero-card hero-card-wide\">\n"
-        "      <div>\n"
-        "        <p class=\"hero-eyebrow\">Prototype Generator</p>\n"
-        "        <h1 class=\"hero-title\">原型导航</h1>\n"
-        f"        <p class=\"hero-subtitle\">{html.escape(product_name)} 的 HTML 高保真输出入口。</p>\n"
+        "      <header class=\"prototype-admin-header\">\n"
+        "        <div class=\"prototype-admin-header-title\"><strong>HTML 原型工作台</strong><span>按真实后台导航归类访问页面</span></div>\n"
+        "        <div class=\"prototype-admin-header-meta\"><span class=\"tag tag-default\">ant-pro</span><span class=\"tag tag-success\">admin_console</span></div>\n"
+        "      </header>\n"
+        "      <div class=\"layout prototype-admin-layout prototype-index-admin-layout\">\n"
+        "        <aside class=\"sidebar prototype-sidebar prototype-index-sidebar\">\n"
+        "          <div class=\"sidebar-brand\">原型导航</div>\n"
+        f"{nav_html}\n"
+        "        </aside>\n"
+        "        <main class=\"main-content prototype-main-content prototype-index-main\">\n"
+        "          <section class=\"hero-card hero-card-inline\">\n"
+        "            <div>\n"
+        "              <p class=\"hero-eyebrow\">Prototype Generator</p>\n"
+        "              <h1 class=\"hero-title\">后台原型工作台</h1>\n"
+        f"              <p class=\"hero-subtitle\">{html.escape(product_name)} 的 HTML 高保真输出入口，默认采用真实后台管理系统骨架。</p>\n"
+        "            </div>\n"
+        "            <div class=\"hero-metrics\">\n"
+        f"              <div class=\"metric-card\"><span class=\"metric-label\">页面数</span><strong class=\"metric-value\">{len(normalized_pages)}</strong></div>\n"
+        f"              <div class=\"metric-card\"><span class=\"metric-label\">一级菜单</span><strong class=\"metric-value\">{len(nav_groups)}</strong></div>\n"
+        "            </div>\n"
+        "          </section>\n"
+        "          <section class=\"content-two-column prototype-index-content\">\n"
+        "            <div class=\"content-main-stack\">\n"
+        f"{group_cards}\n"
+        "            </div>\n"
+        "            <aside class=\"prototype-side-panel\">\n"
+        "              <section class=\"prototype-card side-highlight-card\">\n"
+        f"                <h3>{html.escape(first_group or '重点入口')}</h3>\n"
+        f"                <div class=\"prototype-index-links\">{spotlight_cards}</div>\n"
+        "              </section>\n"
+        "              <section class=\"prototype-card\">\n"
+        "                <h3>使用说明</h3>\n"
+        "                <ul class=\"inline-bullets\"><li>左侧按一级菜单分组浏览模块</li><li>右侧优先展示主导航页面和工作区入口</li><li>弹窗和确认页默认不进入主菜单树</li></ul>\n"
+        "              </section>\n"
+        "            </aside>\n"
+        "          </section>\n"
+        "        </main>\n"
         "      </div>\n"
-        "      <div class=\"hero-metrics\">\n"
-        f"        <div class=\"metric-card\"><span class=\"metric-label\">页面数</span><strong class=\"metric-value\">{len([p for p in pages if p.get('output_file') != 'index.html'])}</strong></div>\n"
-        "      </div>\n"
-        "    </section>\n"
-        "    <section class=\"prototype-card\">\n"
-        "      <ul class=\"prototype-index-links\">\n"
-        f"{links}\n"
-        "      </ul>\n"
-        "    </section>\n"
         "    </section>\n"
         "    <!-- BODY_SLOT_END -->\n"
     )
@@ -408,7 +499,7 @@ def render_index_html(product_name: str, pages: list[dict]) -> str:
         "  <link rel=\"stylesheet\" href=\"common.css\">\n"
         "</head>\n"
         "<body class=\"prototype-page terminal-admin\">\n"
-        "  <div class=\"prototype-shell prototype-index-shell\" data-prototype-shell=\"1\" data-page-name=\"原型导航\" data-page-type=\"index\" data-page-archetype=\"index\" data-reference-basis=\"generated\">\n"
+        "  <div class=\"prototype-shell prototype-index-shell\" data-prototype-shell=\"1\" data-page-name=\"原型导航\" data-page-type=\"index\" data-page-archetype=\"index\" data-reference-basis=\"generated\" data-shell-variant=\"admin_console\" data-design-system=\"ant-pro\" data-nav-group=\"工作台\">\n"
         f"{slot_html}"
         "  </div>\n"
         "</body>\n"
@@ -515,13 +606,31 @@ def _wrap_body_slot(body_html: str) -> str:
     )
 
 
-def _normalize_page(page: dict) -> dict:
+def _normalize_page(page: dict, module_name: str = "") -> dict:
     normalized = dict(page)
     page_name = normalized.get("page_name", "")
+    module_name = str(normalized.get("module_name") or normalized.get("module_title") or module_name or "")
+    normalized["module_name"] = module_name
     inferred_type, inferred_archetype = infer_page_shape(page_name)
-    normalized["page_type"] = normalized.get("page_type") or inferred_type
-    normalized["page_archetype"] = normalized.get("page_archetype") or inferred_archetype
+    semantics = infer_page_semantics(
+        module_name,
+        page_name,
+        normalized.get("page_type") or inferred_type,
+        normalized.get("page_archetype") or inferred_archetype,
+        field_names_from_page(normalized),
+    )
+    normalized["page_type"] = semantics.get("page_type") or normalized.get("page_type") or inferred_type
+    normalized["page_archetype"] = semantics.get("page_archetype") or normalized.get("page_archetype") or inferred_archetype
+    normalized["display_page_name"] = semantics.get("display_page_name") or normalized.get("display_page_name") or page_name
     normalized["output_file"] = normalized.get("output_file") or f"{safe_slug(page_name, 'page')}.html"
+    normalized["is_nav_page"] = bool(normalized.get("is_nav_page", semantics.get("is_nav_page", False)))
+    normalized["is_entry_page"] = bool(normalized.get("is_entry_page", semantics.get("is_entry_page", False)))
+    normalized["nav_group"] = normalized.get("nav_group") or semantics.get("nav_group", "")
+    normalized["nav_parent"] = normalized.get("nav_parent") or semantics.get("nav_parent", "")
+    normalized["nav_label"] = normalized.get("nav_label") or semantics.get("nav_label", page_name)
+    normalized["nav_context"] = normalized.get("nav_context") or semantics.get("nav_context", "")
+    normalized["shell_variant"] = normalized.get("shell_variant") or semantics.get("shell_variant", "")
+    normalized["design_system"] = normalized.get("design_system") or semantics.get("design_system", "")
     normalized["reference_basis"] = normalized.get("reference_basis") or "fallback"
     normalized["reference_pack_file"] = normalized.get("reference_pack_file") or ""
     normalized["reference_summary"] = normalized.get("reference_summary") or ""
@@ -578,8 +687,13 @@ def _wrap_terminal_shell(spec: dict, page: dict, terminal_class: str, content_ht
     module_name = spec.get("module_name", "")
     page_name = page.get("page_name", "")
     page_type = page.get("page_type", "")
-    title_block = _page_title_block(page)
-    nav_items = _nav_items(module_name, page_name, page_file_map)
+    raw_site_pages = spec.get("site_pages", spec.get("pages", []))
+    site_pages = [_normalize_page({**item, "module_name": item.get("module_name", module_name)}) for item in raw_site_pages]
+    title_block = _page_title_block(page, page_file_map, site_pages)
+    nav_items = _admin_nav_markup(page_name, page_file_map, site_pages, active_page_name=page_name)
+    admin_header = _admin_header(page)
+    workspace_intro = _workspace_intro(page)
+    isolated_dialog = page.get("page_archetype") == "modal_form" or any(token in page_name for token in ("弹窗", "确认", "抽屉"))
 
     if page_type == "login":
         return (
@@ -620,13 +734,24 @@ def _wrap_terminal_shell(spec: dict, page: dict, terminal_class: str, content_ht
             f"{tab_bar}"
         )
 
+    if isolated_dialog:
+        return (
+            "    <section class=\"prototype-dialog-shell\">\n"
+            f"{admin_header}\n"
+            f"{title_block}\n"
+            f"{content_html}\n"
+            "    </section>\n"
+        )
+
     return (
+        f"{admin_header}\n"
         "    <div class=\"layout prototype-admin-layout\">\n"
         "      <aside class=\"sidebar prototype-sidebar\">\n"
         f"        <div class=\"sidebar-brand\">{html.escape(module_name)}</div>\n"
         f"{nav_items}\n"
         "      </aside>\n"
         "      <main class=\"main-content prototype-main-content\">\n"
+        f"{workspace_intro}\n"
         f"{title_block}\n"
         f"{content_html}\n"
         "      </main>\n"
@@ -634,27 +759,123 @@ def _wrap_terminal_shell(spec: dict, page: dict, terminal_class: str, content_ht
     )
 
 
-def _page_title_block(page: dict) -> str:
+def _page_title_block(page: dict, page_file_map: dict[str, str], site_pages: list[dict]) -> str:
+    page_actions = _page_level_actions(page, site_pages)
+    action_html = _action_buttons(page_actions[:2], page.get("jumps", []), page_file_map, current_page_name=page.get("page_name", ""), site_pages=site_pages)
+    title = page.get("display_page_name", page.get("page_name", ""))
     return (
         "      <section class=\"hero-card\">\n"
         "        <div>\n"
         "          <p class=\"hero-eyebrow\">高保真 HTML 原型</p>\n"
-        f"          <h1 class=\"hero-title\">{html.escape(page.get('page_name', ''))}</h1>\n"
+        f"          <h1 class=\"hero-title\">{html.escape(title)}</h1>\n"
         f"          <p class=\"hero-subtitle\">{html.escape(page.get('reference_summary', ''))}</p>\n"
         "        </div>\n"
-        f"        <div class=\"hero-chip-group\">{_state_tags(page.get('states', [])[:3])}</div>\n"
+        f"        <div class=\"hero-aside\"><div class=\"hero-chip-group\">{_state_tags(page.get('states', [])[:3])}</div><div class=\"hero-action-group\">{action_html}</div></div>\n"
         "      </section>\n"
     )
 
 
-def _nav_items(module_name: str, page_name: str, page_file_map: dict[str, str]) -> str:
-    items = []
-    for name, output_file in list(page_file_map.items())[:5]:
-        active = " active" if name == page_name else ""
-        items.append(f'        <a class="nav-item{active}" href="{html.escape(output_file)}">{html.escape(name)}</a>')
-    if not items:
-        items.append(f'        <a class="nav-item active" href="#">{html.escape(module_name)}</a>')
-    return "      <nav class=\"prototype-side-nav\">\n" + "\n".join(items) + "\n      </nav>"
+def _admin_header(page: dict) -> str:
+    nav_group = page.get("nav_group", "") or "工作台"
+    design_system = page.get("design_system", "") or "ant-pro"
+    return (
+        "    <header class=\"prototype-admin-header\">\n"
+        "      <div class=\"prototype-admin-header-title\"><strong>后台管理系统</strong>"
+        f"<span>{html.escape(nav_group)} · {html.escape(design_system)}</span></div>\n"
+        "      <div class=\"prototype-admin-header-meta\"><a class=\"prototype-header-link\" href=\"index.html\">功能导航</a><span>消息中心</span><span>系统设置</span><span>当前用户</span></div>\n"
+        "    </header>\n"
+    )
+
+
+def _workspace_intro(page: dict) -> str:
+    breadcrumb = _breadcrumb(page)
+    return (
+        "      <section class=\"prototype-workspace-intro\">\n"
+        f"{breadcrumb}\n"
+        "      </section>\n"
+    )
+
+
+def _breadcrumb(page: dict) -> str:
+    group = page.get("nav_group", "")
+    parent = page.get("nav_parent", "")
+    label = page.get("nav_label", page.get("display_page_name", page.get("page_name", "")))
+    parts = ["<a href=\"index.html\">功能导航</a>"]
+    parts.extend(f"<span>{html.escape(item)}</span>" for item in (group, parent, label) if item)
+    return f"        <nav class=\"breadcrumb prototype-breadcrumb\">{''.join(parts)}</nav>\n"
+
+
+def _prototype_quick_access(page: dict, page_file_map: dict[str, str]) -> str:
+    shortcuts = ['  <nav class="prototype-quick-access" aria-label="原型快捷导航">']
+    shortcuts.append('    <a class="prototype-quick-access-link primary" href="index.html">返回功能导航</a>')
+    dashboard_target = ""
+    for candidate_name in ("后台首页", "工作台", "控制台", "首页"):
+        dashboard_target = page_file_map.get(candidate_name, "")
+        if dashboard_target and dashboard_target != page.get("output_file"):
+            break
+    if dashboard_target:
+        shortcuts.append(f'    <a class="prototype-quick-access-link" href="{html.escape(dashboard_target)}">进入工作台</a>')
+    shortcuts.append("  </nav>")
+    return "\n".join(shortcuts)
+
+
+def _admin_nav_markup(page_name: str, page_file_map: dict[str, str], site_pages: list[dict], active_page_name: str) -> str:
+    grouped = _group_navigation_pages(site_pages or [_normalize_page({"page_name": name, "output_file": output, "module_name": ""}) for name, output in page_file_map.items()])
+    blocks = []
+    for group, items in grouped.items():
+        parents: dict[str, list[dict]] = {}
+        for item in items:
+            parents.setdefault(item.get("nav_parent", "") or "未分组", []).append(item)
+        parent_markup = []
+        for parent, children in sorted(parents.items(), key=lambda current: current[0]):
+            is_active_parent = any(child.get("page_name") == active_page_name for child in children)
+            child_links = []
+            for item in children:
+                active = " active" if item.get("page_name") == active_page_name else ""
+                href = item.get("output_file") or page_file_map.get(item.get("page_name", ""), "#")
+                child_links.append(
+                    f'            <a class="prototype-subnav-item{active}" href="{html.escape(href)}"><span>{html.escape(item.get("nav_label", item.get("display_page_name", item.get("page_name", ""))))}</span><small>{html.escape(item.get("page_type", ""))}</small></a>'
+                )
+            parent_markup.append(
+                "          <div class=\"prototype-nav-parent"
+                f"{' active' if is_active_parent else ''}\">"
+                f"<button class=\"prototype-nav-parent-title\" type=\"button\">{html.escape(parent)}</button>"
+                "<div class=\"prototype-nav-children\">"
+                + "".join(child_links)
+                + "</div></div>"
+            )
+        blocks.append(
+            "        <section class=\"prototype-nav-group\">"
+            f"<p class=\"prototype-nav-group-title\">{html.escape(group)}</p>"
+            + "".join(parent_markup)
+            + "</section>"
+        )
+    if not blocks:
+        blocks.append(
+            "        <section class=\"prototype-nav-group\"><p class=\"prototype-nav-group-title\">工作台</p>"
+            "<div class=\"prototype-nav-parent active\"><button class=\"prototype-nav-parent-title\" type=\"button\">默认分组</button>"
+            "<div class=\"prototype-nav-children\"><a class=\"prototype-subnav-item active\" href=\"#\"><span>默认页面</span><small>web_detail</small></a></div></div></section>"
+        )
+    return "      <nav class=\"prototype-side-nav grouped-nav\">\n" + "\n".join(blocks) + "\n      </nav>"
+
+
+def _group_navigation_pages(site_pages: list[dict]) -> dict[str, list[dict]]:
+    grouped: dict[str, list[dict]] = {}
+    for current in site_pages:
+        page = _normalize_page(current)
+        if not page.get("output_file") or page.get("page_type") == "login":
+            continue
+        if not page.get("is_nav_page") and not page.get("is_entry_page"):
+            continue
+        group = page.get("nav_group", "") or "工作台"
+        grouped.setdefault(group, []).append(page)
+    ordered: dict[str, list[dict]] = {}
+    for group in sort_admin_nav_groups(list(grouped)):
+        ordered[group] = sorted(
+            grouped[group],
+            key=lambda item: (0 if item.get("is_entry_page") else 1, item.get("nav_parent", ""), item.get("nav_label", item.get("page_name", ""))),
+        )
+    return ordered
 
 
 def _mobile_tab_bar(page_name: str) -> str:
@@ -669,6 +890,9 @@ def _mobile_tab_bar(page_name: str) -> str:
 
 def _render_page_content(spec: dict, page: dict, page_file_map: dict[str, str]) -> str:
     page_type = page.get("page_type", "web_detail")
+    page_archetype = page.get("page_archetype", "")
+    if page_archetype == "tree_manage":
+        return _render_tree_manage_page(spec, page, page_file_map)
     if page_type in {"web_list", "mobile_list"}:
         return _render_list_page(spec, page, page_file_map)
     if page_type in {"web_form", "mobile_form", "login"}:
@@ -680,10 +904,14 @@ def _render_page_content(spec: dict, page: dict, page_file_map: dict[str, str]) 
 
 def _render_list_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> str:
     page_name = page.get("page_name", "")
+    display_name = page.get("display_page_name", page_name)
     fields = page.get("fields", [])
     columns = page.get("table_columns", []) or [{"name": field.get("name", "")} for field in fields[:4]]
     actions = page.get("actions", [])
     jumps = page.get("jumps", [])
+    site_pages = spec.get("site_pages", spec.get("pages", []))
+    page_actions = _page_level_actions(page, site_pages)
+    row_actions = _row_level_actions(page, site_pages)
     summary_cards = "\n".join(
         (
             "        <div class=\"metric-card\">"
@@ -704,7 +932,14 @@ def _render_list_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> 
     ) or (
         "        <div class=\"form-group compact\"><label>关键词</label><input class=\"input\" placeholder=\"请输入关键词\"></div>"
     )
-    action_buttons = _action_buttons(actions[:3] or ["新增记录", "导出"], jumps, page_file_map)
+    action_buttons = _action_buttons(
+        page_actions[:3] or ["新增记录", "导出"],
+        jumps,
+        page_file_map,
+        compact=True,
+        current_page_name=page_name,
+        site_pages=site_pages,
+    )
     header_cells = "".join(f"<th>{html.escape(column.get('name', ''))}</th>" for column in columns)
     rows = []
     for index in range(3):
@@ -716,7 +951,7 @@ def _render_list_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> 
             "            <tr>"
             f"{cells}"
             "<td class=\"table-actions-cell\">"
-            f"{_row_action_buttons(actions, jumps, page_file_map)}"
+            f"{_row_action_buttons(row_actions, jumps, page_file_map, current_page_name=page_name, site_pages=site_pages)}"
             "</td></tr>"
         )
     return (
@@ -736,7 +971,7 @@ def _render_list_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> 
         "              </div>\n"
         "            </section>\n"
         "            <section class=\"prototype-card prototype-table-card\">\n"
-        f"              <div class=\"section-heading\"><h2>{html.escape(page_name)}</h2><p>筛选后的业务列表与核心状态</p></div>\n"
+        f"              <div class=\"section-heading\"><h2>{html.escape(display_name)}</h2><p>筛选后的业务列表与核心状态</p></div>\n"
         "              <table class=\"table prototype-table\"><thead><tr>"
         f"{header_cells}<th>操作</th></tr></thead><tbody>\n"
         f"{''.join(rows)}\n"
@@ -759,7 +994,7 @@ def _render_list_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> 
         f"              {_bullet_list(page.get('interaction_patterns', []))}\n"
         "            </section>\n"
         "            <section class=\"prototype-card empty-state\" data-state=\"empty\">\n"
-        f"              <p>暂无{html.escape(page_name)}数据</p>\n"
+        f"              <p>暂无{html.escape(display_name)}数据</p>\n"
         "              <button class=\"btn-primary\">创建首条记录</button>\n"
         "            </section>\n"
         "            <section class=\"prototype-card\" data-state=\"error\">\n"
@@ -771,8 +1006,97 @@ def _render_list_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> 
     )
 
 
+def _render_tree_manage_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> str:
+    page_name = page.get("page_name", "")
+    display_name = page.get("display_page_name", page_name)
+    site_pages = spec.get("site_pages", spec.get("pages", []))
+    object_name = _page_object_label(display_name) or "资源"
+    fields = page.get("fields", [])
+    columns = page.get("table_columns", []) or [{"name": field.get("name", "")} for field in fields[:6]]
+    action_buttons = _action_buttons(
+        _page_level_actions(page, site_pages)[:2] or [f"新增{object_name}"],
+        page.get("jumps", []),
+        page_file_map,
+        compact=True,
+        current_page_name=display_name,
+        site_pages=site_pages,
+    )
+    row_actions = _row_action_buttons(
+        _row_level_actions(page, site_pages),
+        page.get("jumps", []),
+        page_file_map,
+        current_page_name=display_name,
+        site_pages=site_pages,
+    )
+    header_cells = "".join(f"<th>{html.escape(column.get('name', ''))}</th>" for column in columns[:6])
+    rows = []
+    for index in range(4):
+        cells = "".join(
+            f"<td>{_cell_html(column.get('name', ''), _resource_sample_value(column.get('name', ''), index, object_name))}</td>"
+            for column in columns[:6]
+        )
+        rows.append(
+            "                  <tr>"
+            f"{cells}<td class=\"table-actions-cell\">{row_actions}</td></tr>"
+        )
+    tree_items = ["系统管理", "角色管理", "资源管理", "菜单资源", "按钮资源"]
+    tree_markup = []
+    for index, label in enumerate(tree_items):
+        classes = "prototype-tree-node active" if index == 2 else "prototype-tree-node"
+        tree_markup.append(
+            f'<button class="{classes}" type="button"><span>{html.escape(label)}</span><small>{index * 3 + 2} 项</small></button>'
+        )
+    return (
+        "        <section class=\"prototype-tree-manage-layout\" data-tree-manage=\"1\">\n"
+        "          <aside class=\"prototype-card prototype-tree-panel prototype-resource-tree\">\n"
+        f"            <div class=\"section-heading\"><h2>{html.escape(display_name)}</h2><p>父子层级资源树</p></div>\n"
+        "            <div class=\"prototype-tree-search\"><input class=\"input\" placeholder=\"搜索资源名称或标识\"></div>\n"
+        f"            <div class=\"prototype-tree-list\">{''.join(tree_markup)}</div>\n"
+        "          </aside>\n"
+        "          <div class=\"content-main-stack\">\n"
+        "            <section class=\"prototype-card prototype-toolbar-card\">\n"
+        "              <div class=\"filter-grid filter-grid-tree-manage\">\n"
+        f"{_tree_filter_groups(fields, page_name)}\n"
+        "              </div>\n"
+        "              <div class=\"toolbar-actions\">\n"
+        "                <button class=\"btn-secondary btn-sm\">重置</button>\n"
+        "                <button class=\"btn-primary btn-sm\">查询</button>\n"
+        f"{action_buttons}\n"
+        "              </div>\n"
+        "            </section>\n"
+        "            <section class=\"prototype-card prototype-table-card\">\n"
+        f"              <div class=\"section-heading\"><h2>{html.escape(display_name)}列表</h2><p>左树右表联动的资源工作区</p></div>\n"
+        "              <table class=\"table prototype-table\"><thead><tr>"
+        f"{header_cells}<th>操作</th></tr></thead><tbody>{''.join(rows)}</tbody></table>\n"
+        "            </section>\n"
+        "            <section class=\"prototype-card prototype-resource-detail-card\">\n"
+        "              <div class=\"section-heading\"><h2>资源详情</h2><p>展示选中节点的标识、路由与权限说明</p></div>\n"
+        "              <div class=\"kv-grid\">"
+        f"<div class=\"kv-row\"><span class=\"kv-key\">资源名称</span><span class=\"kv-value\">{html.escape(object_name)}菜单</span></div>"
+        "<div class=\"kv-row\"><span class=\"kv-key\">资源标识</span><span class=\"kv-value\">system:resource:menu</span></div>"
+        "<div class=\"kv-row\"><span class=\"kv-key\">上级资源</span><span class=\"kv-value\">系统管理</span></div>"
+        "<div class=\"kv-row\"><span class=\"kv-key\">路由/接口标识</span><span class=\"kv-value\">/system/resource</span></div>"
+        "</div>\n"
+        "            </section>\n"
+        "            <section class=\"prototype-card\" data-state=\"empty\">\n"
+        "              <h3>空态</h3>\n"
+        "              <p>未命中资源节点时，提示从左侧资源树选择节点或新增资源。</p>\n"
+        "            </section>\n"
+        "            <section class=\"prototype-card\" data-state=\"error\">\n"
+        "              <h3>异常态</h3>\n"
+        "              <p>资源树加载失败时保留筛选条件，并提供重试入口。</p>\n"
+        "            </section>\n"
+        "          </div>\n"
+        "        </section>\n"
+        "        <section class=\"prototype-state-strip\">\n"
+        f"{_state_tags(page.get('states', []))}\n"
+        "        </section>\n"
+    )
+
+
 def _render_form_page(spec: dict, page: dict, page_file_map: dict[str, str], *, is_login: bool = False) -> str:
     page_name = page.get("page_name", "")
+    display_name = page.get("display_page_name", page_name)
     fields = page.get("fields", [])
     actions = page.get("actions", [])
     jumps = page.get("jumps", [])
@@ -790,7 +1114,7 @@ def _render_form_page(spec: dict, page: dict, page_file_map: dict[str, str], *, 
         return (
             "    <section class=\"login-card prototype-login-card\">\n"
             f"      <p class=\"hero-eyebrow\">{html.escape(spec.get('module_name', ''))}</p>\n"
-            f"      <h2 class=\"section-title\">{html.escape(page_name)}</h2>\n"
+            f"      <h2 class=\"section-title\">{html.escape(display_name)}</h2>\n"
             f"      <p class=\"section-subtitle\">{html.escape(page.get('reference_summary', ''))}</p>\n"
             f"{form_rows}\n"
             f"{action_buttons}\n"
@@ -851,10 +1175,17 @@ def _render_form_page(spec: dict, page: dict, page_file_map: dict[str, str], *, 
 
 def _render_detail_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> str:
     page_name = page.get("page_name", "")
+    display_name = page.get("display_page_name", page_name)
     fields = page.get("fields", [])[:10]
-    actions = page.get("actions", [])
+    actions = list(page.get("actions", []))
     jumps = page.get("jumps", [])
-    action_buttons = _action_buttons(actions[:3] or ["返回", "编辑"], jumps, page_file_map)
+    detail_actions = actions[:3] or ["返回", "编辑"]
+    if len(detail_actions) == 1:
+        secondary = "返回"
+        if detail_actions[0] == secondary:
+            secondary = "关闭"
+        detail_actions = [detail_actions[0], secondary]
+    action_buttons = _action_buttons(detail_actions, jumps, page_file_map)
     kv_rows = "\n".join(
         (
             "              <div class=\"kv-row\">"
@@ -875,7 +1206,7 @@ def _render_detail_page(spec: dict, page: dict, page_file_map: dict[str, str]) -
     return (
         "        <section class=\"hero-card hero-card-inline\">\n"
         "          <div>\n"
-        f"            <h2 class=\"hero-title-small\">{html.escape(page_name)}摘要</h2>\n"
+        f"            <h2 class=\"hero-title-small\">{html.escape(display_name)}摘要</h2>\n"
         "            <p class=\"hero-subtitle\">聚合关键字段、状态摘要和后续处理动作。</p>\n"
         "          </div>\n"
         f"          <div class=\"hero-chip-group\">{_state_tags(page.get('states', [])[:3])}</div>\n"
@@ -919,6 +1250,7 @@ def _render_detail_page(spec: dict, page: dict, page_file_map: dict[str, str]) -
 
 def _render_dashboard_page(spec: dict, page: dict, page_file_map: dict[str, str]) -> str:
     page_name = page.get("page_name", "")
+    display_name = page.get("display_page_name", page_name)
     fields = page.get("fields", [])
     actions = page.get("actions", [])
     jumps = page.get("jumps", [])
@@ -937,8 +1269,8 @@ def _render_dashboard_page(spec: dict, page: dict, page_file_map: dict[str, str]
         f"{metrics}\n"
         "        </section>\n"
         "        <section class=\"content-two-column dashboard-layout\">\n"
-        "          <section class=\"prototype-card dashboard-focus-panel\">\n"
-        "            <div class=\"section-heading\"><h2>主分析区</h2><p>承载图表、趋势或场景主内容。</p></div>\n"
+          "          <section class=\"prototype-card dashboard-focus-panel\">\n"
+        f"            <div class=\"section-heading\"><h2>{html.escape(display_name)}</h2><p>承载经营概览、趋势、待办与快捷入口。</p></div>\n"
         "            <div class=\"chart-placeholder\">趋势图 / 地图 / 热点分布</div>\n"
         "          </section>\n"
         "          <aside class=\"prototype-side-panel\">\n"
@@ -999,38 +1331,195 @@ def _field_control(field: dict, page_name: str, *, compact: bool = False) -> str
     return f"<input class=\"input\" type=\"{input_type}\" placeholder=\"{html.escape(note)}\">"
 
 
-def _action_buttons(actions: list[str], jumps: list[dict], page_file_map: dict[str, str], *, stacked: bool = False) -> str:
+def _tree_filter_groups(fields: list[dict], page_name: str) -> str:
+    selected = fields[:4] or [
+        {"name": "关键词", "control": "input", "required": "否", "note": ""},
+        {"name": "资源类型", "control": "select", "required": "否", "note": ""},
+        {"name": "状态", "control": "select", "required": "否", "note": ""},
+        {"name": "上级资源", "control": "input", "required": "否", "note": ""},
+    ]
+    return "\n".join(
+        (
+            "                <div class=\"form-group compact\">"
+            f"<label>{html.escape(field.get('name', '关键词'))}</label>"
+            f"{_field_control(field, page_name, compact=True)}"
+            "</div>"
+        )
+        for field in selected
+    )
+
+
+def _action_buttons(
+    actions: list[str],
+    jumps: list[dict],
+    page_file_map: dict[str, str],
+    *,
+    stacked: bool = False,
+    compact: bool = False,
+    current_page_name: str = "",
+    site_pages: list[dict] | None = None,
+) -> str:
     rendered = []
     for index, action in enumerate(actions):
         classes = "btn-primary" if index == 0 else "btn-secondary"
         if "删除" in action:
             classes = "btn-danger"
+        if compact:
+            classes = f"{classes} btn-sm"
         rendered.append(
-            f'<a class="{classes}{" action-block" if stacked else ""}" href="{html.escape(_jump_href(action, jumps, page_file_map))}">{html.escape(action)}</a>'
+            f'<a class="{classes}{" action-block" if stacked else ""}" href="{html.escape(_jump_href(action, jumps, page_file_map, current_page_name=current_page_name, site_pages=site_pages or []))}">{html.escape(action)}</a>'
         )
     return "\n".join(rendered)
 
 
-def _row_action_buttons(actions: list[str], jumps: list[dict], page_file_map: dict[str, str]) -> str:
-    row_actions = [action for action in actions if any(token in action for token in ("查看", "编辑", "删除"))] or ["查看", "编辑", "删除"]
+def _row_action_buttons(
+    actions: list[str],
+    jumps: list[dict],
+    page_file_map: dict[str, str],
+    *,
+    current_page_name: str = "",
+    site_pages: list[dict] | None = None,
+) -> str:
+    row_actions = actions or ["查看详情", "编辑", "删除"]
     buttons = []
     for action in row_actions[:3]:
         classes = "btn-secondary btn-xs"
         if "删除" in action:
             classes = "btn-danger btn-xs"
         buttons.append(
-            f'<a class="{classes}" href="{html.escape(_jump_href(action, jumps, page_file_map))}">{html.escape(action)}</a>'
+            f'<a class="{classes}" href="{html.escape(_jump_href(action, jumps, page_file_map, current_page_name=current_page_name, site_pages=site_pages or []))}">{html.escape(action)}</a>'
         )
     return "".join(buttons)
 
 
-def _jump_href(action: str, jumps: list[dict], page_file_map: dict[str, str]) -> str:
+def _jump_href(
+    action: str,
+    jumps: list[dict],
+    page_file_map: dict[str, str],
+    *,
+    current_page_name: str = "",
+    site_pages: list[dict] | None = None,
+) -> str:
     for jump in jumps:
         if jump.get("action") == action:
             target = jump.get("target", "")
             if target in page_file_map:
-                return page_file_map[target]
+                href = page_file_map[target]
+                if target != current_page_name and href:
+                    return href
+    inferred = _infer_related_page_href(action, current_page_name, page_file_map, site_pages or [])
+    if inferred:
+        return inferred
     return "#"
+
+
+def _page_level_actions(page: dict, site_pages: list[dict]) -> list[str]:
+    actions = list(page.get("actions", []) or [])
+    page_type = str(page.get("page_type", ""))
+    page_archetype = str(page.get("page_archetype", ""))
+    if page_archetype == "tree_manage":
+        return ["新增资源"] if _related_page_exists(site_pages, page.get("page_name", ""), kind="form") else ["新增资源"]
+    if page_type not in {"web_list", "mobile_list"}:
+        return actions
+    page_tokens = ("新增", "创建", "导入", "导出", "批量", "同步", "发布", "生成", "配置", "设置")
+    primary = [action for action in actions if any(token in action for token in page_tokens)]
+    if primary:
+        return primary
+    if _related_page_exists(site_pages, page.get("page_name", ""), kind="form"):
+        return ["新增记录"]
+    return []
+
+
+def _row_level_actions(page: dict, site_pages: list[dict]) -> list[str]:
+    actions = list(page.get("actions", []) or [])
+    page_type = str(page.get("page_type", ""))
+    page_archetype = str(page.get("page_archetype", ""))
+    if page_archetype == "tree_manage":
+        row_actions = [action for action in actions if any(token in action for token in ("编辑", "删除", "查看", "详情"))]
+        return row_actions or ["编辑", "删除"]
+    if page_type not in {"web_list", "mobile_list"}:
+        return actions
+    row_tokens = ("查看", "详情", "编辑", "删除", "启用", "停用", "禁用", "审核", "拒绝", "通过", "授权")
+    row_actions = [action for action in actions if any(token in action for token in row_tokens)]
+    if row_actions:
+        return row_actions
+    inferred: list[str] = []
+    if _related_page_exists(site_pages, page.get("page_name", ""), kind="detail"):
+        inferred.append("查看详情")
+    if _related_page_exists(site_pages, page.get("page_name", ""), kind="form"):
+        inferred.append("编辑")
+    if _related_page_exists(site_pages, page.get("page_name", ""), kind="confirm"):
+        inferred.append("删除")
+    return inferred or ["查看详情", "编辑"]
+
+
+def _related_page_exists(site_pages: list[dict], current_page_name: str, *, kind: str) -> bool:
+    return bool(_infer_related_page_href(kind, current_page_name, {}, site_pages, action_mode=True))
+
+
+def _infer_related_page_href(
+    action: str,
+    current_page_name: str,
+    page_file_map: dict[str, str],
+    site_pages: list[dict],
+    *,
+    action_mode: bool = False,
+) -> str:
+    candidates = []
+    object_label = _page_object_label(action if any(token in action for token in ("新增", "编辑", "删除", "详情", "查看", "授权")) else current_page_name)
+    if not object_label:
+        object_label = _page_object_label(current_page_name)
+    for raw in site_pages:
+        page = _normalize_page(raw, raw.get("module_name", ""))
+        name = page.get("page_name", "")
+        if not name or name == current_page_name:
+            continue
+        if object_label and object_label not in name:
+            continue
+        score = _related_page_score(action, name)
+        if score > 0:
+            href = page.get("output_file") or page_file_map.get(name, "")
+            if href:
+                candidates.append((score, href))
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1] if candidates else ""
+
+
+def _related_page_score(action: str, candidate_name: str) -> int:
+    action_text = str(action or "")
+    candidate = str(candidate_name or "")
+    if any(token in action_text for token in ("删除", "关闭", "拒绝")):
+        score = 0
+        if any(token in candidate for token in ("删除", "关闭", "拒绝")):
+            score += 6
+        if "确认" in candidate:
+            score += 4
+        if "弹窗" in candidate:
+            score += 1
+        return score
+    if any(token in action_text for token in ("查看", "详情", "授权")):
+        score = 0
+        if any(token in candidate for token in ("详情", "明细", "授权")):
+            score += 6
+        if "抽屉" in candidate:
+            score += 4
+        return score
+    if any(token in action_text for token in ("新增", "创建", "编辑", "form")):
+        score = 0
+        if any(token in candidate for token in ("新增", "编辑")):
+            score += 6
+        if any(token in candidate for token in ("表单", "弹窗", "抽屉")):
+            score += 3
+        return score
+    return 3 if any(token in candidate for token in ("新增", "编辑", "表单", "详情", "删除", "确认", "弹窗", "抽屉")) else 0
+
+
+def _page_object_label(text: str) -> str:
+    cleaned = re.sub(r"[（(][^）)]*[）)]", "", str(text or ""))
+    for token in ("查看详情", "查看", "新增", "编辑", "删除", "授权", "确认", "页面", "列表页", "管理页", "详情页", "表单页", "弹窗", "抽屉", "后台"):
+        cleaned = cleaned.replace(token, "")
+    cleaned = re.sub(r"[\s\-_/]+", "", cleaned)
+    return cleaned.strip()
 
 
 def _state_tags(states: list[str]) -> str:
@@ -1078,6 +1567,25 @@ def _sample_value(field_name: str, index: int, page_name: str) -> str:
     return ["重点信息", "处理中", "待确认"][index % 3]
 
 
+def _resource_sample_value(field_name: str, index: int, object_name: str) -> str:
+    text = str(field_name or "")
+    if "资源名称" in text:
+        return [f"{object_name}菜单", f"{object_name}按钮", f"{object_name}接口", f"{object_name}目录"][index % 4]
+    if "资源类型" in text:
+        return ["menu", "button", "api", "catalog"][index % 4]
+    if "资源标识" in text:
+        return f"system:resource:{index + 1}"
+    if "上级资源" in text:
+        return ["系统管理", "角色管理", "资源管理", "基础设置"][index % 4]
+    if "排序" in text:
+        return str((index + 1) * 10)
+    if "状态" in text:
+        return ["已启用", "待审核", "已停用", "已启用"][index % 4]
+    if any(token in text for token in ("路由", "接口")):
+        return ["/system/resource", "/system/role", "/system/menu", "/system/button"][index % 4]
+    return _sample_value(field_name, index, object_name)
+
+
 def _sample_metric(field_name: str, index: int) -> str:
     text = str(field_name)
     if any(token in text for token in ("率", "占比")):
@@ -1101,3 +1609,29 @@ def _bullet_list(items: list[str]) -> str:
     if not items:
         return "<ul class=\"inline-bullets\"><li>无</li></ul>"
     return "<ul class=\"inline-bullets\">" + "".join(f"<li>{html.escape(item)}</li>" for item in items) + "</ul>"
+
+
+def _field_traceability_comment(page: dict) -> str:
+    tokens = []
+    for field in page.get("fields", []):
+        name = str(field.get("name", "")).strip()
+        if name:
+            tokens.append(name)
+    for column in page.get("table_columns", []):
+        name = str(column.get("name", "")).strip()
+        if name:
+            tokens.append(name)
+    for action in page.get("actions", []):
+        action_name = str(action).strip()
+        if action_name:
+            tokens.append(action_name)
+    for state in page.get("states", []):
+        state_name = str(state).strip()
+        if state_name:
+            tokens.append(state_name)
+    deduped = []
+    for token in tokens:
+        if token not in deduped:
+            deduped.append(token)
+    lines = ["<!-- FIELD_TRACEABILITY", *[f"- {token}" for token in deduped], "-->"]
+    return "\n".join(lines)

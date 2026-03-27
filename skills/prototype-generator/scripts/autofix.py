@@ -7,12 +7,13 @@ import sys
 from pathlib import Path
 
 from html_utils import parse_page_spec, to_markdown
-from requirements_compression import ensure_compressed_requirements
+from requirements_compression import ensure_compressed_requirements, _build_module_brief_markdown as build_compressed_module_brief_markdown
 from reference_utils import ensure_reference_pack
 from requirements_utils import (
     default_actions_for_page,
     default_states_for_page,
     infer_object_name,
+    infer_page_semantics,
     infer_page_shape,
     infer_terminal_type_from_module,
     parse_requirement_modules,
@@ -165,6 +166,7 @@ def repair_html_page_specs(
         changed = False
         existing = {page.get("page_name", ""): page for page in spec.get("pages", [])}
         for page_name, req in module_req["pages"].items():
+            req = {**req, "module_name": module_name}
             if target_pages and page_name not in target_pages and page_name not in rebuild_pages:
                 continue
             if page_name not in existing:
@@ -230,7 +232,7 @@ def repair_html_module_briefs(
         if target_modules and module_name not in target_modules:
             continue
         brief_path = briefs_dir / f"模块摘要_{module_name}.md"
-        brief_text = _build_module_brief_markdown(module_name, module_req)
+        brief_text = build_compressed_module_brief_markdown(module_name, module_req)
         if not brief_path.exists() or brief_path.read_text(encoding="utf-8") != brief_text:
             brief_path.write_text(brief_text, encoding="utf-8")
             changes.append({"path": str(brief_path), "module_name": module_name})
@@ -411,12 +413,21 @@ def _build_page_model_stub(model: dict, req: dict) -> dict:
 def _build_html_page_stub(req: dict) -> dict:
     page_name = req.get("page_name", "")
     page_type, page_archetype = infer_page_shape(page_name)
+    module_name = req.get("module_name", "")
+    semantics = infer_page_semantics(module_name, page_name, page_type, page_archetype)
     return {
         "page_name": page_name,
-        "page_type": page_type,
-        "page_archetype": page_archetype,
+        "page_type": semantics.get("page_type", page_type),
+        "page_archetype": semantics.get("page_archetype", page_archetype),
         "output_file": f"{safe_slug(page_name, 'page')}.html",
-        "is_nav_page": False,
+        "is_nav_page": semantics.get("is_nav_page", False),
+        "is_entry_page": semantics.get("is_entry_page", False),
+        "nav_group": semantics.get("nav_group", ""),
+        "nav_parent": semantics.get("nav_parent", ""),
+        "nav_label": semantics.get("nav_label", page_name),
+        "nav_context": semantics.get("nav_context", ""),
+        "shell_variant": semantics.get("shell_variant", ""),
+        "design_system": semantics.get("design_system", ""),
         "reference_basis": "fallback",
         "reference_pack_file": "",
         "reference_summary": "",
@@ -456,27 +467,6 @@ def _target_modules(requirements: dict[str, dict], findings: list[dict]) -> set[
         if any(page_name in target_pages for page_name in module_req["pages"]):
             modules.add(module_name)
     return modules
-
-
-def _build_module_brief_markdown(module_name: str, module_req: dict) -> str:
-    page_lines = []
-    for page_name, page_req in module_req.get("pages", {}).items():
-        page_lines.append(f"- {page_name}（{page_req.get('page_archetype', infer_page_shape(page_name)[1])}）")
-    field_bucket = []
-    for page_req in module_req.get("pages", {}).values():
-        for field in page_req.get("fields", []):
-            if field not in field_bucket:
-                field_bucket.append(field)
-    field_lines = "\n".join(f"- {field}" for field in field_bucket[:12]) or "- 无字段"
-    return (
-        f"# {module_name} 模块摘要\n\n"
-        "## 1. 模块目标与边界\n"
-        f"- 模块：{module_name}\n\n"
-        "## 2. 页面清单与页面 archetype\n"
-        f"{chr(10).join(page_lines) if page_lines else '- 无页面'}\n\n"
-        "## 3. 关键字段索引\n"
-        f"{field_lines}\n"
-    )
 
 
 def _index_requires_refresh(index_path: Path, requirements: dict[str, dict]) -> bool:

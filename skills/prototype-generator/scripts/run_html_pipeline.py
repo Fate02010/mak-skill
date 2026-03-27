@@ -183,7 +183,7 @@ def _route_html_validation_rule(
             expected_fix_scope="reference_pack",
             stop_category="auto_repairable",
         )
-    if rule in {"H1", "H2", "H4", "H10", "H11", "BODY_RENDER", "BODY_SLOT_MISSING", "BODY_CONTRACT", "RENDER"}:
+    if rule in {"H1", "H2", "H4", "H10", "H11", "H12", "H13", "BODY_RENDER", "BODY_SLOT_MISSING", "BODY_CONTRACT", "RENDER"}:
         return _make_html_finding(
             scope=scope,
             page_or_sheet=page_name,
@@ -519,7 +519,7 @@ def run_pipeline(work_dir: str | Path, product_name: str, max_parallel: int = 3)
     for spec_path in page_specs:
         spec = parse_page_spec(spec_path)
         for page in spec.get("pages", []):
-            all_pages.append({"page_name": page.get("page_name", ""), "output_file": page.get("output_file", "")})
+            all_pages.append({"module_name": spec.get("module_name", ""), **page})
     (prototypes_dir / "index.html").write_text(render_index_html(product_name, all_pages), encoding="utf-8")
 
     consistency_scope = _consistency_scope(product_name)

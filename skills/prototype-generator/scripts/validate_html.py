@@ -74,6 +74,8 @@ def run_checks(path: str | Path) -> dict:
     weak_hierarchy: list[str] = []
     unstable_rendering: list[str] = []
     body_slot_issues: list[str] = []
+    missing_admin_shell: list[str] = []
+    index_nav_issues: list[str] = []
     file_names = {file.name for file in files}
     for file in files:
         text = file.read_text(encoding="utf-8")
@@ -81,6 +83,7 @@ def run_checks(path: str | Path) -> dict:
         page_type = _extract_attr(text, "data-page-type")
         page_archetype = _extract_attr(text, "data-page-archetype")
         reference_basis = _extract_attr(text, "data-reference-basis")
+        shell_variant = _extract_attr(text, "data-shell-variant")
         if "<html" not in lowered or "<head" not in lowered or "<body" not in lowered or "</html>" not in lowered or "<title>" not in lowered:
             missing_structure.append(file.name)
         if 'href="common.css"' not in text and "href='common.css'" not in text:
@@ -119,6 +122,12 @@ def run_checks(path: str | Path) -> dict:
         body_slot_issue = _check_body_slot_contract(file.name, text, page_type, page_archetype)
         if body_slot_issue:
             body_slot_issues.append(body_slot_issue)
+        admin_shell_issue = _check_admin_shell(file.name, text, page_type, page_archetype, shell_variant)
+        if admin_shell_issue:
+            missing_admin_shell.append(admin_shell_issue)
+        index_nav_issue = _check_index_navigation(file.name, text, page_type, shell_variant)
+        if index_nav_issue:
+            index_nav_issues.append(index_nav_issue)
         for pattern in UNSTABLE_RENDER_PATTERNS:
             if pattern.search(text):
                 unstable_rendering.append(f"{file.name}: 命中不稳定样式 `{pattern.pattern}`")
@@ -136,6 +145,8 @@ def run_checks(path: str | Path) -> dict:
         RuleResult("H9", "visual_hierarchy", "FAIL" if weak_hierarchy else "PASS", len(weak_hierarchy), weak_hierarchy),
         RuleResult("H10", "render_stability", "FAIL" if unstable_rendering else "PASS", len(unstable_rendering), unstable_rendering),
         RuleResult("H11", "body_slot_contract", "FAIL" if body_slot_issues else "PASS", len(body_slot_issues), body_slot_issues),
+        RuleResult("H12", "admin_console_shell", "FAIL" if missing_admin_shell else "PASS", len(missing_admin_shell), missing_admin_shell),
+        RuleResult("H13", "grouped_index_navigation", "FAIL" if index_nav_issues else "PASS", len(index_nav_issues), index_nav_issues),
     ]
     fail = sum(1 for item in results if item.status == "FAIL")
     return {
@@ -149,6 +160,11 @@ def _check_archetype_skeleton(filename: str, text: str, page_type: str, page_arc
     metric_count = text.count("metric-card")
     form_group_count = text.count("form-group")
     kv_count = text.count("kv-row")
+    if page_archetype == "tree_manage":
+        required = ("data-tree-manage=\"1\"", "prototype-resource-tree", "prototype-tree-node", "prototype-resource-detail-card")
+        missing = [token for token in required if token not in text]
+        if missing:
+            return f"{filename}: 资源管理页缺少树管理骨架 {', '.join(missing)}"
     if page_type in {"web_list", "mobile_list"}:
         if "<table" not in text or row_count < 4:
             return f"{filename}: 列表页缺少真实表格或数据行不足"
@@ -168,9 +184,15 @@ def _check_archetype_skeleton(filename: str, text: str, page_type: str, page_arc
 
 
 def _check_visual_hierarchy(filename: str, text: str, page_type: str) -> str:
-    primary_count = text.count("btn-primary")
+    primary_count = text.count("btn-primary") + text.count("btn-danger")
     secondary_count = text.count("btn-secondary")
     card_count = text.count("prototype-card") + text.count("hero-card")
+    if page_type in {"web_list", "mobile_list"}:
+        toolbar_match = re.search(r"<div class=['\"]toolbar-actions['\"]>(.*?)</div>", text, re.S)
+        if toolbar_match:
+            toolbar = toolbar_match.group(1)
+            if any(label in toolbar for label in (">编辑<", ">删除<", ">查看详情<", ">授权<")):
+                return f"{filename}: 列表页查询区混入行级操作"
     if page_type != "index" and primary_count == 0:
         return f"{filename}: 缺少主按钮"
     if page_type in {"web_list", "web_form", "web_detail", "dashboard"} and card_count < 2:
@@ -193,6 +215,26 @@ def _check_body_slot_contract(filename: str, text: str, page_type: str, page_arc
     for token in required_body_markers_for(page_type, page_archetype):
         if token and token not in body_slot:
             return f"{filename}: body slot 缺少必需标记 {token}"
+    return ""
+
+
+def _check_admin_shell(filename: str, text: str, page_type: str, page_archetype: str, shell_variant: str) -> str:
+    page_name = _extract_attr(text, "data-page-name")
+    if shell_variant != "admin_console" or page_type in {"index", "login"} or page_archetype == "modal_form" or "抽屉" in page_name:
+        return ""
+    required = ("prototype-admin-header", "prototype-sidebar", "prototype-nav-parent", "prototype-subnav-item", "prototype-workspace-intro")
+    missing = [token for token in required if token not in text]
+    if missing:
+        return f"{filename}: 后台壳层缺少 {', '.join(missing)}"
+    return ""
+
+
+def _check_index_navigation(filename: str, text: str, page_type: str, shell_variant: str) -> str:
+    if page_type != "index" or shell_variant != "admin_console":
+        return ""
+    required = ("prototype-index-admin-layout", "prototype-nav-group", "prototype-nav-parent", "prototype-subnav-item")
+    if any(token not in text for token in required):
+        return f"{filename}: 导航首页未按后台菜单树分组"
     return ""
 
 

@@ -10,7 +10,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from html_utils import parse_page_spec, to_markdown
-from requirements_utils import infer_page_shape, infer_terminal_type_from_module, safe_slug
+from requirements_utils import field_names_from_page, infer_page_semantics, infer_page_shape, infer_terminal_type_from_module, safe_slug
 
 
 VISUAL_SUFFIXES = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".svg", ".pdf", ".drawio", ".html"}
@@ -122,6 +122,10 @@ def _build_reference_entry(root: Path, spec: dict, page: dict, source_files: lis
     page_name = page.get("page_name", "")
     page_type = page.get("page_type", "web_detail")
     page_archetype = page.get("page_archetype") or infer_page_shape(page_name)[1]
+    semantics = infer_page_semantics(module_name, page_name, page_type, page_archetype, field_names_from_page(page))
+    page_type = semantics.get("page_type", page_type)
+    page_archetype = semantics.get("page_archetype", page_archetype)
+    design_system = semantics.get("design_system", "prototype-default")
     local_refs = _match_local_references(page_name, module_name, source_files)
     external_refs: list[dict] = []
     query = _default_query(module_name, page_name, page_archetype)
@@ -137,8 +141,15 @@ def _build_reference_entry(root: Path, spec: dict, page: dict, source_files: lis
                 "query": query,
             }
         )
-    reference_basis = "internal" if local_refs else "external" if external_refs else "fallback"
-    summary = _reference_summary(page_name, page_archetype, reference_basis, local_refs, external_refs)
+    if local_refs:
+        reference_basis = "internal"
+    elif external_refs:
+        reference_basis = "external"
+    elif semantics.get("terminal_type") == "admin":
+        reference_basis = "builtin_design_system"
+    else:
+        reference_basis = "fallback"
+    summary = _reference_summary(page_name, page_archetype, reference_basis, local_refs, external_refs, design_system)
     return {
         "module_name": module_name,
         "module_key": module_key,
@@ -146,6 +157,8 @@ def _build_reference_entry(root: Path, spec: dict, page: dict, source_files: lis
         "page_type": page_type,
         "page_archetype": page_archetype,
         "reference_basis": reference_basis,
+        "design_system": design_system,
+        "reference_source_type": "builtin_design_system" if reference_basis == "builtin_design_system" else reference_basis,
         "reference_summary": summary,
         "reference_sources": _format_reference_sources(local_refs, external_refs),
         "layout_directives": _layout_directives(page_archetype, page_type),
@@ -198,7 +211,10 @@ def _keywords(text: str) -> set[str]:
 
 
 def _default_query(module_name: str, page_name: str, page_archetype: str) -> str:
+    semantics = infer_page_semantics(module_name, page_name, "", page_archetype)
     terminal_name = infer_terminal_type_from_module(module_name)[1]
+    if semantics.get("terminal_type") == "admin":
+        return f"{terminal_name} {page_name} {page_archetype} Ant Design Pro 后台管理 竞品 行业案例"
     return f"{terminal_name} {page_name} {page_archetype} 竞品 行业案例"
 
 
@@ -249,12 +265,14 @@ def _format_reference_sources(local_refs: list[str], external_refs: list[dict]) 
     return sources
 
 
-def _reference_summary(page_name: str, page_archetype: str, reference_basis: str, local_refs: list[str], external_refs: list[dict]) -> str:
+def _reference_summary(page_name: str, page_archetype: str, reference_basis: str, local_refs: list[str], external_refs: list[dict], design_system: str) -> str:
     if reference_basis == "internal":
         return f"{page_name} 优先对齐内部资料中的视觉样式与结构，当前使用 {len(local_refs)} 份本地参考。"
     if reference_basis == "external":
         titles = " / ".join(item.get("title", "") for item in external_refs[:2])
         return f"{page_name} 缺少内部参照，已补充检索行业案例：{titles}，用于约束 {page_archetype} 的布局与视觉层级。"
+    if reference_basis == "builtin_design_system":
+        return f"{page_name} 未命中可复用截图，当前按 {design_system} 的后台管理系统基线生成，保证左侧导航、顶部工作区和卡片化操作区一致。"
     return f"{page_name} 未找到可复用参照，按 {page_archetype} 的高保真默认骨架生成，并保留显式布局指令。"
 
 
@@ -278,12 +296,12 @@ def _layout_directives(page_archetype: str, page_type: str) -> list[str]:
             "重要字段和校验提示放在首屏，次要配置放在后续分组卡片。",
         ],
         "dashboard": [
-            "顶部先给出核心指标卡和状态摘要，中部是主分析面板，右侧是待办与预警。",
-            "避免纯文档式堆叠，主面板占据页面最大面积。",
+            "整体采用后台工作台布局：顶部信息栏 + 指标卡区 + 主分析区 + 右侧待办预警。",
+            "页面保留左侧主导航、顶部操作区和卡片化内容区，避免移动端宫格首页形态。",
         ],
         "mobile_home": [
-            "首屏采用欢迎区 + 核心指标 + 快捷入口 + 内容流的顺序。",
-            "底部保留 TabBar，核心 CTA 置于首屏可见区域。",
+            "若模块属于后台管理，则按后台工作台布局渲染；若属于移动端，再使用欢迎区 + 核心指标 + 快捷入口。",
+            "后台场景不保留 TabBar，而是左侧主导航 + 右侧工作区。",
         ],
         "portal_landing": [
             "官网首页采用 Hero 主视觉 + 核心能力卡片 + 场景区块 + CTA 的顺序。",
@@ -316,12 +334,12 @@ def _visual_cues(page_archetype: str, page_type: str) -> list[str]:
             "提交按钮使用主色实心，取消使用描边样式。",
         ],
         "dashboard": [
-            "指标卡使用深浅对比和数字放大，主分析面板保持深色或强对比容器。",
-            "预警和异常信息使用 warning / danger 色强调。",
+            "指标卡采用后台卡片化样式，主分析面板与待办区形成明显主次层级。",
+            "左侧导航使用深色沉稳底色，右侧内容区保持浅色工作台背景。",
         ],
         "mobile_home": [
-            "首页使用渐变欢迎区与圆角卡片，快捷入口以 4 列宫格出现。",
-            "主 CTA 采用整宽按钮或强调色卡片入口。",
+            "后台场景使用后台工作台视觉，不使用移动端宫格和底部 TabBar。",
+            "首屏应突出工作台标题、指标卡、快捷操作和待办提醒。",
         ],
         "portal_landing": [
             "首屏需要大标题、说明文案和主视觉插槽，避免纯文字。",
@@ -372,6 +390,7 @@ def _module_summary_markdown(spec: dict, entries: list[dict]) -> str:
                 f"- 页面类型：{item.get('page_type', '')}",
                 f"- 页面原型：{item.get('page_archetype', '')}",
                 f"- 参考来源：{item.get('reference_basis', '')}",
+                f"- 设计系统：{item.get('design_system', '')}",
                 f"- 参考摘要：{item.get('reference_summary', '')}",
                 "",
                 "### 布局指令",
