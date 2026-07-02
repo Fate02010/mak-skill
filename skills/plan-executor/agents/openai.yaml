@@ -1,0 +1,4 @@
+interface:
+  display_name: "Plan Executor"
+  short_description: "Execute plans with review and verification"
+  default_prompt: "Use $plan-executor to execute an existing implementation plan with review and verification."
