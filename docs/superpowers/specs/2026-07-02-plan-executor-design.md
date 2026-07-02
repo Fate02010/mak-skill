@@ -121,14 +121,21 @@ For every plan task:
 
 1. Mark the task in progress.
 2. Execute the task using the confirmed execution mode.
-3. For feature development, software development, and script development, require strict TDD by invoking or following `superpowers:test-driven-development` before implementation code is written.
-4. For documentation, configuration, release, cleanup, or organizational tasks, decide whether TDD applies based on risk and testability.
-5. Run the task-specific tests or verification commands defined by the plan.
-6. If tests or verification fail, repair and re-run within the task repair limit.
-7. Request code review with `superpowers:requesting-code-review`.
-8. Handle review feedback with `superpowers:receiving-code-review`.
-9. Repair and re-review until the task's tests, verification, and review feedback are clear, or until the repair limit is reached.
-10. Mark the task complete only after task verification and review are clear.
+3. For feature development, software development, and script development, require strict TDD by invoking or following `superpowers:test-driven-development`.
+4. Strict TDD requires this exact order:
+   - Write the failing test first.
+   - Run the test and verify RED: it fails for the expected reason.
+   - Write the minimal implementation.
+   - Run the test and verify GREEN: it passes.
+   - Refactor only after GREEN, keeping tests green.
+5. If an implementation subagent reports completion for a TDD-required task, its report must include RED evidence and GREEN evidence before the task can proceed to review.
+6. For documentation, configuration, release, cleanup, or organizational tasks, decide whether TDD applies based on risk and testability.
+7. Run the task-specific tests or verification commands defined by the plan.
+8. If tests or verification fail, repair and re-run within the task repair limit.
+9. Request code review with `superpowers:requesting-code-review`.
+10. Handle review feedback with `superpowers:receiving-code-review`.
+11. Repair and re-review until the task's tests, verification, and review feedback are clear, or until the repair limit is reached.
+12. Mark the task complete only after task verification and review are clear.
 
 The skill must not enter the next task while the current task has failing tests, failing verification, unclear review feedback, or unresolved review findings.
 
@@ -225,6 +232,8 @@ When stopping, report the blocker concretely and avoid claiming progress beyond 
 - The skill requires `receiving-code-review` before implementing review feedback.
 - The skill enforces a maximum of three repair rounds per task.
 - The skill requires strict TDD for feature development, software development, and script development.
+- The strict TDD requirement explicitly enforces `write failing test -> verify RED -> implement -> verify GREEN -> refactor while green`.
+- The skill rejects TDD-required task completion reports that lack RED and GREEN evidence.
 - The skill uses `verification-before-completion` before any completion claim.
 - The skill enters `finishing-a-development-branch` after final verification passes.
 - `~/.codex/skills/plan-executor` points to the repository skill directory.
