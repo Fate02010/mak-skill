@@ -41,6 +41,14 @@ Run the normal git checks for the current repository. If the current branch is `
 
 If isolation is missing, use `superpowers:using-git-worktrees` or ask the user to create or switch to an isolated branch/worktree.
 
+## Execution Preflight
+
+Before mode selection, read the plan and audit execution risk.
+
+Stop if the plan has placeholders, vague instructions such as "handle edge cases", missing file targets, missing interfaces, missing verification commands, missing expected results, contradictions, or tasks without independently testable deliverables.
+
+Create a short requirement-to-task coverage checklist from the plan goal, global constraints, acceptance criteria, and task headings. If any requirement has no task, stop and report the gap instead of guessing during execution.
+
 ## Execution Mode Selector
 
 Read the plan before choosing a mode. Recommend one mode, explain why, show the alternative, and wait for the user to choose.
@@ -56,6 +64,28 @@ The mode prompt must include:
 3. A clear request for the user to choose before execution.
 
 Do not execute any task until the user confirms the mode.
+
+## Cost-Controlled SDD
+
+When recommending or using `superpowers:subagent-driven-development`, prepare a per-task routing table before dispatch:
+
+- `cheap`: exact-code, single-file, doc/config/test-only, or mechanical edits.
+- `standard`: normal multi-file implementation with clear interfaces.
+- `high`: architecture, ambiguous integration, security, concurrency, performance risk, or final whole-branch review.
+
+If model selection is unavailable, record the intended tier and use the available model.
+
+Do not hard-code model names. Select the cheapest currently available model in the current runtime that can safely handle the tier. If the runtime exposes reasoning effort, use lower effort for `cheap`, medium effort for `standard`, and high or maximum effort only for `high` risk work.
+
+### Token Budget Rules
+
+Use task briefs and file paths for reports, diffs, and review packages. Do not paste the full plan, accumulated task history, or large diffs into prompts. Require subagents to return only status, commits, test summary, and concerns in chat. Group adjacent trivial tasks only when grouping does not change the plan's deliverables or review boundary.
+
+## Executing-Plans Detail Safeguards
+
+Use `superpowers:executing-plans` only after the preflight audit passes.
+
+Before marking each task complete, confirm planned files, interfaces, verification commands, expected results, and acceptance criteria were satisfied. For each task review under `superpowers:executing-plans`, include the task text, coverage checklist, verification output, and diff reference.
 
 ## Per-Task Gate
 

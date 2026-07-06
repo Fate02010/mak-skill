@@ -87,6 +87,33 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
         for phrase in required_phrases:
             self.assertIn(phrase, body)
 
+    def test_execution_preflight_controls_cost_and_plan_detail_risk(self):
+        _, body = _frontmatter_and_body()
+        required_phrases = [
+            "Execution Preflight",
+            "requirement-to-task coverage checklist",
+            "Cost-Controlled SDD",
+            "`cheap`",
+            "`standard`",
+            "`high`",
+            "Token Budget Rules",
+            "Executing-Plans Detail Safeguards",
+        ]
+        for phrase in required_phrases:
+            self.assertIn(phrase, body)
+
+    def test_model_routing_is_runtime_agnostic(self):
+        _, body = _frontmatter_and_body()
+        required_phrases = [
+            "Do not hard-code model names",
+            "cheapest currently available model",
+            "current runtime",
+            "reasoning effort",
+        ]
+        for phrase in required_phrases:
+            self.assertIn(phrase, body)
+        self.assertNotRegex(body, r"\bgpt-\d")
+
     def test_task_loop_enforces_tdd_review_and_repair_limits(self):
         _, body = _frontmatter_and_body()
         required_phrases = [
