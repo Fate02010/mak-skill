@@ -81,6 +81,12 @@ Do not hard-code model names. Select the cheapest currently available model in t
 
 Use task briefs and file paths for reports, diffs, and review packages. Do not paste the full plan, accumulated task history, or large diffs into prompts. Require subagents to return only status, commits, test summary, and concerns in chat. Group adjacent trivial tasks only when grouping does not change the plan's deliverables or review boundary.
 
+## Frontend Task Budget Rules
+
+For frontend tasks, require a frontend surface brief: target screen or component, affected files, existing design source, states to implement, and exact acceptance checks.
+
+Do not paste full component trees, full CSS bundles, large screenshots, large DOM dumps, or full browser/test logs into prompts. Pass screenshot paths, bounded DOM/CSS excerpts, relevant file paths, and exact failing assertions instead.
+
 ## Executing-Plans Detail Safeguards
 
 Use `superpowers:executing-plans` only after the preflight audit passes.
