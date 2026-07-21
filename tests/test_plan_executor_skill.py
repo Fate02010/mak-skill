@@ -137,6 +137,37 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
         for phrase in required_phrases:
             self.assertIn(phrase, body)
 
+    def test_model_preflight_requires_exact_runtime_package(self):
+        _, body = _frontmatter_and_body()
+        required_phrases = [
+            "Model and Reasoning Preflight",
+            "exact model ID",
+            "exact supported reasoning effort",
+            "cheapest currently available model",
+            "everyday coding workhorse with medium reasoning",
+            "lower-cost model with low reasoning",
+            "strongest suitable coding model with high reasoning",
+            "If exact model IDs are unavailable, stop",
+            "Do not continue with tier-only routing",
+            "`xhigh`, `max`, or `ultra`",
+            "one user confirmation",
+            "task, exact model ID, effort, and reason",
+        ]
+        for phrase in required_phrases:
+            self.assertIn(phrase, body)
+
+        ordered_fields = [
+            "`Execution mode`",
+            "`Overall model`",
+            "`Reasoning effort`",
+            "`Why this is the best value`",
+            "`Task overrides`",
+            "`Alternative`",
+            "`Confirmation`",
+        ]
+        positions = [body.index(field) for field in ordered_fields]
+        self.assertEqual(sorted(positions), positions)
+
 
 class PlanExecutorCodexSymlinkTests(unittest.TestCase):
     def test_codex_skill_symlink_points_to_repo_skill(self):

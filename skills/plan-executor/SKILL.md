@@ -49,33 +49,43 @@ Stop if the plan has placeholders, vague instructions such as "handle edge cases
 
 Create a short requirement-to-task coverage checklist from the plan goal, global constraints, acceptance criteria, and task headings. If any requirement has no task, stop and report the gap instead of guessing during execution.
 
+## Model and Reasoning Preflight
+
+Before mode selection, inspect exact model IDs and reasoning levels in the current runtime. Choose the cheapest currently available model and lowest exact supported reasoning effort expected to complete the plan reliably. For normal plans, use the everyday coding workhorse with medium reasoning; use a lower-cost model with low reasoning for mechanical exceptions and the strongest suitable coding model with high reasoning for security, concurrency, migration, architecture, or ambiguous integration.
+
+Do not hard-code model names. Do not recommend `xhigh`, `max`, or `ultra` by default. Use one only for exceptional reasoning or parallelism; justify extra usage.
+
+If exact model IDs are unavailable, stop and ask the user to select from the current runtime's visible model list. Do not continue with tier-only routing.
+
+Every pre-execution recommendation must contain, in order:
+
+1. `Execution mode`: recommended workflow.
+2. `Overall model`: exact model ID.
+3. `Reasoning effort`: exact supported value.
+4. `Why this is the best value`: token-cost and completion-quality rationale.
+5. `Task overrides`: task, exact model ID, effort, and reason; write `None` when absent.
+6. `Alternative`: one lower-cost or higher-quality package and its tradeoff.
+7. `Confirmation`: one user confirmation covering the execution mode and model package.
+
+No implementation task may start before that confirmation.
+
 ## Execution Mode Selector
 
-Read the plan before choosing a mode. Recommend one mode, explain why, show the alternative, and wait for the user to choose.
+Read the plan, recommend one mode, show the alternative, and wait for the user to choose.
 
-Recommend `superpowers:subagent-driven-development` when subagents are available and plan tasks are mostly independent, task-scoped, and suitable for fresh context per task.
+Recommend `superpowers:subagent-driven-development` for independent, task-scoped work when subagents are available. Recommend `superpowers:executing-plans` for tightly coupled work needing continuous context.
 
-Recommend `superpowers:executing-plans` when tasks are tightly coupled, require continuous main-session context, or are not suitable for implementation subagents.
-
-The mode prompt must include:
-
-1. Recommended option and reason.
-2. Alternative option and tradeoff.
-3. A clear request for the user to choose before execution.
-
-Do not execute any task until the user confirms the mode.
+Present the Recommended option, tradeoff, and model package together. Do not execute until confirmed.
 
 ## Cost-Controlled SDD
 
-When recommending or using `superpowers:subagent-driven-development`, prepare a per-task routing table before dispatch:
+For `superpowers:subagent-driven-development`, use the confirmed overall model by default and route only exceptions:
 
 - `cheap`: exact-code, single-file, doc/config/test-only, or mechanical edits.
 - `standard`: normal multi-file implementation with clear interfaces.
 - `high`: architecture, ambiguous integration, security, concurrency, performance risk, or final whole-branch review.
 
-If model selection is unavailable, record the intended tier and use the available model.
-
-Do not hard-code model names. Select the cheapest currently available model in the current runtime that can safely handle the tier. If the runtime exposes reasoning effort, use lower effort for `cheap`, medium effort for `standard`, and high or maximum effort only for `high` risk work.
+Every override must name an exact current-runtime model and supported reasoning effort.
 
 ### Token Budget Rules
 
