@@ -103,10 +103,13 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
         _, body = _frontmatter_and_body()
         required_phrases = [
             "Keep the current runtime model and reasoning effort unchanged",
-            "Do not inspect or require a model catalog",
+            "Do not inspect, fetch, or require a model catalog",
+            "Do not evaluate the current model or its suitability",
             "Do not recommend, select, switch, or compare models",
             "Do not recommend or change reasoning effort",
+            "Do not produce model-price or model-quality analysis",
             "Do not create task-level model or reasoning overrides",
+            "Do not block execution because exact model IDs are unavailable",
             "Do not restrict `max`, `ultra`, or any other reasoning level",
             "Wait for the user to confirm the execution mode",
             "- The execution mode is unconfirmed.",

@@ -51,7 +51,7 @@ Create a short requirement-to-task coverage checklist from the plan goal, global
 
 ## Execution Mode Selector
 
-Keep the current runtime model and reasoning effort unchanged. Do not inspect or require a model catalog. Do not recommend, select, switch, or compare models. Do not recommend or change reasoning effort. Do not create task-level model or reasoning overrides. Do not restrict `max`, `ultra`, or any other reasoning level.
+Keep the current runtime model and reasoning effort unchanged. Do not inspect, fetch, or require a model catalog. Do not evaluate the current model or its suitability. Do not recommend, select, switch, or compare models. Do not recommend or change reasoning effort. Do not produce model-price or model-quality analysis. Do not create task-level model or reasoning overrides. Do not block execution because exact model IDs are unavailable. Do not restrict `max`, `ultra`, or any other reasoning level.
 
 Recommend `superpowers:subagent-driven-development` for independent, task-scoped work when subagents are available. Recommend `superpowers:executing-plans` for tightly coupled work needing continuous context.
 
