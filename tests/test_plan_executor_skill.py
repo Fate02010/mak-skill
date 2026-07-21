@@ -82,7 +82,8 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
             "Recommend `superpowers:executing-plans`",
             "Wait for the user to confirm the execution mode",
             "Recommended option",
-            "3-5 concrete options",
+            "For execution-mode confirmation, provide exactly the two supported modes",
+            "For other choices or clarifications, provide 3-5 concrete options",
         ]
         for phrase in required_phrases:
             self.assertIn(phrase, body)

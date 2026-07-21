@@ -23,7 +23,7 @@ This skill is a thin orchestrator. It does not replace the source skills and doe
 
 ## Question Rule
 
-Ask only one question per message. When asking the user to choose or clarify, provide 3-5 concrete options and mark the Recommended option.
+Ask only one question per message. For execution-mode confirmation, provide exactly the two supported modes and mark the Recommended option. For other choices or clarifications, provide 3-5 concrete options and mark the Recommended option.
 
 ## Startup Gates
 
