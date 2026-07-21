@@ -152,21 +152,28 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
             "`xhigh`, `max`, or `ultra`",
             "one user confirmation",
             "task, exact model ID, effort, and reason",
+            "materially cheaper or riskier than the overall plan",
+            "- Exact runtime model IDs are unavailable.",
+            "execution mode or model package is unconfirmed",
         ]
         for phrase in required_phrases:
             self.assertIn(phrase, body)
 
-        ordered_fields = [
-            "`Execution mode`",
-            "`Overall model`",
-            "`Reasoning effort`",
-            "`Why this is the best value`",
-            "`Task overrides`",
-            "`Alternative`",
-            "`Confirmation`",
-        ]
-        positions = [body.index(field) for field in ordered_fields]
-        self.assertEqual(sorted(positions), positions)
+        preflight = body.split("## Model and Reasoning Preflight\n", 1)[1].split(
+            "\n## Execution Mode Selector", 1
+        )[0]
+        expected_contract = "\n".join(
+            [
+                "1. `Execution mode`: recommended workflow.",
+                "2. `Overall model`: exact model ID.",
+                "3. `Reasoning effort`: exact supported value.",
+                "4. `Why this is the best value`: token-cost and completion-quality rationale.",
+                "5. `Task overrides`: task, exact model ID, effort, and reason; write `None` when absent.",
+                "6. `Alternative`: one lower-cost or higher-quality package and its tradeoff.",
+                "7. `Confirmation`: one user confirmation covering the execution mode and model package.",
+            ]
+        )
+        self.assertIn(expected_contract, preflight)
 
 
 class PlanExecutorCodexSymlinkTests(unittest.TestCase):

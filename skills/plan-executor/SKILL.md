@@ -67,11 +67,11 @@ Every pre-execution recommendation must contain, in order:
 6. `Alternative`: one lower-cost or higher-quality package and its tradeoff.
 7. `Confirmation`: one user confirmation covering the execution mode and model package.
 
-No implementation task may start before that confirmation.
+No task may start before confirmation.
 
 ## Execution Mode Selector
 
-Read the plan, recommend one mode, show the alternative, and wait for the user to choose.
+Recommend one mode and alternative; wait for the user to choose.
 
 Recommend `superpowers:subagent-driven-development` for independent, task-scoped work when subagents are available. Recommend `superpowers:executing-plans` for tightly coupled work needing continuous context.
 
@@ -79,7 +79,7 @@ Present the Recommended option, tradeoff, and model package together. Do not exe
 
 ## Cost-Controlled SDD
 
-For `superpowers:subagent-driven-development`, use the confirmed overall model by default and route only exceptions:
+For `superpowers:subagent-driven-development`, override only tasks materially cheaper or riskier than the overall plan:
 
 - `cheap`: exact-code, single-file, doc/config/test-only, or mechanical edits.
 - `standard`: normal multi-file implementation with clear interfaces.
@@ -143,7 +143,8 @@ Stop immediately when:
 - Current branch is `main` or `master`.
 - Branch or worktree isolation cannot be confirmed.
 - The plan has contradictions or blocking gaps.
-- The user has not chosen an execution mode.
+- Exact runtime model IDs are unavailable.
+- The execution mode or model package is unconfirmed.
 - A task exceeds three repair rounds.
 - Review feedback is unclear and cannot be resolved locally.
 - Required verification cannot be run.
