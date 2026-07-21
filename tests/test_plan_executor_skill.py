@@ -80,39 +80,65 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
         required_phrases = [
             "Recommend `superpowers:subagent-driven-development`",
             "Recommend `superpowers:executing-plans`",
-            "wait for the user to choose",
+            "Wait for the user to confirm the execution mode",
             "Recommended option",
             "3-5 concrete options",
         ]
         for phrase in required_phrases:
             self.assertIn(phrase, body)
 
-    def test_execution_preflight_controls_cost_and_plan_detail_risk(self):
+    def test_execution_preflight_controls_plan_detail_and_token_cost(self):
         _, body = _frontmatter_and_body()
         required_phrases = [
             "Execution Preflight",
             "requirement-to-task coverage checklist",
-            "Cost-Controlled SDD",
-            "`cheap`",
-            "`standard`",
-            "`high`",
             "Token Budget Rules",
             "Executing-Plans Detail Safeguards",
         ]
         for phrase in required_phrases:
             self.assertIn(phrase, body)
 
-    def test_model_routing_is_runtime_agnostic(self):
+    def test_execution_keeps_current_model_without_selection(self):
         _, body = _frontmatter_and_body()
         required_phrases = [
-            "Do not hard-code model names",
-            "cheapest currently available model",
-            "current runtime",
-            "reasoning effort",
+            "Keep the current runtime model and reasoning effort unchanged",
+            "Do not inspect or require a model catalog",
+            "Do not recommend, select, switch, or compare models",
+            "Do not recommend or change reasoning effort",
+            "Do not create task-level model or reasoning overrides",
+            "Do not restrict `max`, `ultra`, or any other reasoning level",
+            "Wait for the user to confirm the execution mode",
+            "- The execution mode is unconfirmed.",
         ]
         for phrase in required_phrases:
             self.assertIn(phrase, body)
+
+        forbidden_phrases = [
+            "## Model and Reasoning Preflight",
+            "## Cost-Controlled SDD",
+            "`Overall model`",
+            "`Reasoning effort`",
+            "`Why this is the best value`",
+            "token-cost and completion-quality rationale",
+            "`Task overrides`",
+            "`cheap`:",
+            "`standard`:",
+            "`high`:",
+            "- Exact runtime model IDs are unavailable.",
+            "model package is unconfirmed",
+        ]
+        for phrase in forbidden_phrases:
+            self.assertNotIn(phrase, body)
         self.assertNotRegex(body, r"\bgpt-\d")
+
+        expected_contract = "\n".join(
+            [
+                "1. Recommended option and reason.",
+                "2. Alternative option and tradeoff.",
+                "3. A confirmation request for the execution mode.",
+            ]
+        )
+        self.assertIn(expected_contract, body)
 
     def test_task_loop_enforces_tdd_review_and_repair_limits(self):
         _, body = _frontmatter_and_body()
@@ -136,45 +162,6 @@ class PlanExecutorSkillFileTests(unittest.TestCase):
         ]
         for phrase in required_phrases:
             self.assertIn(phrase, body)
-
-    def test_model_preflight_requires_exact_runtime_package(self):
-        _, body = _frontmatter_and_body()
-        required_phrases = [
-            "Model and Reasoning Preflight",
-            "exact model ID",
-            "exact supported reasoning effort",
-            "cheapest currently available model",
-            "everyday coding workhorse with medium reasoning",
-            "lower-cost model with low reasoning",
-            "strongest suitable coding model with high reasoning",
-            "If exact model IDs are unavailable, stop",
-            "Do not continue with tier-only routing",
-            "`xhigh`, `max`, or `ultra`",
-            "one user confirmation",
-            "task, exact model ID, effort, and reason",
-            "materially cheaper or riskier than the overall plan",
-            "- Exact runtime model IDs are unavailable.",
-            "execution mode or model package is unconfirmed",
-        ]
-        for phrase in required_phrases:
-            self.assertIn(phrase, body)
-
-        preflight = body.split("## Model and Reasoning Preflight\n", 1)[1].split(
-            "\n## Execution Mode Selector", 1
-        )[0]
-        expected_contract = "\n".join(
-            [
-                "1. `Execution mode`: recommended workflow.",
-                "2. `Overall model`: exact model ID.",
-                "3. `Reasoning effort`: exact supported value.",
-                "4. `Why this is the best value`: token-cost and completion-quality rationale.",
-                "5. `Task overrides`: task, exact model ID, effort, and reason; write `None` when absent.",
-                "6. `Alternative`: one lower-cost or higher-quality package and its tradeoff.",
-                "7. `Confirmation`: one user confirmation covering the execution mode and model package.",
-            ]
-        )
-        self.assertIn(expected_contract, preflight)
-
 
 class PlanExecutorCodexSymlinkTests(unittest.TestCase):
     def test_codex_skill_symlink_points_to_repo_skill(self):

@@ -49,45 +49,21 @@ Stop if the plan has placeholders, vague instructions such as "handle edge cases
 
 Create a short requirement-to-task coverage checklist from the plan goal, global constraints, acceptance criteria, and task headings. If any requirement has no task, stop and report the gap instead of guessing during execution.
 
-## Model and Reasoning Preflight
-
-Before mode selection, inspect exact model IDs and reasoning levels in the current runtime. Choose the cheapest currently available model and lowest exact supported reasoning effort expected to complete the plan reliably. For normal plans, use the everyday coding workhorse with medium reasoning; use a lower-cost model with low reasoning for mechanical exceptions and the strongest suitable coding model with high reasoning for security, concurrency, migration, architecture, or ambiguous integration.
-
-Do not hard-code model names. Do not recommend `xhigh`, `max`, or `ultra` by default. Use one only for exceptional reasoning or parallelism; justify extra usage.
-
-If exact model IDs are unavailable, stop and ask the user to select from the current runtime's visible model list. Do not continue with tier-only routing.
-
-Every pre-execution recommendation must contain, in order:
-
-1. `Execution mode`: recommended workflow.
-2. `Overall model`: exact model ID.
-3. `Reasoning effort`: exact supported value.
-4. `Why this is the best value`: token-cost and completion-quality rationale.
-5. `Task overrides`: task, exact model ID, effort, and reason; write `None` when absent.
-6. `Alternative`: one lower-cost or higher-quality package and its tradeoff.
-7. `Confirmation`: one user confirmation covering the execution mode and model package.
-
-No task may start before confirmation.
-
 ## Execution Mode Selector
 
-Recommend one mode and alternative; wait for the user to choose.
+Keep the current runtime model and reasoning effort unchanged. Do not inspect or require a model catalog. Do not recommend, select, switch, or compare models. Do not recommend or change reasoning effort. Do not create task-level model or reasoning overrides. Do not restrict `max`, `ultra`, or any other reasoning level.
 
 Recommend `superpowers:subagent-driven-development` for independent, task-scoped work when subagents are available. Recommend `superpowers:executing-plans` for tightly coupled work needing continuous context.
 
-Present the Recommended option, tradeoff, and model package together. Do not execute until confirmed.
+The mode prompt must contain only:
 
-## Cost-Controlled SDD
+1. Recommended option and reason.
+2. Alternative option and tradeoff.
+3. A confirmation request for the execution mode.
 
-For `superpowers:subagent-driven-development`, override only tasks materially cheaper or riskier than the overall plan:
+Wait for the user to confirm the execution mode before implementation.
 
-- `cheap`: exact-code, single-file, doc/config/test-only, or mechanical edits.
-- `standard`: normal multi-file implementation with clear interfaces.
-- `high`: architecture, ambiguous integration, security, concurrency, performance risk, or final whole-branch review.
-
-Every override must name an exact current-runtime model and supported reasoning effort.
-
-### Token Budget Rules
+## Token Budget Rules
 
 Use task briefs and file paths for reports, diffs, and review packages. Do not paste the full plan, accumulated task history, or large diffs into prompts. Require subagents to return only status, commits, test summary, and concerns in chat. Group adjacent trivial tasks only when grouping does not change the plan's deliverables or review boundary.
 
@@ -143,8 +119,7 @@ Stop immediately when:
 - Current branch is `main` or `master`.
 - Branch or worktree isolation cannot be confirmed.
 - The plan has contradictions or blocking gaps.
-- Exact runtime model IDs are unavailable.
-- The execution mode or model package is unconfirmed.
+- The execution mode is unconfirmed.
 - A task exceeds three repair rounds.
 - Review feedback is unclear and cannot be resolved locally.
 - Required verification cannot be run.
